@@ -1,0 +1,261 @@
+.admin-page {
+  display: flex;
+  min-height: calc(100vh - 70px);
+  background: #f4f6fa;
+}
+
+/* Guard */
+.admin-guard {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: #555;
+}
+
+/* Sidebar */
+.admin-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #1a1a2e;
+  color: white;
+  padding: 2rem 1.2rem;
+}
+
+.admin-sidebar h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  color: white;
+}
+
+.admin-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-sidebar nav button {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  text-align: left;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.admin-sidebar nav button:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+.admin-sidebar nav button.active {
+  background: #007bff;
+  color: white;
+  font-weight: 700;
+}
+
+/* Main Area */
+.admin-main {
+  flex: 1;
+  padding: 2rem;
+}
+
+.admin-main h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 0.3rem;
+}
+
+.admin-hint {
+  color: #888;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.loading-msg {
+  color: #888;
+  padding: 2rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  background: white;
+  border-radius: 12px;
+  color: #555;
+  font-size: 1.1rem;
+}
+
+/* Toast */
+.admin-toast {
+  background: #1a1a2e;
+  color: white;
+  padding: 0.7rem 1.2rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  display: inline-block;
+}
+
+/* Listing Cards */
+.admin-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-listing-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 1rem 1.2rem;
+}
+
+.card-img {
+  flex-shrink: 0;
+}
+
+.card-img img {
+  width: 120px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.no-img {
+  width: 120px;
+  height: 80px;
+  background: #e9ecef;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+}
+
+.card-info {
+  flex: 1;
+}
+
+.card-info h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 0.2rem;
+}
+
+.card-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #007bff;
+  margin-bottom: 0.2rem;
+}
+
+.card-meta, .card-seller, .card-date {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 0.15rem;
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.approve-btn, .reject-btn, .view-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: opacity 0.2s;
+}
+
+.approve-btn { background: #28a745; color: white; }
+.reject-btn  { background: #dc3545; color: white; }
+.view-btn    { background: #6c757d; color: white; }
+
+.approve-btn:hover, .reject-btn:hover, .view-btn:hover {
+  opacity: 0.85;
+}
+
+/* Users Table */
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  font-size: 0.88rem;
+}
+
+.users-table thead {
+  background: #1a1a2e;
+  color: white;
+}
+
+.users-table th {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.users-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f0f0f0;
+  color: #444;
+}
+
+.users-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.users-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.role-tag {
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.role-tag.buyer   { background: #e3f2fd; color: #1565c0; }
+.role-tag.seller  { background: #e8f5e9; color: #2e7d32; }
+.role-tag.admin   { background: #fce4ec; color: #c62828; }
+
+.verified-yes { color: #388e3c; font-weight: 600; }
+.verified-no  { color: #aaa; }
+
+.user-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.verify-btn, .delete-btn {
+  padding: 0.35rem 0.8rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.verify-btn { background: #28a745; color: white; }
+.delete-btn { background: #dc3545; color: white; }
