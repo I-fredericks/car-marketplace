@@ -6,7 +6,6 @@ const register = async (req, res) => {
   try {
     const { email, password, name, phone, role } = req.body;
 
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -15,11 +14,9 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
     const user = await prisma.user.create({
       data: {
         email,
@@ -30,7 +27,6 @@ const register = async (req, res) => {
       },
     });
 
-    // If role is SELLER, create a seller profile
     if (user.role === 'SELLER') {
       await prisma.sellerProfile.create({
         data: {
@@ -50,7 +46,6 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user
     const user = await prisma.user.findUnique({
       where: { email },
     });
@@ -59,17 +54,15 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Check password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Generate token
     const token = jwt.sign(
       { id: user.id, role: user.role },
-      process.env.JWT_SECRET || 'fallback_secret',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -141,7 +134,7 @@ const upgradeToSeller = async (req, res) => {
     // Generate a fresh token with the new role
     const token = jwt.sign(
       { id: updatedUser.id, role: updatedUser.role },
-      process.env.JWT_SECRET || 'fallback_secret',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -161,9 +154,14 @@ const upgradeToSeller = async (req, res) => {
   }
 };
 
+const logout = (req, res) => {
+  res.json({ message: 'Logged out successfully' });
+};
+
 module.exports = {
   register,
   login,
   getMe,
-  upgradeToSeller
+  upgradeToSeller,
+  logout
 };

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Car, MapPin, CheckCircle2, User, MessageSquare, Phone, Edit, ShieldAlert, Check, Star } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import api from '../utils/api';
+import api, { getImageUrl } from '../utils/api';
+import { Heart, Flag } from 'lucide-react';
 import './CarDetails.css';
 
 const CarDetails = () => {
@@ -13,20 +13,75 @@ const CarDetails = () => {
   const [car, setCar] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [brokenImages, setBrokenImages] = useState(new Set());
 
   useEffect(() => {
     const fetchCar = async () => {
       try {
         const { data } = await api.get(`/vehicles/${id}`);
         setCar(data);
-      } catch (err) {
-        console.error('Error fetching car:', err);
-      } finally {
+    } catch {
+      console.error('Error fetching car');
+    } finally {
         setLoading(false);
       }
     };
     fetchCar();
   }, [id]);
+
+  useEffect(() => {
+    if (!user || !car) return;
+    const checkFavorite = async () => {
+      try {
+        const { data } = await api.get('/favorites');
+        setIsFavorite(data.some(v => v.id === car.id));
+      } catch (err) {
+        console.error('Error checking favorite:', err);
+      }
+    };
+    checkFavorite();
+  }, [user, car]);
+
+  const toggleFavorite = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      if (isFavorite) {
+        await api.delete(`/favorites/${id}`);
+        setIsFavorite(false);
+      } else {
+        await api.post(`/favorites/${id}`);
+        setIsFavorite(true);
+      }
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
+  };
+
+  const handleReport = async (e) => {
+    e.preventDefault();
+    setReportSubmitting(true);
+    try {
+      await api.post('/reports', { vehicleId: id, reason: reportReason });
+      alert('Report submitted. Thank you.');
+      setShowReportModal(false);
+      setReportReason('');
+    } catch {
+      alert('Failed to submit report.');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
+  const handleImageError = (imgId) => {
+    setBrokenImages(prev => new Set(prev).add(imgId));
+  };
 
   if (loading) return <div className="page-loading">Loading car details...</div>;
   if (!car) return <div className="page-loading">Car not found.</div>;
@@ -64,8 +119,8 @@ const CarDetails = () => {
           {/* Image Gallery */}
           <div className="gallery">
             <div className="gallery-main">
-              {car.images && car.images.length > 0
-                ? <img src={`http://localhost:5000${car.images[activeImg]?.url}`} alt={car.make} />
+              {car.images && car.images.length > 0 && !brokenImages.has(`main-${car.id}`)
+                ? <img src={getImageUrl(car.images[activeImg]?.data)} alt={car.make} onError={() => handleImageError(`main-${car.id}`)} />
                 : <div className="no-image-placeholder">🚗 No Photos</div>
               }
             </div>
@@ -74,10 +129,11 @@ const CarDetails = () => {
                 {car.images.map((img, i) => (
                   <img
                     key={img.id}
-                    src={`http://localhost:5000${img.url}`}
+                    src={getImageUrl(img.data)}
                     alt={`thumb-${i}`}
                     className={i === activeImg ? 'thumb active' : 'thumb'}
                     onClick={() => setActiveImg(i)}
+                    onError={() => handleImageError(img.id)}
                   />
                 ))}
               </div>
@@ -166,11 +222,27 @@ const CarDetails = () => {
                   📞 Call Seller
                 </a>
               )}
+              {user && user.id !== car.seller?.userId && (
+                <Link to={`/messages/${car.seller.userId}/${car.id}`} className="contact-btn message">
+                  ✉️ Message Seller
+                </Link>
+              )}
             </div>
 
             <p className="contact-note">
               Mention CarMarket Ghana when you call. Always inspect the vehicle before paying.
             </p>
+
+            <div className="action-buttons">
+              <button onClick={toggleFavorite} className={`action-btn favorite ${isFavorite ? 'active' : ''}`}>
+                <Heart size={18} fill={isFavorite ? '#DC2626' : 'none'} />
+                {isFavorite ? 'Saved' : 'Save Car'}
+              </button>
+              <button onClick={() => setShowReportModal(true)} className="action-btn report">
+                <Flag size={18} />
+                Report
+              </button>
+            </div>
 
             {/* If seller is the owner, show edit button */}
             {user && user.role === 'SELLER' && car.seller?.userId === user.id && (
@@ -196,6 +268,30 @@ const CarDetails = () => {
         </div>
 
       </div>
+
+      {showReportModal && (
+        <div className="modal-overlay" onClick={() => setShowReportModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Report Listing</h3>
+            <p>Please provide a reason for reporting this listing.</p>
+            <form onSubmit={handleReport}>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Describe the issue..."
+                rows={4}
+                required
+              />
+              <div className="modal-actions">
+                <button type="button" onClick={() => setShowReportModal(false)}>Cancel</button>
+                <button type="submit" disabled={reportSubmitting}>
+                  {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

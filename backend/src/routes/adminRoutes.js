@@ -1,24 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  getPendingVehicles, 
-  updateListingStatus, 
-  getAllUsers, 
-  verifySeller, 
-  deleteUser 
+const {
+  getPendingVehicles,
+  getAllVehicles,
+  updateListingStatus,
+  toggleFeatured,
+  getAllUsers,
+  verifySeller,
+  deleteUser,
+  getStats,
+  getReports,
+  resolveReport,
 } = require('../controllers/adminController');
 const { protect, admin } = require('../middlewares/authMiddleware');
+const { validate } = require('../middlewares/validation');
+const { updateListingStatusSchema } = require('../middlewares/validation');
 
-// All routes here are protected and require admin role
 router.use(protect, admin);
 
-// Listing approvals
+// Stats
+router.get('/stats', getStats);
+
+// Vehicle management
 router.get('/vehicles/pending', getPendingVehicles);
-router.put('/vehicles/:id/status', updateListingStatus);
+router.get('/vehicles/all', getAllVehicles);
+router.put('/vehicles/:id/status', validate(updateListingStatusSchema), updateListingStatus);
+router.put('/vehicles/:id/featured', toggleFeatured);
 
 // User management
 router.get('/users', getAllUsers);
 router.put('/users/:id/verify', verifySeller);
 router.delete('/users/:id', deleteUser);
+
+// Reports
+router.get('/reports', getReports);
+router.put('/reports/:id/resolve', resolveReport);
 
 module.exports = router;

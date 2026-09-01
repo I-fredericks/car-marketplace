@@ -12,13 +12,13 @@ export const AuthProvider = ({ children }) => {
     const fetchUser = async () => {
       const token = localStorage.getItem('token');
       if (token) {
-        try {
-          const { data } = await api.get('/auth/me');
-          setUser(data);
-        } catch (error) {
-          console.error("Token invalid or expired");
-          localStorage.removeItem('token');
-        }
+      try {
+        const { data } = await api.get('/auth/me');
+        setUser(data);
+      } catch {
+        console.error("Token invalid or expired");
+        localStorage.removeItem('token');
+      }
       }
       setLoading(false);
     };
@@ -42,9 +42,15 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('token');
+      setUser(null);
+    }
   };
 
   return (

@@ -1,12 +1,26 @@
 import axios from 'axios';
 
+const BACKEND_URL = (() => {
+  // In dev mode (Vite on port 5173), point to local Express backend on 5000
+  if (typeof window !== 'undefined' && window.location.port === '5173') {
+    return 'http://localhost:5000';
+  }
+  // In production / single-tunnel ngrok mode, frontend & backend share the exact same origin
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return 'http://localhost:5000';
+})();
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', // Adjust if backend port changes
+  baseURL: `${BACKEND_URL}/api`,
 });
 
-// Add a request interceptor to include the JWT token
 api.interceptors.request.use(
   (config) => {
+    // Automatically bypass ngrok interstitial warning page
+    config.headers['ngrok-skip-browser-warning'] = 'true';
+
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -17,5 +31,40 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Resolves any image data string stored in the DB into a fully-qualified URL
+ * the browser can load.
+ */
+export const getImageUrl = (data) => {
+  if (!data) return '';
+
+  // Already a full HTTP URL
+  if (data.startsWith('http://') || data.startsWith('https://')) return data;
+
+  // Base64 data URI (jpeg, png, webp, etc.)
+  if (data.startsWith('data:image/') && data.includes(';base64,')) return data;
+
+  // SVG as utf8 data URI – re-encode as base64 to avoid browser parse issues
+  if (data.startsWith('data:image/svg+xml')) {
+    try {
+      const svgContent = data.replace(/^data:image\/svg\+xml;utf8,/, '');
+      const b64 = btoa(unescape(encodeURIComponent(svgContent)));
+      return `data:image/svg+xml;base64,${b64}`;
+    } catch {
+      return data;
+    }
+  }
+
+  // Relative path saved by multer disk storage
+  if (data.startsWith('/uploads/') || data.startsWith('/uploads\\')) {
+    return `${BACKEND_URL}${data}`;
+  }
+  if (data.startsWith('uploads/') || data.startsWith('uploads\\')) {
+    return `${BACKEND_URL}/${data}`;
+  }
+
+  return data;
+};
 
 export default api;

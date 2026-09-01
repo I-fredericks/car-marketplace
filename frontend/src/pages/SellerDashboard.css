@@ -1,0 +1,307 @@
+.seller-dashboard {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-md);
+  min-height: calc(100vh - 72px);
+  background: var(--color-background);
+}
+
+.seller-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: var(--space-2xl);
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.seller-header h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.seller-header p {
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+  font-size: 1.1rem;
+}
+
+.seller-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-lg);
+  margin-bottom: var(--space-2xl);
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  text-align: center;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border);
+  transition: transform var(--transition-fast);
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.stat-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-card.pending .stat-value { color: var(--color-warning); }
+.stat-card.available .stat-value { color: var(--color-success); }
+.stat-card.sold .stat-value { color: var(--color-primary-light); }
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-destructive);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  margin-bottom: var(--space-xl);
+  font-weight: 500;
+}
+
+.loading-msg {
+  text-align: center;
+  padding: var(--space-4xl);
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-4xl) var(--space-xl);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+}
+
+.empty-state p {
+  margin-bottom: var(--space-lg);
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-xl);
+}
+
+.listing-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border);
+  transition: all var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+}
+
+.listing-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-xl);
+  border-color: var(--color-border-hover);
+}
+
+.listing-img {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.listing-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 500ms ease;
+}
+
+.listing-card:hover .listing-img img {
+  transform: scale(1.05);
+}
+
+.no-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 3rem;
+  color: var(--color-border-hover);
+}
+
+.status-badge {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(4px);
+}
+
+.status-badge.pending {
+  background: rgba(245, 158, 11, 0.9);
+  color: white;
+}
+
+.status-badge.available {
+  background: rgba(16, 185, 129, 0.9);
+  color: white;
+}
+
+.status-badge.sold {
+  background: rgba(15, 23, 42, 0.9);
+  color: white;
+}
+
+.status-badge.rejected {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+}
+
+.listing-info {
+  padding: var(--space-lg);
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.listing-info h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  margin-bottom: var(--space-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.listing-price {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-success);
+  margin-bottom: var(--space-xs);
+}
+
+.listing-meta {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-lg);
+}
+
+.listing-actions {
+  display: flex;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
+  margin-top: auto;
+}
+
+.btn-small {
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.btn-small.view {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-accent);
+}
+
+.btn-small.view:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.btn-small.edit {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.btn-small.edit:hover {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.btn-small.delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-destructive);
+}
+
+.btn-small.delete:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.btn-small.sold {
+  background: rgba(15, 23, 42, 0.1);
+  color: var(--color-primary);
+}
+
+.seller-guard {
+  text-align: center;
+  padding: var(--space-4xl) var(--space-lg);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+}
+
+.seller-guard h2 {
+  font-size: 2rem;
+  color: var(--color-primary);
+  margin-bottom: var(--space-lg);
+}
+
+.btn-primary {
+  display: inline-block;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  padding: 1rem 2rem;
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.05rem;
+  transition: all var(--transition-fast);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:hover {
+  background: var(--color-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}

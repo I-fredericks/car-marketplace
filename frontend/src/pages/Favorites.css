@@ -1,0 +1,202 @@
+.favorites-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-md);
+  min-height: calc(100vh - 72px);
+  background: var(--color-background);
+}
+
+.favorites-header {
+  margin-bottom: var(--space-2xl);
+}
+
+.favorites-header h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  letter-spacing: -0.5px;
+}
+
+.favorites-header p {
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+  font-size: 1.1rem;
+}
+
+.loading-msg {
+  text-align: center;
+  padding: var(--space-4xl) 0;
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-4xl) var(--space-xl);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+}
+
+.empty-icon {
+  color: var(--color-destructive);
+  margin-bottom: var(--space-md);
+  opacity: 0.8;
+}
+
+.empty-state p {
+  margin-bottom: var(--space-lg);
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+.favorites-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-xl);
+}
+
+.fav-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  transition: all var(--transition-normal);
+  height: 150px;
+}
+
+.fav-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+  border-color: var(--color-border-hover);
+}
+
+.fav-img {
+  width: 140px;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.fav-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 500ms ease;
+}
+
+.fav-card:hover .fav-img img {
+  transform: scale(1.05);
+}
+
+.fav-card .no-img {
+  width: 100%;
+  height: 100%;
+  background: var(--color-background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-border-hover);
+  font-size: 2.5rem;
+}
+
+.fav-info {
+  padding: var(--space-md);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.fav-info h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: var(--space-xs);
+  color: var(--color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fav-price {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  margin-bottom: var(--space-xs);
+}
+
+.fav-meta {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remove-fav {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  background: var(--color-surface);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
+  color: var(--color-text-muted);
+}
+
+.remove-fav:hover {
+  transform: scale(1.1);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-destructive);
+}
+
+.fav-guard {
+  text-align: center;
+  padding: var(--space-4xl) var(--space-lg);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+}
+
+.fav-guard h2 {
+  font-size: 2rem;
+  color: var(--color-primary);
+  margin-bottom: var(--space-lg);
+}
+
+.btn-primary {
+  display: inline-block;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  padding: 1rem 2rem;
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.05rem;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:hover {
+  background: var(--color-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}

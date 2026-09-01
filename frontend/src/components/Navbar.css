@@ -1,79 +1,205 @@
+/* Navbar Global */
 .navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  transition: all var(--transition-normal);
+  padding: 0 var(--space-md);
+}
+
+.navbar-scrolled {
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.navbar-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-md) var(--space-lg);
-  background-color: var(--color-card);
-  box-shadow: var(--shadow-sm);
-  border-bottom: 1px solid var(--color-border);
+  max-width: 1280px;
+  margin: 0 auto;
+  height: 72px;
 }
 
+/* Logo */
 .navbar-logo a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-family: var(--font-display);
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--color-primary);
   text-decoration: none;
+  letter-spacing: -0.5px;
 }
 
 .logo-icon {
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
+.logo-accent {
+  color: var(--color-accent);
+}
+
+/* Mobile Menu Button */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--color-text-main);
+  cursor: pointer;
+  padding: var(--space-xs);
+}
+
+/* Links Container */
 .navbar-links {
   display: flex;
   align-items: center;
   gap: var(--space-lg);
 }
 
-.navbar-links a {
-  text-decoration: none;
-  color: var(--color-muted-foreground);
+.nav-link {
   font-weight: 600;
-  transition: color 200ms ease;
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
 }
 
-.navbar-links a:hover {
-  color: var(--color-primary);
+.nav-link:hover {
+  color: var(--color-accent);
 }
 
+/* Buttons */
 .sell-btn {
   background-color: var(--color-accent);
   color: var(--color-on-accent) !important;
-  padding: 0.6rem 1.2rem;
-  border-radius: var(--radius-md);
-  transition: opacity 200ms ease;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
 }
 
-.register-btn {
-  background-color: var(--color-primary);
-  color: var(--color-on-primary) !important;
-  padding: 0.6rem 1.2rem;
-  border-radius: var(--radius-md);
-  transition: opacity 200ms ease;
+.sell-btn:hover {
+  background-color: var(--color-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
-.sell-btn:hover, .register-btn:hover {
-  opacity: 0.9;
-}
-
+/* User Menu & Auth */
 .user-menu, .auth-links {
   display: flex;
   align-items: center;
   gap: var(--space-md);
 }
 
-.user-menu button {
-  background: none;
-  border: 1px solid var(--color-destructive);
-  color: var(--color-destructive);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
-  cursor: pointer;
+.user-greeting {
   font-weight: 600;
-  transition: all 200ms ease;
+  color: var(--color-primary);
 }
 
-.user-menu button:hover {
-  background: var(--color-destructive);
-  color: var(--color-on-destructive);
+.nav-icon-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.nav-icon-link:hover {
+  color: var(--color-accent);
+}
+
+.mobile-text {
+  display: none; /* Only show on mobile menu */
+}
+
+.logout-btn {
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-main);
+  font-weight: 600;
+}
+
+.logout-btn:hover {
+  background-color: var(--color-background);
+  border-color: var(--color-border-hover);
+}
+
+.login-btn {
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+.login-btn:hover {
+  color: var(--color-accent);
+}
+
+.register-btn {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary) !important;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+
+.register-btn:hover {
+  background-color: var(--color-primary-light);
+}
+
+/* Responsive Styles */
+@media (max-width: 992px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .navbar-links {
+    position: absolute;
+    top: 72px;
+    left: 0;
+    width: 100%;
+    background-color: var(--color-surface);
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--space-md);
+    gap: var(--space-md);
+    box-shadow: var(--shadow-lg);
+    border-bottom: 1px solid var(--color-border);
+    transform: translateY(-150%);
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-normal);
+  }
+
+  .navbar-links.mobile-open {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .user-menu, .auth-links {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .sell-btn, .logout-btn, .register-btn, .login-btn {
+    text-align: center;
+    width: 100%;
+  }
+
+  .mobile-text {
+    display: inline;
+  }
+
+  .nav-icon-link {
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--color-background);
+  }
 }

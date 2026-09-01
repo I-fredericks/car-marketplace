@@ -1,0 +1,14 @@
+# Terminal 1 — Backend
+cd backend && npm run dev
+
+# Terminal 2 — Ngrok tunnel
+ngrok http 5000
+# Copy the https URL it gives you, e.g. https://abc123.ngrok-free.app
+
+# Terminal 3 — Update frontend/src/utils/api.js baseURL to:
+#   https://abc123.ngrok-free.app/api
+# Then start frontend:
+cd frontend && npm run dev
+
+# Terminal 4 — Optional second tunnel for frontend
+ngrok http 5173

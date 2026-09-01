@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { Car, MapPin, Gauge, Settings, CheckCircle2 } from 'lucide-react';
-import api from '../utils/api';
+import React, { useState, useEffect, useContext } from 'react';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { Car, MapPin, Gauge, Settings, CheckCircle2, Heart, GitCompareArrows, X } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import api, { getImageUrl } from '../utils/api';
 import './SearchResults.css';
 
 const MAKES = ['Toyota', 'Honda', 'Mercedes', 'Hyundai', 'Nissan', 'Ford', 'Kia', 'BMW', 'Volkswagen'];
@@ -9,22 +10,35 @@ const LOCATIONS = ['Accra', 'Kumasi', 'Takoradi', 'Tamale', 'Cape Coast', 'Sunya
 const TRANSMISSIONS = ['AUTOMATIC', 'MANUAL'];
 const FUEL_TYPES = ['PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC'];
 const CONDITIONS = ['BRAND_NEW', 'FOREIGN_USED', 'LOCALLY_USED'];
+const SELLER_TYPES = ['PRIVATE', 'DEALER', 'COMPANY'];
 
 const SearchResults = () => {
+  const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [favorites, setFavorites] = useState(new Set());
+  const [brokenImages, setBrokenImages] = useState(new Set());
+  const [compareList, setCompareList] = useState([]);
 
-  // Local state for filters
   const [filters, setFilters] = useState({
     make: searchParams.get('make') || '',
     model: searchParams.get('model') || '',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
+    year: searchParams.get('year') || '',
+    minMileage: searchParams.get('minMileage') || '',
+    maxMileage: searchParams.get('maxMileage') || '',
     location: searchParams.get('location') || '',
     transmission: searchParams.get('transmission') || '',
     fuelType: searchParams.get('fuelType') || '',
     condition: searchParams.get('condition') || '',
+    sellerType: searchParams.get('sellerType') || '',
+    verifiedOnly: searchParams.get('verifiedOnly') || '',
   });
 
   useEffect(() => {
@@ -32,10 +46,13 @@ const SearchResults = () => {
       setLoading(true);
       try {
         const params = Object.fromEntries(
-          Object.entries(filters).filter(([_, v]) => v !== '')
+          Object.entries(filters).filter(([, v]) => v !== '')
         );
         const { data } = await api.get('/vehicles', { params });
-        setVehicles(data);
+        setVehicles(data.vehicles || []);
+        setTotal(data.total || 0);
+        setCurrentPage(data.page || 1);
+        setTotalPages(data.pages || 1);
       } catch (err) {
         console.error('Error fetching vehicles:', err);
       } finally {
@@ -43,19 +60,77 @@ const SearchResults = () => {
       }
     };
     fetchVehicles();
-  }, [searchParams]);
+  }, [searchParams, filters]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchFavorites = async () => {
+      try {
+        const { data } = await api.get('/favorites');
+        setFavorites(new Set(data.map(v => v.id)));
+      } catch (err) {
+        console.error('Error fetching favorites:', err);
+      }
+    };
+    fetchFavorites();
+  }, [user]);
+
+  const toggleFavorite = async (e, vehicleId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) { navigate('/login'); return; }
+    try {
+      if (favorites.has(vehicleId)) {
+        await api.delete(`/favorites/${vehicleId}`);
+        setFavorites(prev => { const n = new Set(prev); n.delete(vehicleId); return n; });
+      } else {
+        await api.post(`/favorites/${vehicleId}`);
+        setFavorites(prev => new Set(prev).add(vehicleId));
+      }
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
+  };
+
+  const toggleCompare = (e, car) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCompareList(prev => {
+      const alreadyIn = prev.find(c => c.id === car.id);
+      if (alreadyIn) return prev.filter(c => c.id !== car.id);
+      if (prev.length >= 2) return prev; // max 2
+      return [...prev, car];
+    });
+  };
+
+  const removeFromCompare = (carId) => {
+    setCompareList(prev => prev.filter(c => c.id !== carId));
+  };
+
+  const goCompare = () => {
+    if (compareList.length === 2) {
+      navigate(`/compare?ids=${compareList[0].id},${compareList[1].id}`);
+    }
+  };
+
+  const handleImageError = (vehicleId) => {
+    setBrokenImages(prev => new Set(prev).add(vehicleId));
+  };
 
   const applyFilters = (e) => {
     e.preventDefault();
-    setSearchParams(Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== '')));
+    setSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== '')));
   };
 
   const clearFilters = () => {
-    setFilters({ make: '', model: '', minPrice: '', maxPrice: '', location: '', transmission: '', fuelType: '', condition: '' });
+    setFilters({ make: '', model: '', minPrice: '', maxPrice: '', year: '', minMileage: '', maxMileage: '', location: '', transmission: '', fuelType: '', condition: '', sellerType: '', verifiedOnly: '' });
     setSearchParams({});
   };
 
   const formatPrice = (price) => `GH₵${Number(price).toLocaleString()}`;
+
+  const isInCompare = (id) => compareList.some(c => c.id === id);
+  const compareMaxed = compareList.length >= 2;
 
   return (
     <div className="search-page">
@@ -110,14 +185,59 @@ const SearchResults = () => {
               {FUEL_TYPES.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
+          <div className="filter-group">
+            <label>Year</label>
+            <input type="number" placeholder="e.g. 2021" value={filters.year} onChange={(e) => setFilters({...filters, year: e.target.value})} />
+          </div>
+          <div className="filter-group">
+            <label>Mileage Range (km)</label>
+            <input type="number" placeholder="Min Mileage" value={filters.minMileage} onChange={(e) => setFilters({...filters, minMileage: e.target.value})} />
+            <input type="number" placeholder="Max Mileage" value={filters.maxMileage} onChange={(e) => setFilters({...filters, maxMileage: e.target.value})} style={{marginTop: '0.5rem'}} />
+          </div>
+          <div className="filter-group">
+            <label>Seller Type</label>
+            <select value={filters.sellerType} onChange={(e) => setFilters({...filters, sellerType: e.target.value})}>
+              <option value="">Any</option>
+              {SELLER_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>
+              <input type="checkbox" checked={filters.verifiedOnly === 'true'} onChange={(e) => setFilters({...filters, verifiedOnly: e.target.checked ? 'true' : ''})} />
+              {' '}Verified Sellers Only
+            </label>
+          </div>
           <button type="submit" className="apply-btn">Apply Filters</button>
         </form>
       </aside>
 
       {/* Results */}
-      <main className="results-main">
+      <main className="results-main" style={{ paddingBottom: compareList.length > 0 ? '96px' : undefined }}>
         <div className="results-header">
-          <h2>{loading ? 'Searching...' : `${vehicles.length} Cars Found`}</h2>
+          <h2>{loading ? 'Searching...' : `${total} Cars Found`}</h2>
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                onClick={() => {
+                  const newPage = Math.max(1, currentPage - 1);
+                  setSearchParams({ ...Object.fromEntries(searchParams), page: newPage.toString() });
+                }}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span>Page {currentPage} of {totalPages}</span>
+              <button
+                onClick={() => {
+                  const newPage = Math.min(totalPages, currentPage + 1);
+                  setSearchParams({ ...Object.fromEntries(searchParams), page: newPage.toString() });
+                }}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -131,13 +251,22 @@ const SearchResults = () => {
             {vehicles.map(car => (
               <Link to={`/car/${car.id}`} key={car.id} className="result-card">
                 <div className="result-img">
-                  {car.images && car.images.length > 0
-                    ? <img src={`http://localhost:5000${car.images[0].url}`} alt={car.make} />
+                  {car.images && car.images.length > 0 && !brokenImages.has(car.id)
+                    ? <img src={getImageUrl(car.images[0].data)} alt={car.make} onError={() => handleImageError(car.id)} />
                     : <div className="img-placeholder"><Car size={40} className="placeholder-icon" /></div>
                   }
                   <span className={`condition-badge ${car.condition}`}>
                     {car.condition.replace('_', ' ')}
                   </span>
+                  {user && (
+                    <button
+                      className={`favorite-btn ${favorites.has(car.id) ? 'active' : ''}`}
+                      onClick={(e) => toggleFavorite(e, car.id)}
+                      title="Save to Favorites"
+                    >
+                      <Heart size={18} fill={favorites.has(car.id) ? '#DC2626' : 'none'} />
+                    </button>
+                  )}
                 </div>
                 <div className="result-info">
                   <h3>{car.year} {car.make} {car.model}</h3>
@@ -150,12 +279,63 @@ const SearchResults = () => {
                   {car.seller?.verified && (
                     <span className="verified-badge"><CheckCircle2 size={12} /> Verified Seller</span>
                   )}
+                  {/* Compare button */}
+                  <button
+                    id={`compare-btn-${car.id}`}
+                    className={`compare-btn ${isInCompare(car.id) ? 'in-compare' : ''} ${compareMaxed && !isInCompare(car.id) ? 'compare-maxed' : ''}`}
+                    onClick={(e) => toggleCompare(e, car)}
+                    title={compareMaxed && !isInCompare(car.id) ? 'Remove a car first to add another' : 'Compare this car'}
+                  >
+                    <GitCompareArrows size={14} />
+                    {isInCompare(car.id) ? 'Added ✓' : compareMaxed ? 'Max 2' : '+ Compare'}
+                  </button>
                 </div>
               </Link>
             ))}
           </div>
         )}
       </main>
+
+      {/* Sticky Compare Bar */}
+      {compareList.length > 0 && (
+        <div className="compare-bar" role="region" aria-label="Compare selected cars">
+          <div className="compare-bar-inner">
+            <div className="compare-bar-label">
+              <GitCompareArrows size={20} />
+              <span>Compare</span>
+            </div>
+
+            <div className="compare-bar-slots">
+              {compareList.map(car => (
+                <div key={car.id} className="compare-slot">
+                  <span className="compare-slot-name">{car.year} {car.make} {car.model}</span>
+                  <button
+                    className="compare-slot-remove"
+                    onClick={() => removeFromCompare(car.id)}
+                    aria-label={`Remove ${car.make} ${car.model} from compare`}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              {compareList.length === 1 && (
+                <div className="compare-slot compare-slot-empty">
+                  <span>Pick one more car</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              id="compare-now-btn"
+              className="compare-now-btn"
+              onClick={goCompare}
+              disabled={compareList.length < 2}
+            >
+              Compare Now →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
