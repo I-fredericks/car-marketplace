@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, X, Car, ShieldCheck, MapPin } from 'lucide-react';
+import { ArrowLeft, Check, X, Car, ShieldCheck } from 'lucide-react';
 import api, { getImageUrl } from '../utils/api';
-import './Compare.css';
 
 const Compare = () => {
   const [searchParams] = useSearchParams();
@@ -48,17 +47,27 @@ const Compare = () => {
   const formatLabel = (str) => str?.replace(/_/g, ' ') || '—';
 
   if (loading) {
-    return <div className="compare-page page-loading">Loading vehicles comparison...</div>;
+    return (
+      <div className="min-h-screen pt-24 pb-20 flex flex-col items-center justify-center bg-bg text-textmuted">
+        <div className="animate-spin w-10 h-10 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
+        <p>Loading vehicles comparison...</p>
+      </div>
+    );
   }
 
   if (error || cars.length < 2) {
     return (
-      <div className="compare-page error-container">
-        <h2>Comparison Error</h2>
-        <p>{error || 'Insufficient vehicles selected.'}</p>
-        <button onClick={() => navigate('/search')} className="back-to-search-btn">
-          <ArrowLeft size={16} /> Back to Search
-        </button>
+      <div className="min-h-screen pt-24 pb-20 flex flex-col items-center justify-center bg-bg px-4">
+        <div className="bg-surface border border-bordercol rounded-xl p-8 max-w-md w-full text-center">
+          <h2 className="font-display font-bold text-2xl text-err mb-2">Comparison Error</h2>
+          <p className="text-textsecondary mb-6">{error || 'Insufficient vehicles selected.'}</p>
+          <button 
+            onClick={() => navigate('/search')} 
+            className="w-full py-3 bg-primary text-white font-medium rounded-md hover:bg-primarylight transition-colors flex items-center justify-center gap-2"
+          >
+            <ArrowLeft size={16} /> Back to Search
+          </button>
+        </div>
       </div>
     );
   }
@@ -93,76 +102,78 @@ const Compare = () => {
   ];
 
   return (
-    <div className="compare-page">
-      <div className="compare-container">
-        <div className="compare-header">
-          <button onClick={() => navigate(-1)} className="back-btn">
-            <ArrowLeft size={18} /> Back
+    <div className="bg-bg min-h-screen pt-24 pb-20">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div className="mb-8">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="flex items-center gap-1 text-sm font-medium text-textsecondary hover:text-primary transition-colors mb-4"
+          >
+            <ArrowLeft size={16} /> Back
           </button>
-          <h1>Compare Vehicles</h1>
-          <p>Side-by-side comparison to help you choose the best deal.</p>
+          <h1 className="font-display font-bold text-3xl text-textprimary mb-2">Compare Vehicles</h1>
+          <p className="text-textsecondary">Side-by-side comparison to help you choose the best deal.</p>
         </div>
 
-        <div className="compare-grid">
+        <div className="bg-surface border border-bordercol rounded-lg overflow-hidden shadow-sm">
+          
           {/* Header Row — Cards */}
-          <div className="compare-cards-row">
-            <div className="compare-card">
-              <div className="compare-img-box">
-                {carA.images && carA.images.length > 0 && !brokenImages.has(carA.id)
-                  ? <img src={getImageUrl(carA.images[0].data)} alt={carA.make} onError={() => handleImageError(carA.id)} />
-                  : <div className="no-img"><Car size={40} /></div>
-                }
+          <div className="grid grid-cols-2 p-4 sm:p-6 gap-4 sm:gap-6 border-b border-bordercol relative">
+            <div className="absolute inset-y-0 left-1/2 w-px bg-bordercol transform -translate-x-1/2"></div>
+            
+            {[carA, carB].map((car, idx) => (
+              <div key={car.id} className={`flex flex-col items-center text-center ${idx === 0 ? 'pr-2' : 'pl-2'}`}>
+                <div className="w-full aspect-[4/3] bg-bg rounded-md overflow-hidden mb-4 border border-bordercol flex items-center justify-center">
+                  {car.images && car.images.length > 0 && !brokenImages.has(car.id) ? (
+                    <img src={getImageUrl(car.images[0].data)} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
+                  ) : (
+                    <Car size={32} className="text-bordercol" />
+                  )}
+                </div>
+                <h2 className="font-display font-semibold text-lg text-textprimary line-clamp-1 mb-1">
+                  {car.year} {car.make} {car.model}
+                </h2>
+                <p className="font-display font-bold text-xl text-primary mb-4">
+                  {formatPrice(car.price)}
+                </p>
+                <Link 
+                  to={`/car/${car.id}`} 
+                  className="w-full py-2 bg-primary/5 text-primary border border-primary/20 font-medium rounded-md hover:bg-primary hover:text-white transition-colors text-sm"
+                >
+                  View Listing
+                </Link>
               </div>
-              <h2>{carA.year} {carA.make} {carA.model}</h2>
-              <p className="price-tag">{formatPrice(carA.price)}</p>
-              <Link to={`/car/${carA.id}`} className="view-link-btn">View Listing</Link>
-            </div>
-
-            <div className="compare-vs">VS</div>
-
-            <div className="compare-card">
-              <div className="compare-img-box">
-                {carB.images && carB.images.length > 0 && !brokenImages.has(carB.id)
-                  ? <img src={getImageUrl(carB.images[0].data)} alt={carB.make} onError={() => handleImageError(carB.id)} />
-                  : <div className="no-img"><Car size={40} /></div>
-                }
-              </div>
-              <h2>{carB.year} {carB.make} {carB.model}</h2>
-              <p className="price-tag">{formatPrice(carB.price)}</p>
-              <Link to={`/car/${carB.id}`} className="view-link-btn">View Listing</Link>
-            </div>
+            ))}
           </div>
 
           {/* Table — Key Specifications */}
-          <div className="section-title">Key Specifications</div>
-          <div className="compare-table-wrapper">
-            <table className="compare-table">
-              <thead>
-                <tr>
-                  <th className="feature-col">Specification</th>
-                  <th>{carA.year} {carA.make} {carA.model}</th>
-                  <th>{carB.year} {carB.make} {carB.model}</th>
-                </tr>
-              </thead>
+          <div className="overflow-x-auto">
+            <div className="bg-bg px-6 py-3 border-b border-bordercol">
+              <h3 className="font-display font-semibold text-textprimary">Key Specifications</h3>
+            </div>
+            <table className="w-full text-sm text-left border-collapse">
               <tbody>
-                {specRows.map(row => {
-                  let classA = '';
-                  let classB = '';
+                {specRows.map((row, i) => {
+                  let classA = 'py-4 px-4 sm:px-6 w-[35%] align-top';
+                  let classB = 'py-4 px-4 sm:px-6 w-[35%] align-top';
 
                   if (row.isPrice && priceWinner) {
-                    if (priceWinner === carA.id) classA = 'winner-cell';
-                    if (priceWinner === carB.id) classB = 'winner-cell';
+                    if (priceWinner === carA.id) classA += ' bg-success/10 font-semibold text-success';
+                    if (priceWinner === carB.id) classB += ' bg-success/10 font-semibold text-success';
                   }
 
                   if (row.isMileage && mileageWinner) {
-                    if (mileageWinner === carA.id) classA = 'winner-cell';
-                    if (mileageWinner === carB.id) classB = 'winner-cell';
+                    if (mileageWinner === carA.id) classA += ' bg-success/10 font-semibold text-success';
+                    if (mileageWinner === carB.id) classB += ' bg-success/10 font-semibold text-success';
                   }
 
                   return (
-                    <tr key={row.label}>
-                      <td className="spec-name">{row.label}</td>
-                      <td className={classA}>{row.valueA}</td>
+                    <tr key={row.label} className={i !== specRows.length - 1 ? 'border-b border-bordercol' : ''}>
+                      <td className="py-4 px-4 sm:px-6 font-medium text-textsecondary w-[30%] bg-surface border-r border-bordercol align-top">
+                        {row.label}
+                      </td>
+                      <td className={`${classA} border-r border-bordercol`}>{row.valueA}</td>
                       <td className={classB}>{row.valueB}</td>
                     </tr>
                   );
@@ -173,61 +184,71 @@ const Compare = () => {
 
           {/* Table — Features Comparison */}
           {allFeaturesList.length > 0 && (
-            <>
-              <div className="section-title">Features & Options</div>
-              <div className="compare-table-wrapper">
-                <table className="compare-table">
-                  <thead>
-                    <tr>
-                      <th className="feature-col">Feature</th>
-                      <th>{carA.make} {carA.model}</th>
-                      <th>{carB.make} {carB.model}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allFeaturesList.map(feat => {
-                      const hasA = carA.features?.some(f => f.featureName === feat);
-                      const hasB = carB.features?.some(f => f.featureName === feat);
-                      return (
-                        <tr key={feat}>
-                          <td className="spec-name">{feat}</td>
-                          <td>{hasA ? <Check className="icon-check" size={18} /> : <X className="icon-cross" size={18} />}</td>
-                          <td>{hasB ? <Check className="icon-check" size={18} /> : <X className="icon-cross" size={18} />}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div className="overflow-x-auto border-t border-bordercol">
+              <div className="bg-bg px-6 py-3 border-b border-bordercol">
+                <h3 className="font-display font-semibold text-textprimary">Features & Options</h3>
               </div>
-            </>
+              <table className="w-full text-sm text-left border-collapse">
+                <tbody>
+                  {allFeaturesList.map((feat, i) => {
+                    const hasA = carA.features?.some(f => f.featureName === feat);
+                    const hasB = carB.features?.some(f => f.featureName === feat);
+                    return (
+                      <tr key={feat} className={i !== allFeaturesList.length - 1 ? 'border-b border-bordercol' : ''}>
+                        <td className="py-3 px-4 sm:px-6 font-medium text-textsecondary w-[30%] bg-surface border-r border-bordercol align-top">
+                          {feat}
+                        </td>
+                        <td className="py-3 px-4 sm:px-6 w-[35%] text-center border-r border-bordercol">
+                          {hasA ? <Check className="text-success inline-block" size={18} /> : <X className="text-textmuted inline-block" size={18} />}
+                        </td>
+                        <td className="py-3 px-4 sm:px-6 w-[35%] text-center">
+                          {hasB ? <Check className="text-success inline-block" size={18} /> : <X className="text-textmuted inline-block" size={18} />}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {/* Seller Trust Comparison */}
-          <div className="section-title">Seller Trust & Information</div>
-          <div className="compare-table-wrapper">
-            <table className="compare-table">
+          <div className="overflow-x-auto border-t border-bordercol">
+            <div className="bg-bg px-6 py-3 border-b border-bordercol">
+              <h3 className="font-display font-semibold text-textprimary">Seller Trust & Info</h3>
+            </div>
+            <table className="w-full text-sm text-left border-collapse">
               <tbody>
-                <tr>
-                  <td className="spec-name">Seller Type</td>
-                  <td>{formatLabel(carA.seller?.sellerType)}</td>
-                  <td>{formatLabel(carB.seller?.sellerType)}</td>
+                <tr className="border-b border-bordercol">
+                  <td className="py-4 px-4 sm:px-6 font-medium text-textsecondary w-[30%] bg-surface border-r border-bordercol">Seller Type</td>
+                  <td className="py-4 px-4 sm:px-6 w-[35%] border-r border-bordercol capitalize">{formatLabel(carA.seller?.sellerType)}</td>
+                  <td className="py-4 px-4 sm:px-6 w-[35%] capitalize">{formatLabel(carB.seller?.sellerType)}</td>
                 </tr>
                 <tr>
-                  <td className="spec-name">Verification Status</td>
-                  <td>
+                  <td className="py-4 px-4 sm:px-6 font-medium text-textsecondary w-[30%] bg-surface border-r border-bordercol">Verification</td>
+                  <td className="py-4 px-4 sm:px-6 w-[35%] border-r border-bordercol">
                     {carA.seller?.verified ? (
-                      <span className="verified-badge"><ShieldCheck size={14} /> Verified</span>
-                    ) : 'Unverified'}
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-success/10 text-success text-xs font-bold rounded-full">
+                        <ShieldCheck size={14} /> Verified
+                      </span>
+                    ) : (
+                      <span className="text-textmuted">Unverified</span>
+                    )}
                   </td>
-                  <td>
+                  <td className="py-4 px-4 sm:px-6 w-[35%]">
                     {carB.seller?.verified ? (
-                      <span className="verified-badge"><ShieldCheck size={14} /> Verified</span>
-                    ) : 'Unverified'}
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-success/10 text-success text-xs font-bold rounded-full">
+                        <ShieldCheck size={14} /> Verified
+                      </span>
+                    ) : (
+                      <span className="text-textmuted">Unverified</span>
+                    )}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+
         </div>
       </div>
     </div>

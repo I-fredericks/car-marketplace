@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { applyVerifiedPayment } = require('./billingController');
 
 // @desc    Get all pending vehicle listings
 // @route   GET /api/admin/vehicles/pending
@@ -258,6 +259,63 @@ const resolveReport = async (req, res) => {
   }
 };
 
+// @desc    Get all payments (bill verification queue)
+// @route   GET /api/admin/payments
+// @access  Private (Admin only)
+const getPayments = async (req, res) => {
+  try {
+    const payments = await prisma.payment.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        vehicle: { select: { id: true, make: true, model: true, year: true } },
+      },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+    res.json(payments);
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Manually verify a payment and apply the purchased plan
+// @route   PUT /api/admin/payments/:id/verify
+// @access  Private (Admin only)
+const verifyPayment = async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
+    if (!payment) return res.status(404).json({ message: 'Payment not found' });
+    if (payment.status === 'VERIFIED') {
+      return res.status(400).json({ message: 'Payment already verified' });
+    }
+
+    const updated = await applyVerifiedPayment(payment);
+
+    res.json({ message: `Payment verified. Plan activated.`, payment: updated });
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Reject a payment (money not received / invalid reference)
+// @route   PUT /api/admin/payments/:id/reject
+// @access  Private (Admin only)
+const rejectPayment = async (req, res) => {
+  try {
+    const payment = await prisma.payment.update({
+      where: { id: parseInt(req.params.id) },
+      data: { status: 'REJECTED' },
+    });
+    res.json({ message: 'Payment rejected', payment });
+  } catch (error) {
+    console.error('Error rejecting payment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getPendingVehicles,
   getAllVehicles,
@@ -269,4 +327,7 @@ module.exports = {
   getStats,
   getReports,
   resolveReport,
+  getPayments,
+  verifyPayment,
+  rejectPayment,
 };

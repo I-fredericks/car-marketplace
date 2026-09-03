@@ -27,6 +27,8 @@ model User {
   messagesSent  Message[]      @relation("MessageSender")
   messagesReceived Message[]   @relation("MessageReceiver")
   reports       Report[]       @relation("ReportReporter")
+  payments      Payment[]
+  subscription  Subscription?
 
   @@map("user")
 }
@@ -86,6 +88,8 @@ model Vehicle {
   description  String? @db.Text
   status       VehicleStatus @default(PENDING)
   featured     Boolean       @default(false)
+  featuredUntil DateTime?
+  expiresAt    DateTime?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -96,6 +100,7 @@ model Vehicle {
   favorites    Favorite[]
   messages     Message[]
   reports      Report[]
+  payments     Payment[]
 
   @@index([sellerId])
   @@map("vehicle")
@@ -216,4 +221,54 @@ model Report {
   @@index([reporterId])
   @@index([vehicleId])
   @@map("report")
+}
+
+enum PaymentPlan {
+  BASIC
+  PLUS
+  DEALER_BASIC
+  DEALER_PRO
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Payment {
+  id          Int           @id @default(autoincrement())
+  userId      Int
+  user        User          @relation(fields: [userId], references: [id])
+  plan        PaymentPlan
+  amount      Float
+  reference   String        @unique
+  status      PaymentStatus @default(PENDING)
+  method      String        @default("PAYSTACK")
+  channel     String?
+  paidAt      DateTime?
+  vehicleId   Int?
+  vehicle     Vehicle?      @relation(fields: [vehicleId], references: [id])
+  periodStart DateTime?
+  periodEnd   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("payment")
+}
+
+model Subscription {
+  id          Int         @id @default(autoincrement())
+  userId      Int         @unique
+  user        User        @relation(fields: [userId], references: [id])
+  plan        PaymentPlan
+  status      String      @default("ACTIVE")
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("subscription")
 }

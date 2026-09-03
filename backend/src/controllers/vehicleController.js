@@ -1,4 +1,49 @@
 const prisma = require('../config/db');
+const { getActiveSubscription } = require('./billingController');
+const { getListingLimit, getPlanRank } = require('../config/plans');
+
+// How long a free-plan listing stays public before it must be renewed by upgrading
+const FREE_LISTING_DAYS = 90;
+
+// Public queries must hide listings whose free period has lapsed
+const notExpiredFilter = () => ({
+  OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+});
+
+// Seller info included with listings: identity + active subscription for ranking/badges
+const sellerInclude = {
+  seller: {
+    include: {
+      user: {
+        select: {
+          name: true,
+          phone: true,
+          subscription: { select: { plan: true, status: true, periodEnd: true } },
+        },
+      },
+    },
+  },
+};
+
+// Plan weight of a listing's seller; only counts if the subscription is currently active
+const sellerPlanRank = (seller) => {
+  const sub = seller?.user?.subscription;
+  if (!sub || sub.status !== 'ACTIVE' || !sub.periodEnd || new Date(sub.periodEnd) <= new Date()) {
+    return 0;
+  }
+  return getPlanRank(sub.plan);
+};
+
+// Fetch full listing rows for an ordered list of ids, preserving the given order
+const hydrateVehiclesByIds = async (ids) => {
+  if (ids.length === 0) return [];
+  const rows = await prisma.vehicle.findMany({
+    where: { id: { in: ids } },
+    include: { ...sellerInclude, images: true },
+  });
+  const byId = new Map(rows.map((v) => [v.id, v]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+};
 
 // Helper to format images array safely
 const formatImages = (images) => {
@@ -39,6 +84,21 @@ const createVehicle = async (req, res) => {
       }
     }
 
+    // Enforce plan-based listing limits (starter billing strategy)
+    const subscription = await getActiveSubscription(req.user.id);
+    const listingLimit = getListingLimit(subscription ? subscription.plan : null);
+    if (listingLimit !== null) {
+      const activeListings = await prisma.vehicle.count({
+        where: { sellerId: seller.id, status: { in: ['PENDING', 'AVAILABLE'] } },
+      });
+      if (activeListings >= listingLimit) {
+        return res.status(403).json({
+          message: `You've reached the ${listingLimit}-listing limit of your current plan. Upgrade your plan to add more listings.`,
+          upgradeRequired: true,
+        });
+      }
+    }
+
     const {
       make, model, year, price, location, condition,
       mileage, transmission, fuelType, engineSize, bodyType, color,
@@ -50,6 +110,12 @@ const createVehicle = async (req, res) => {
 
     const formattedImgList = formatImages(images);
     const formattedDocList = formatDocuments(documents);
+
+    // Free-plan listings auto-expire after 90 days; paid plans don't expire
+    const subscription2 = await getActiveSubscription(req.user.id);
+    const expiresAt = subscription2
+      ? null
+      : new Date(Date.now() + FREE_LISTING_DAYS * 24 * 60 * 60 * 1000);
 
     const vehicle = await prisma.vehicle.create({
       data: {
@@ -67,6 +133,7 @@ const createVehicle = async (req, res) => {
         bodyType,
         color,
         description,
+        expiresAt,
         features: features && features.length > 0 ? {
           create: features.map(f => ({ featureName: f }))
         } : undefined,
@@ -95,13 +162,16 @@ const createVehicle = async (req, res) => {
 // @desc    Get all vehicles (with filtering, sorting, pagination)
 // @route   GET /api/vehicles
 // @access  Public
+const SORTABLE_FIELDS = ['createdAt', 'updatedAt', 'price', 'year', 'mileage'];
+
 const getVehicles = async (req, res) => {
   try {
     const {
-      make, model, condition, transmission, fuelType,
+      make, model, condition, transmission, fuelType, bodyType,
       minPrice, maxPrice, location, verifiedOnly, search,
-      sortBy = 'createdAt', order = 'desc', page = 1, limit = 12
+      order = 'desc', page = 1, limit = 12
     } = req.query;
+    const sortBy = SORTABLE_FIELDS.includes(req.query.sortBy) ? req.query.sortBy : 'createdAt';
 
     const where = {
       status: 'AVAILABLE'
@@ -112,6 +182,7 @@ const getVehicles = async (req, res) => {
     if (condition) where.condition = condition;
     if (transmission) where.transmission = transmission;
     if (fuelType) where.fuelType = fuelType;
+    if (bodyType) where.bodyType = bodyType;
     if (location) where.location = location;
 
     if (minPrice || maxPrice) {
@@ -124,31 +195,48 @@ const getVehicles = async (req, res) => {
       where.seller = { verified: true };
     }
 
+    // Keyword and expiry clauses are AND-ed so expired free listings stay hidden during searches
+    where.AND = [notExpiredFilter()];
     if (search) {
-      where.OR = [
-        { make: { contains: search } },
-        { model: { contains: search } },
-        { description: { contains: search } },
-        { location: { contains: search } }
-      ];
+      where.AND.push({
+        OR: [
+          { make: { contains: search } },
+          { model: { contains: search } },
+          { description: { contains: search } },
+          { location: { contains: search } }
+        ],
+      });
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
+    const dir = order === 'asc' ? 1 : -1;
+
+    // Lightweight pass over all matches to rank by seller plan tier before pagination
+    const candidates = await prisma.vehicle.findMany({
+      where,
+      select: {
+        id: true,
+        featured: true,
+        createdAt: true,
+        updatedAt: true,
+        price: true,
+        year: true,
+        mileage: true,
+        seller: { select: { user: { select: { subscription: { select: { plan: true, status: true, periodEnd: true } } } } } },
+      },
+    });
+
+    candidates.sort((a, b) =>
+      (sellerPlanRank(b.seller) - sellerPlanRank(a.seller)) ||
+      (b.featured - a.featured) ||
+      ((a[sortBy] ?? 0) - (b[sortBy] ?? 0)) * dir
+    );
+
+    const pageIds = candidates.slice(skip, skip + take).map((v) => v.id);
 
     const [vehicles, total] = await Promise.all([
-      prisma.vehicle.findMany({
-        where,
-        include: {
-          seller: {
-            include: { user: { select: { name: true, phone: true } } }
-          },
-          images: true
-        },
-        orderBy: { [sortBy]: order },
-        skip,
-        take
-      }),
+      hydrateVehiclesByIds(pageIds),
       prisma.vehicle.count({ where })
     ]);
 
@@ -167,39 +255,50 @@ const getVehicles = async (req, res) => {
   }
 };
 
-// @desc    Get featured vehicles
+// @desc    Get featured vehicles (home feed), prioritising sellers on higher plans
 // @route   GET /api/vehicles/featured
 // @access  Public
 const getFeaturedCars = async (req, res) => {
   try {
-    let vehicles = await prisma.vehicle.findMany({
+    const candidateSelect = {
+      id: true,
+      createdAt: true,
+      seller: { select: { user: { select: { subscription: { select: { plan: true, status: true, periodEnd: true } } } } } },
+    };
+
+    let candidates = await prisma.vehicle.findMany({
       where: {
         status: 'AVAILABLE',
         featured: true,
+        AND: [
+          { OR: [{ featuredUntil: null }, { featuredUntil: { gt: new Date() } }] },
+          notExpiredFilter(),
+        ],
       },
-      include: {
-        seller: {
-          include: { user: { select: { name: true, phone: true } } }
-        },
-        images: true,
-      },
-      take: 6,
+      select: candidateSelect,
+      take: 24,
       orderBy: { createdAt: 'desc' }
     });
 
-    if (vehicles.length === 0) {
-      vehicles = await prisma.vehicle.findMany({
-        where: { status: 'AVAILABLE' },
-        include: {
-          seller: {
-            include: { user: { select: { name: true, phone: true } } }
-          },
-          images: true,
+    if (candidates.length === 0) {
+      candidates = await prisma.vehicle.findMany({
+        where: {
+          status: 'AVAILABLE',
+          AND: [notExpiredFilter()],
         },
-        take: 6,
+        select: candidateSelect,
+        take: 24,
         orderBy: { createdAt: 'desc' }
       });
     }
+
+    // Highest plan tier first, then newest
+    candidates.sort((a, b) =>
+      (sellerPlanRank(b.seller) - sellerPlanRank(a.seller)) ||
+      (new Date(b.createdAt) - new Date(a.createdAt))
+    );
+
+    const vehicles = await hydrateVehiclesByIds(candidates.slice(0, 6).map((v) => v.id));
 
     res.json(vehicles);
   } catch (error) {

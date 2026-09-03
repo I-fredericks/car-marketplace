@@ -15,10 +15,13 @@ import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
 import Compare from './pages/Compare';
 import NotFound from './pages/NotFound';
+import Pricing from './pages/Pricing';
+import BillingCallback from './pages/BillingCallback';
 
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import BottomNav from './components/BottomNav';
 
 // Global styles
 import './App.css';
@@ -44,10 +47,13 @@ function App() {
               <Route path="/messages/:userId/:vehicleId" element={<Messages />} />
               <Route path="/admin"    element={<AdminDashboard />} />
               <Route path="/compare"  element={<Compare />} />
+              <Route path="/pricing"  element={<Pricing />} />
+              <Route path="/billing/callback" element={<BillingCallback />} />
               <Route path="*"        element={<NotFound />} />
             </Routes>
           </main>
           <Footer />
+          <BottomNav />
         </div>
       </Router>
     </AuthProvider>

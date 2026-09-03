@@ -44,7 +44,10 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/', authLimiter);
 
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  verify: (req, res, buf) => { req.rawBody = buf; }, // needed for Paystack webhook signature check
+}));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static uploads directory (backend/uploads)
@@ -68,6 +71,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/favorites', require('./routes/favoriteRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/billing', require('./routes/billingRoutes'));
 
 // Serve static frontend build if dist folder exists (for single-tunnel ngrok presentation)
 const distPath = path.join(__dirname, '../../frontend/dist');

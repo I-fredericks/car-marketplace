@@ -2,8 +2,10 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { Heart, Flag } from 'lucide-react';
-import './CarDetails.css';
+import { Heart, Flag, MapPin, MessageCircle, Phone, CheckCircle, ShieldCheck, Car, Star } from 'lucide-react';
+import SpecGrid from '../components/SpecGrid';
+import StickyContactBar from '../components/StickyContactBar';
+import Badge from '../components/Badge';
 
 const CarDetails = () => {
   const { id } = useParams();
@@ -17,16 +19,15 @@ const CarDetails = () => {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
-  const [brokenImages, setBrokenImages] = useState(new Set());
 
   useEffect(() => {
     const fetchCar = async () => {
       try {
         const { data } = await api.get(`/vehicles/${id}`);
         setCar(data);
-    } catch {
-      console.error('Error fetching car');
-    } finally {
+      } catch {
+        console.error('Error fetching car');
+      } finally {
         setLoading(false);
       }
     };
@@ -79,17 +80,26 @@ const CarDetails = () => {
     }
   };
 
-  const handleImageError = (imgId) => {
-    setBrokenImages(prev => new Set(prev).add(imgId));
-  };
-
-  if (loading) return <div className="page-loading">Loading car details...</div>;
-  if (!car) return <div className="page-loading">Car not found.</div>;
+  if (loading) return (
+    <div className="min-h-screen pt-24 pb-20 flex flex-col items-center justify-center bg-bg">
+      <div className="animate-spin w-10 h-10 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
+      <p className="text-textsecondary">Loading vehicle details...</p>
+    </div>
+  );
+  
+  if (!car) return (
+    <div className="min-h-screen pt-24 pb-20 flex flex-col items-center justify-center bg-bg">
+      <Car size={64} className="text-bordercol mb-4" />
+      <h2 className="font-display font-bold text-2xl text-textprimary mb-2">Vehicle Not Found</h2>
+      <Link to="/search" className="text-primary font-medium hover:underline">Return to search</Link>
+    </div>
+  );
 
   const seller = car.seller;
   const sellerName = seller?.user?.name || 'Seller';
   const sellerPhone = seller?.user?.phone || '';
   const sellerWhatsApp = seller?.whatsapp || sellerPhone;
+  const isVerified = seller?.role === 'ADMIN' || seller?.role === 'SELLER';
 
   const whatsappMsg = encodeURIComponent(
     `Hello, I'm interested in your ${car.year} ${car.make} ${car.model} listed on CarMarket Ghana for GH₵${Number(car.price).toLocaleString()}. Is it still available?`
@@ -98,193 +108,267 @@ const CarDetails = () => {
   const formatLabel = (str) => str?.replace(/_/g, ' ') || '—';
 
   const specs = [
-    { label: 'Year',         value: car.year },
-    { label: 'Mileage',      value: car.mileage ? `${car.mileage.toLocaleString()} km` : '—' },
+    { label: 'Year', value: car.year },
+    { label: 'Mileage', value: car.mileage ? `${car.mileage.toLocaleString()} km` : '—' },
     { label: 'Transmission', value: formatLabel(car.transmission) },
-    { label: 'Fuel Type',    value: formatLabel(car.fuelType) },
-    { label: 'Engine Size',  value: car.engineSize || '—' },
-    { label: 'Body Type',    value: car.bodyType || '—' },
-    { label: 'Condition',    value: formatLabel(car.condition) },
-    { label: 'Color',        value: car.color || '—' },
-    { label: 'Location',     value: car.location },
+    { label: 'Fuel Type', value: formatLabel(car.fuelType) },
+    { label: 'Engine Size', value: car.engineSize || '—' },
+    { label: 'Body Type', value: car.bodyType || '—' },
+    { label: 'Condition', value: formatLabel(car.condition) },
+    { label: 'Color', value: car.color || '—' },
   ];
 
   return (
-    <div className="car-details-page">
-      <div className="details-container">
-
-        {/* Left — Gallery + Info */}
-        <div className="details-left">
-
-          {/* Image Gallery */}
-          <div className="gallery">
-            <div className="gallery-main">
-              {car.images && car.images.length > 0 && !brokenImages.has(`main-${car.id}`)
-                ? <img src={getImageUrl(car.images[activeImg]?.data)} alt={car.make} onError={() => handleImageError(`main-${car.id}`)} />
-                : <div className="no-image-placeholder">🚗 No Photos</div>
-              }
+    <div className="bg-bg min-h-screen pt-24 pb-32 md:pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div className="flex flex-col lg:flex-row gap-8">
+          
+          {/* Left Column: Gallery & Details */}
+          <div className="flex-1 min-w-0">
+            {/* Header for Mobile */}
+            <div className="lg:hidden mb-6">
+              <h1 className="font-display font-bold text-3xl text-textprimary mb-2">
+                {car.year} {car.make} {car.model}
+              </h1>
+              <p className="font-display font-bold text-2xl text-primary mb-3">
+                GH₵{Number(car.price).toLocaleString()}
+              </p>
+              <div className="flex items-center gap-3 text-sm">
+                <Badge type="neutral">{formatLabel(car.condition)}</Badge>
+                <span className="flex items-center gap-1 text-textsecondary">
+                  <MapPin size={16} /> {car.location}
+                </span>
+              </div>
             </div>
-            {car.images && car.images.length > 1 && (
-              <div className="gallery-thumbs">
-                {car.images.map((img, i) => (
-                  <img
-                    key={img.id}
-                    src={getImageUrl(img.data)}
-                    alt={`thumb-${i}`}
-                    className={i === activeImg ? 'thumb active' : 'thumb'}
-                    onClick={() => setActiveImg(i)}
-                    onError={() => handleImageError(img.id)}
+
+            {/* Gallery */}
+            <div className="bg-surface border border-bordercol rounded-lg p-2 mb-8 shadow-sm">
+              <div className="aspect-[4/3] rounded-md overflow-hidden bg-bg mb-2">
+                {car.images && car.images.length > 0 ? (
+                  <img 
+                    src={getImageUrl(car.images[activeImg]?.data)} 
+                    alt={`${car.make} ${car.model}`} 
+                    className="w-full h-full object-cover"
                   />
-                ))}
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-textmuted">
+                    <Car size={48} className="mb-2" />
+                    <p>No photos available</p>
+                  </div>
+                )}
+              </div>
+              
+              {car.images && car.images.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto p-1 custom-scrollbar">
+                  {car.images.map((img, i) => (
+                    <button 
+                      key={img.id}
+                      onClick={() => setActiveImg(i)}
+                      className={`flex-shrink-0 w-24 h-18 rounded-md overflow-hidden border-2 ${activeImg === i ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'} transition-all`}
+                    >
+                      <img src={getImageUrl(img.data)} alt={`Thumbnail ${i}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Header for Desktop */}
+            <div className="hidden lg:block mb-8">
+              <h1 className="font-display font-bold text-4xl text-textprimary mb-2">
+                {car.year} {car.make} {car.model}
+              </h1>
+              <div className="flex items-end justify-between">
+                <p className="font-display font-bold text-3xl text-primary">
+                  GH₵{Number(car.price).toLocaleString()}
+                </p>
+                <div className="flex items-center gap-3">
+                  <Badge type="neutral">{formatLabel(car.condition)}</Badge>
+                  <span className="flex items-center gap-1 text-textsecondary text-sm">
+                    <MapPin size={16} /> {car.location}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Specifications */}
+            <div className="mb-10">
+              <h2 className="font-display font-semibold text-xl text-textprimary mb-4">Vehicle Specifications</h2>
+              <SpecGrid specs={specs} />
+            </div>
+
+            {/* Features Checklist */}
+            {car.features && car.features.length > 0 && (
+              <div className="mb-10">
+                <h2 className="font-display font-semibold text-xl text-textprimary mb-4">Features</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {car.features.map(f => (
+                    <div key={f.id} className="flex items-center gap-2 text-sm text-textsecondary">
+                      <CheckCircle size={16} className="text-success flex-shrink-0" />
+                      <span>{f.featureName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Description */}
+            {car.description && (
+              <div className="mb-10">
+                <h2 className="font-display font-semibold text-xl text-textprimary mb-4">Description</h2>
+                <div className="bg-surface border border-bordercol rounded-lg p-5">
+                  <p className="text-textsecondary whitespace-pre-wrap leading-relaxed text-sm">
+                    {car.description}
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Car Title + Price */}
-          <div className="car-header">
-            <h1>{car.year} {car.make} {car.model}</h1>
-            <p className="details-price">GH₵{Number(car.price).toLocaleString()}</p>
-            <div className="car-meta-tags">
-              <span>📍 {car.location}</span>
-              <span className="condition-tag">{formatLabel(car.condition)}</span>
-              {car.seller?.verified && <span className="verified-tag">🟢 Verified Seller</span>}
-            </div>
-          </div>
+          {/* Right Column: Seller & Actions */}
+          <div className="w-full lg:w-[350px] flex-shrink-0">
+            <div className="sticky top-24 flex flex-col gap-6">
+              
+              {/* Seller Card */}
+              <div className="bg-surface border border-bordercol rounded-lg p-6 shadow-sm">
+                <h3 className="font-display font-semibold text-lg text-textprimary mb-4 border-b border-bordercol pb-2">Seller Information</h3>
+                
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="w-14 h-14 bg-bg rounded-full flex items-center justify-center text-primary text-xl font-bold border border-bordercol">
+                    {sellerName.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-textprimary text-lg">{sellerName}</h4>
+                    <p className="text-sm text-textsecondary capitalize">{formatLabel(seller?.sellerType)} Seller</p>
+                  </div>
+                </div>
 
-          {/* Specs Table */}
-          <div className="section-card">
-            <h2>Vehicle Specifications</h2>
-            <table className="specs-table">
-              <tbody>
-                {specs.map(s => (
-                  <tr key={s.label}>
-                    <td className="spec-label">{s.label}</td>
-                    <td className="spec-value">{s.value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                {isVerified && (
+                  <div className="flex gap-2 mb-6">
+                    <Badge type="success">
+                      <ShieldCheck size={14} /> Verified Seller
+                    </Badge>
+                    {seller?.rating > 0 && (
+                      <Badge type="neutral">
+                        <Star size={14} className="text-accent" fill="currentColor" /> {seller.rating.toFixed(1)}
+                      </Badge>
+                    )}
+                  </div>
+                )}
 
-          {/* Features */}
-          {car.features && car.features.length > 0 && (
-            <div className="section-card">
-              <h2>Features</h2>
-              <div className="features-grid">
-                {car.features.map(f => (
-                  <span key={f.id} className="feature-chip">✓ {f.featureName}</span>
-                ))}
+                {/* Desktop Action Buttons */}
+                <div className="hidden md:flex flex-col gap-3 mb-6">
+                  {sellerWhatsApp && (
+                    <a 
+                      href={`https://wa.me/${sellerWhatsApp.replace(/\D/g, '')}?text=${whatsappMsg}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-3 bg-[#25D366] text-white font-bold rounded-md hover:bg-[#1DA851] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <MessageCircle size={20} /> WhatsApp Seller
+                    </a>
+                  )}
+                  {sellerPhone && (
+                    <a 
+                      href={`tel:${sellerPhone}`} 
+                      className="w-full py-3 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Phone size={20} /> Call Seller
+                    </a>
+                  )}
+                  {user && user.id !== car.seller?.userId && (
+                    <Link 
+                      to={`/messages/${car.seller.userId}/${car.id}`} 
+                      className="w-full py-3 bg-bg border border-bordercol text-textprimary font-medium rounded-md hover:bg-bordercol/30 transition-colors flex items-center justify-center gap-2"
+                    >
+                      Message Seller
+                    </Link>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-bordercol pt-5">
+                  <button 
+                    onClick={toggleFavorite} 
+                    className={`flex items-center gap-2 text-sm font-medium transition-colors ${isFavorite ? 'text-err' : 'text-textsecondary hover:text-primary'}`}
+                  >
+                    <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
+                    {isFavorite ? 'Saved' : 'Save Car'}
+                  </button>
+                  
+                  <button 
+                    onClick={() => setShowReportModal(true)} 
+                    className="flex items-center gap-2 text-sm font-medium text-textmuted hover:text-textprimary transition-colors"
+                  >
+                    <Flag size={18} /> Report
+                  </button>
+                </div>
+
+                {user && user.role === 'SELLER' && car.seller?.userId === user.id && (
+                  <button
+                    className="w-full mt-4 py-2 border border-primary text-primary font-medium rounded-md hover:bg-primary hover:text-white transition-colors"
+                    onClick={() => navigate(`/sell/edit/${car.id}`)}
+                  >
+                    Edit Listing
+                  </button>
+                )}
               </div>
-            </div>
-          )}
 
-          {/* Description */}
-          {car.description && (
-            <div className="section-card">
-              <h2>Description</h2>
-              <p className="description-text">{car.description}</p>
+              {/* Safety Tips */}
+              <div className="bg-primary/5 border border-primary/10 rounded-lg p-5">
+                <h4 className="font-display font-semibold text-primary mb-3 flex items-center gap-2">
+                  <ShieldCheck size={18} /> Safety Tips
+                </h4>
+                <ul className="text-sm text-textsecondary space-y-2">
+                  <li className="flex gap-2"><span className="text-primary">•</span> Always meet in a public place</li>
+                  <li className="flex gap-2"><span className="text-primary">•</span> Inspect the car before making any payment</li>
+                  <li className="flex gap-2"><span className="text-primary">•</span> Verify ownership documents</li>
+                  <li className="flex gap-2"><span className="text-primary">•</span> Never send money in advance</li>
+                </ul>
+              </div>
+
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Right — Seller Contact Card */}
-        <div className="details-right">
-          <div className="seller-card">
-            <h3>Seller Information</h3>
-            <div className="seller-name">
-              <span className="seller-avatar">👤</span>
-              <div>
-                <p className="seller-fullname">{sellerName}</p>
-                <p className="seller-type">{formatLabel(seller?.sellerType)} Seller</p>
-              </div>
-            </div>
-
-            {seller?.verified && (
-              <div className="trust-badges">
-                <span className="badge green">🟢 Verified Seller</span>
-                {seller?.rating > 0 && <span className="badge blue">⭐ {seller.rating.toFixed(1)} / 5</span>}
-              </div>
-            )}
-
-            <div className="contact-buttons">
-              {sellerWhatsApp && (
-                <a
-                  href={`https://wa.me/${sellerWhatsApp.replace(/\D/g, '')}?text=${whatsappMsg}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="contact-btn whatsapp"
-                >
-                  💬 WhatsApp Seller
-                </a>
-              )}
-              {sellerPhone && (
-                <a href={`tel:${sellerPhone}`} className="contact-btn phone">
-                  📞 Call Seller
-                </a>
-              )}
-              {user && user.id !== car.seller?.userId && (
-                <Link to={`/messages/${car.seller.userId}/${car.id}`} className="contact-btn message">
-                  ✉️ Message Seller
-                </Link>
-              )}
-            </div>
-
-            <p className="contact-note">
-              Mention CarMarket Ghana when you call. Always inspect the vehicle before paying.
-            </p>
-
-            <div className="action-buttons">
-              <button onClick={toggleFavorite} className={`action-btn favorite ${isFavorite ? 'active' : ''}`}>
-                <Heart size={18} fill={isFavorite ? '#DC2626' : 'none'} />
-                {isFavorite ? 'Saved' : 'Save Car'}
-              </button>
-              <button onClick={() => setShowReportModal(true)} className="action-btn report">
-                <Flag size={18} />
-                Report
-              </button>
-            </div>
-
-            {/* If seller is the owner, show edit button */}
-            {user && user.role === 'SELLER' && car.seller?.userId === user.id && (
-              <button
-                className="edit-btn"
-                onClick={() => navigate(`/sell/edit/${car.id}`)}
-              >
-                ✏️ Edit Listing
-              </button>
-            )}
-          </div>
-
-          {/* Safety tip */}
-          <div className="safety-card">
-            <h4>🛡️ Safety Tips</h4>
-            <ul>
-              <li>Always meet in a public place</li>
-              <li>Inspect the car before making any payment</li>
-              <li>Verify ownership documents</li>
-              <li>Never send money in advance</li>
-            </ul>
-          </div>
-        </div>
-
       </div>
 
+      {/* Mobile Sticky Contact Bar */}
+      <StickyContactBar
+        phone={sellerPhone}
+        whatsapp={sellerWhatsApp}
+        sellerUserId={car.seller?.userId}
+        vehicleId={car.id}
+        isLoggedIn={Boolean(user)}
+      />
+
+      {/* Report Modal */}
       {showReportModal && (
-        <div className="modal-overlay" onClick={() => setShowReportModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Report Listing</h3>
-            <p>Please provide a reason for reporting this listing.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-textprimary/60 backdrop-blur-sm" onClick={() => setShowReportModal(false)}>
+          <div className="bg-surface rounded-xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display font-bold text-xl text-textprimary mb-2">Report Listing</h3>
+            <p className="text-sm text-textsecondary mb-4">Please provide a reason for reporting this listing.</p>
             <form onSubmit={handleReport}>
               <textarea
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 placeholder="Describe the issue..."
                 rows={4}
+                className="w-full p-3 border border-bordercol rounded-md bg-bg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary mb-4 resize-none"
                 required
               />
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowReportModal(false)}>Cancel</button>
-                <button type="submit" disabled={reportSubmitting}>
+              <div className="flex gap-3 justify-end">
+                <button 
+                  type="button" 
+                  onClick={() => setShowReportModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-textsecondary hover:bg-bg rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={reportSubmitting}
+                  className="px-4 py-2 text-sm font-medium bg-err text-white rounded-md hover:bg-err/90 transition-colors disabled:opacity-50"
+                >
                   {reportSubmitting ? 'Submitting...' : 'Submit Report'}
                 </button>
               </div>

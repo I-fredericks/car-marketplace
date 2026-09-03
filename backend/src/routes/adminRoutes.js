@@ -11,6 +11,9 @@ const {
   getStats,
   getReports,
   resolveReport,
+  getPayments,
+  verifyPayment,
+  rejectPayment,
 } = require('../controllers/adminController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
@@ -35,5 +38,10 @@ router.delete('/users/:id', deleteUser);
 // Reports
 router.get('/reports', getReports);
 router.put('/reports/:id/resolve', resolveReport);
+
+// Payments (billing verification)
+router.get('/payments', getPayments);
+router.put('/payments/:id/verify', verifyPayment);
+router.put('/payments/:id/reject', rejectPayment);
 
 module.exports = router;
