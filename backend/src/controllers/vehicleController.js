@@ -34,12 +34,18 @@ const sellerPlanRank = (seller) => {
   return getPlanRank(sub.plan);
 };
 
+// List endpoints ship only image ids; browsers load pixels via /api/images/:id
+// which caches immutably. Full base64 data is only pulled for editing.
+const imageIdSelect = {
+  select: { id: true, isPrimary: true },
+};
+
 // Fetch full listing rows for an ordered list of ids, preserving the given order
 const hydrateVehiclesByIds = async (ids) => {
   if (ids.length === 0) return [];
   const rows = await prisma.vehicle.findMany({
     where: { id: { in: ids } },
-    include: { ...sellerInclude, images: true },
+    include: { ...sellerInclude, images: imageIdSelect },
   });
   const byId = new Map(rows.map((v) => [v.id, v]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
@@ -322,7 +328,7 @@ const getVehicleById = async (req, res) => {
           }
         },
         features: true,
-        images: true,
+        images: req.query.withImageData === 'true' ? true : imageIdSelect,
         documents: true
       }
     });
@@ -471,7 +477,7 @@ const getSellerListings = async (req, res) => {
     const vehicles = await prisma.vehicle.findMany({
       where: { sellerId: seller.id },
       include: {
-        images: true
+        images: imageIdSelect
       },
       orderBy: { createdAt: 'desc' }
     });

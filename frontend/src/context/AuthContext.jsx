@@ -35,6 +35,26 @@ export const AuthProvider = ({ children }) => {
     setUser(profile.data);
   };
 
+  const loginWithGoogle = async (credential, role, sellerType) => {
+    const { data } = await api.post('/auth/google', { credential, role, sellerType });
+    localStorage.setItem('token', data.token);
+    setUser(data.user);
+    const profile = await api.get('/auth/me');
+    setUser(profile.data);
+    return profile.data;
+  };
+
+  // Upgrade the logged-in buyer to a seller account; the backend returns a
+  // fresh token carrying the new role
+  const upgradeToSeller = async (details) => {
+    const { data } = await api.put('/auth/upgrade', details);
+    localStorage.setItem('token', data.token);
+    setUser(data.user);
+    const profile = await api.get('/auth/me');
+    setUser(profile.data);
+    return profile.data;
+  };
+
   const register = async (userData) => {
     const { data } = await api.post('/auth/register', userData);
     // Automatically log in after registration could be done here, 
@@ -54,7 +74,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

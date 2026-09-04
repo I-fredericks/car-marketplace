@@ -126,7 +126,7 @@ const Compare = () => {
               <div key={car.id} className={`flex flex-col items-center text-center ${idx === 0 ? 'pr-2' : 'pl-2'}`}>
                 <div className="w-full aspect-[4/3] bg-bg rounded-md overflow-hidden mb-4 border border-bordercol flex items-center justify-center">
                   {car.images && car.images.length > 0 && !brokenImages.has(car.id) ? (
-                    <img src={getImageUrl(car.images[0].data)} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
+                    <img src={getImageUrl(car.images[0])} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
                   ) : (
                     <Car size={32} className="text-bordercol" />
                   )}

@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Car } from 'lucide-react';
+import GoogleButton from '../components/GoogleButton';
 
 const Login = () => {
   const { login } = useContext(AuthContext);
@@ -58,7 +59,7 @@ const Login = () => {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-medium text-textprimary">Password</label>
-              <a href="#" className="text-xs font-medium text-primary hover:text-primarylight">Forgot password?</a>
+              <Link to="/forgot-password" className="text-xs font-medium text-primary hover:text-primarylight">Forgot password?</Link>
             </div>
             <input
               type="password"
@@ -85,6 +86,14 @@ const Login = () => {
             )}
           </button>
         </form>
+
+        <div className="flex items-center gap-4 my-6">
+          <span className="flex-1 h-px bg-bordercol"></span>
+          <span className="text-xs font-medium text-textmuted uppercase tracking-wide">or</span>
+          <span className="flex-1 h-px bg-bordercol"></span>
+        </div>
+
+        <GoogleButton onError={setError} navigate={navigate} />
 
         <p className="mt-8 text-center text-sm text-textsecondary">
           Don't have an account?{' '}

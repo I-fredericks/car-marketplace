@@ -15,7 +15,17 @@ const registerSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().optional(),
-  role: z.enum(['BUYER', 'SELLER']).optional()
+  role: z.enum(['BUYER', 'SELLER']).optional(),
+  sellerType: z.enum(['PRIVATE', 'DEALER', 'COMPANY']).optional()
+});
+
+const emailOnlySchema = z.object({
+  email: z.string().email('Invalid email address')
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(10, 'Reset token is required'),
+  password: z.string().min(6, 'Password must be at least 6 characters')
 });
 
 const loginSchema = z.object({
@@ -50,11 +60,38 @@ const vehicleSchema = z.object({
   images: z.array(z.object({
     data: z.string().min(1, 'Image data is required'),
     isPrimary: z.boolean().optional()
-  })).optional(),
+  })).max(15, 'Maximum 15 images per listing').optional()
+    .refine(
+      (imgs) => imgs.every((img) => {
+        // Accept base64 raster images and uploaded/external URLs only — SVG
+        // can carry scripts (stored XSS), so it is rejected at creation time.
+        if (/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i.test(img.data)) return true;
+        if (/^\/?uploads\//.test(img.data)) return true;
+        if (/^https?:\/\//.test(img.data)) return true;
+        return false;
+      }),
+      { message: 'Images must be JPEG, PNG, WebP or GIF' }
+    )
+    .refine(
+      (imgs) => imgs.every((img) => img.data.length <= 12_000_000),
+      { message: 'Each image must be under ~9MB' }
+    ),
   documents: z.array(z.object({
     data: z.string().min(1, 'Document data is required'),
     documentType: z.string().optional()
-  })).optional()
+  })).max(5, 'Maximum 5 documents per listing').optional()
+    .refine(
+      (docs) => docs.every((doc) => {
+        if (/^data:(image\/(jpeg|jpg|png|webp)|application\/pdf);base64,/i.test(doc.data)) return true;
+        if (/^\/?uploads\//.test(doc.data)) return true;
+        return false;
+      }),
+      { message: 'Documents must be images or PDFs' }
+    )
+    .refine(
+      (docs) => docs.every((doc) => doc.data.length <= 12_000_000),
+      { message: 'Each document must be under ~9MB' }
+    )
 });
 
 const updateVehicleSchema = vehicleSchema.partial().extend({
@@ -70,6 +107,8 @@ module.exports = {
   registerSchema,
   loginSchema,
   upgradeToSellerSchema,
+  emailOnlySchema,
+  resetPasswordSchema,
   vehicleSchema,
   updateVehicleSchema,
   updateListingStatusSchema

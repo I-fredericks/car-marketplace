@@ -18,5 +18,22 @@ export default defineConfig({
         secure: false,
       }
     }
-  }
+  },
+  build: {
+    // Split long-lived vendor code into separately cached chunks
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (/[\\/]react(-dom|-router-dom)?[\\/]/.test(id) || id.includes('scheduler')) {
+              return 'react-vendor';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
+          }
+        },
+      },
+    },
+  },
 })

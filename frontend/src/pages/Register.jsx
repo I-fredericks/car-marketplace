@@ -1,7 +1,14 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Car, Search } from 'lucide-react';
+import { Car, Search, User, Store, Building2 } from 'lucide-react';
+import GoogleButton from '../components/GoogleButton';
+
+const SELLER_TYPES = [
+  { value: 'PRIVATE', label: 'Private', description: 'Selling my own car', Icon: User },
+  { value: 'DEALER', label: 'Dealer', description: 'I buy & sell cars', Icon: Store },
+  { value: 'COMPANY', label: 'Company', description: 'Registered company', Icon: Building2 },
+];
 
 const Register = () => {
   const { register } = useContext(AuthContext);
@@ -13,7 +20,8 @@ const Register = () => {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'BUYER'
+    role: 'BUYER',
+    sellerType: 'PRIVATE'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +34,7 @@ const Register = () => {
     }
     setLoading(true);
     try {
-      await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, role: form.role });
+      await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, role: form.role, sellerType: form.role === 'SELLER' ? form.sellerType : undefined });
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
@@ -74,6 +82,30 @@ const Register = () => {
               />
             </div>
           </div>
+
+          {form.role === 'SELLER' && (
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-textprimary">I am selling as...</label>
+              <div className="grid grid-cols-3 gap-3">
+                {SELLER_TYPES.map(({ value, label, description, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setForm({ ...form, sellerType: value })}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-md border-2 text-center transition-colors ${
+                      form.sellerType === value
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-bordercol bg-surface text-textsecondary hover:bg-bg'
+                    }`}
+                  >
+                    <Icon size={20} />
+                    <span className="text-sm font-semibold">{label}</span>
+                    <span className="text-[11px] text-textmuted leading-snug">{description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-textprimary">Phone Number</label>
@@ -139,8 +171,8 @@ const Register = () => {
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="w-full h-12 mt-4 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
           >
@@ -153,6 +185,14 @@ const Register = () => {
               'Create Account'
             )}
           </button>
+
+          <div className="flex items-center gap-4 my-6">
+            <span className="flex-1 h-px bg-bordercol"></span>
+            <span className="text-xs font-medium text-textmuted uppercase tracking-wide">or sign up with Google</span>
+            <span className="flex-1 h-px bg-bordercol"></span>
+          </div>
+
+          <GoogleButton role={form.role} sellerType={form.role === 'SELLER' ? form.sellerType : undefined} onError={setError} navigate={navigate} />
         </form>
 
         <p className="mt-8 text-center text-sm text-textsecondary">

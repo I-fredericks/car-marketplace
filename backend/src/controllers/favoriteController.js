@@ -69,7 +69,8 @@ const getFavorites = async (req, res) => {
           include: {
             images: {
               where: { isPrimary: true },
-              take: 1
+              take: 1,
+              select: { id: true, isPrimary: true }
             },
             seller: {
               select: {

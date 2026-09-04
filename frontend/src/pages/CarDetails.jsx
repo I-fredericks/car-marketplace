@@ -147,7 +147,7 @@ const CarDetails = () => {
               <div className="aspect-[4/3] rounded-md overflow-hidden bg-bg mb-2">
                 {car.images && car.images.length > 0 ? (
                   <img 
-                    src={getImageUrl(car.images[activeImg]?.data)} 
+                    src={getImageUrl(car.images[activeImg])} 
                     alt={`${car.make} ${car.model}`} 
                     className="w-full h-full object-cover"
                   />
@@ -167,7 +167,7 @@ const CarDetails = () => {
                       onClick={() => setActiveImg(i)}
                       className={`flex-shrink-0 w-24 h-18 rounded-md overflow-hidden border-2 ${activeImg === i ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'} transition-all`}
                     >
-                      <img src={getImageUrl(img.data)} alt={`Thumbnail ${i}`} className="w-full h-full object-cover" />
+                      <img src={getImageUrl(img)} alt={`Thumbnail ${i}`} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>

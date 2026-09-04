@@ -18,6 +18,7 @@ model User {
   phone     String?
   role      Role     @default(BUYER)
   verified  Boolean  @default(false)
+  emailVerified Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -29,8 +30,22 @@ model User {
   reports       Report[]       @relation("ReportReporter")
   payments      Payment[]
   subscription  Subscription?
+  authTokens    AuthToken[]
 
   @@map("user")
+}
+
+model AuthToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  type      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("authtoken")
 }
 
 enum Role {

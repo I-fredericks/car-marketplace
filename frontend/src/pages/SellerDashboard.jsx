@@ -76,14 +76,23 @@ const SellerDashboard = () => {
     return (
       <div className="min-h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-bg px-4 mt-16">
         <div className="bg-surface border border-bordercol rounded-xl shadow-sm p-12 max-w-md w-full text-center flex flex-col items-center">
-          <div className="w-16 h-16 bg-err/10 rounded-full flex items-center justify-center mb-6">
-            <ShieldAlert size={32} className="text-err" />
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+            <ShieldAlert size={32} className="text-primary" />
           </div>
-          <h2 className="font-display font-semibold text-2xl text-textprimary mb-2">Access Denied</h2>
+          <h2 className="font-display font-semibold text-2xl text-textprimary mb-2">Become a Seller</h2>
           <p className="text-textsecondary mb-8 leading-relaxed">
-            You need a Seller account to view this dashboard. Go to your profile to upgrade your account.
+            You need a Seller account to view this dashboard. Upgrade your buyer account to get started.
           </p>
-          <Link to="/" className="w-full h-11 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center">
+          {user ? (
+            <Link to="/become-seller" className="w-full h-11 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center">
+              Upgrade to Seller
+            </Link>
+          ) : (
+            <Link to="/login" className="w-full h-11 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center">
+              Sign In
+            </Link>
+          )}
+          <Link to="/" className="w-full h-11 mt-3 bg-bg border border-bordercol text-textprimary font-medium rounded-md hover:bg-bordercol/30 transition-colors flex items-center justify-center">
             Return Home
           </Link>
         </div>
@@ -220,7 +229,7 @@ const SellerDashboard = () => {
                         <div className="flex items-center gap-4">
                           <div className="w-16 h-12 bg-bg border border-bordercol rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center">
                             {car.images && car.images.length > 0 && !brokenImages.has(car.id) ? (
-                              <img src={getImageUrl(car.images[0].data)} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
+                              <img src={getImageUrl(car.images[0])} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
                             ) : (
                               <Car size={20} className="text-textmuted" />
                             )}

@@ -97,12 +97,31 @@ const sendMessage = async (req, res) => {
       return res.status(400).json({ message: 'Receiver, vehicle, and content are required' });
     }
 
+    const trimmed = String(content).trim();
+    if (trimmed.length === 0 || trimmed.length > 2000) {
+      return res.status(400).json({ message: 'Message must be between 1 and 2000 characters' });
+    }
+
+    const receiverIdNum = parseInt(receiverId, 10);
+    const vehicleIdNum = parseInt(vehicleId, 10);
+    if (!Number.isInteger(receiverIdNum) || !Number.isInteger(vehicleIdNum)) {
+      return res.status(400).json({ message: 'Receiver and vehicle must be valid ids' });
+    }
+
+    const [receiver, vehicle] = await Promise.all([
+      prisma.user.findUnique({ where: { id: receiverIdNum }, select: { id: true } }),
+      prisma.vehicle.findUnique({ where: { id: vehicleIdNum }, select: { id: true } }),
+    ]);
+    if (!receiver || !vehicle) {
+      return res.status(400).json({ message: 'Receiver or vehicle does not exist' });
+    }
+
     const message = await prisma.message.create({
       data: {
         senderId: req.user.id,
-        receiverId: parseInt(receiverId),
-        vehicleId: parseInt(vehicleId),
-        content
+        receiverId: receiverIdNum,
+        vehicleId: vehicleIdNum,
+        content: trimmed
       },
       include: {
         sender: {

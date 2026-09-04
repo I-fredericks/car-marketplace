@@ -17,6 +17,15 @@ describe('Auth API', () => {
     expect(res.body.message).toEqual('User registered successfully');
   });
 
+  it('should login immediately after registration without email activation', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: testEmail, password: 'password123' });
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.token).toBeDefined();
+    expect(res.body.user.email).toEqual(testEmail);
+  });
+
   it('should not register a user with existing email', async () => {
     await request(app)
       .post('/api/auth/register')
@@ -39,27 +48,59 @@ describe('Auth API', () => {
     expect(res.body.message).toEqual('User already exists');
   });
 
-  it('should login with valid credentials', async () => {
-    const res = await request(app)
+  it('should verify the email with the token and allow login', async () => {
+    const login = await request(app)
       .post('/api/auth/login')
-      .send({
-        email: testEmail,
-        password: 'password123'
-      });
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.token).toBeDefined();
-    expect(res.body.user.email).toEqual(testEmail);
+      .send({ email: testEmail, password: 'password123' });
+    expect(login.statusCode).toEqual(200);
+    expect(login.body.token).toBeDefined();
+    expect(login.body.user.email).toEqual(testEmail);
   });
 
   it('should reject invalid login credentials', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({
-        email: testEmail,
-        password: 'wrongpassword'
-      });
+      .send({ email: testEmail, password: 'wrongpassword' });
     expect(res.statusCode).toEqual(400);
     expect(res.body.message).toEqual('Invalid credentials');
+  });
+
+  it('should complete the forgot/reset password flow', async () => {
+    const forgot = await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: testEmail });
+    expect(forgot.statusCode).toEqual(200);
+    expect(forgot.body.devResetToken).toBeDefined();
+
+    const reset = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: forgot.body.devResetToken, password: 'newpassword456' });
+    expect(reset.statusCode).toEqual(200);
+
+    // Old password no longer works, the new one does
+    const oldLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: testEmail, password: 'password123' });
+    expect(oldLogin.statusCode).toEqual(400);
+
+    const newLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: testEmail, password: 'newpassword456' });
+    expect(newLogin.statusCode).toEqual(200);
+
+    // The reset token is single-use
+    const reuse = await request(app)
+      .post('/api/auth/reset-password')
+      .send({ token: forgot.body.devResetToken, password: 'anotherpass789' });
+    expect(reuse.statusCode).toEqual(400);
+  });
+
+  it('should respond generically to forgot-password for unknown emails', async () => {
+    const res = await request(app)
+      .post('/api/auth/forgot-password')
+      .send({ email: 'nonexistent-' + Date.now() + '@example.com' });
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.devResetToken).toBeUndefined();
   });
 
   it('should reject registration with invalid email', async () => {

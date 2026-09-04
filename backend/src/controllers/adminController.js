@@ -9,7 +9,7 @@ const getPendingVehicles = async (req, res) => {
     const vehicles = await prisma.vehicle.findMany({
       where: { status: 'PENDING' },
       include: {
-        images: true,
+        images: { select: { id: true, isPrimary: true } },
         seller: {
           include: {
             user: {
@@ -35,7 +35,7 @@ const getAllVehicles = async (req, res) => {
     const vehicles = await prisma.vehicle.findMany({
       where: { status: 'AVAILABLE' },
       include: {
-        images: { take: 1 },
+        images: { take: 1, select: { id: true, isPrimary: true } },
         seller: {
           include: {
             user: { select: { name: true } }

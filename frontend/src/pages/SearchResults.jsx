@@ -207,7 +207,7 @@ const SearchResults = () => {
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 mb-10">
                   {vehicles.map(car => {
-                    const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0].data) : null;
+                    const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0]) : null;
                     return (
                       <VehicleCard 
                         key={car.id}

@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
 import { compressImage, MIN_RECOMMENDED_WIDTH } from '../utils/imageCompression';
-import { Check, X, UploadCloud, ChevronRight, ChevronLeft, Save, ShieldAlert } from 'lucide-react';
+import { Car, Check, X, UploadCloud, ChevronRight, ChevronLeft, Save, ShieldAlert } from 'lucide-react';
 
 const TOTAL_STEPS = 5;
 
@@ -49,7 +49,8 @@ const SellCar = () => {
     if (!isEdit) return;
     const loadVehicle = async () => {
       try {
-        const { data } = await api.get(`/vehicles/${id}`);
+        // Edit mode needs the raw image data so an unchanged save can re-submit it
+        const { data } = await api.get(`/vehicles/${id}`, { params: { withImageData: 'true' } });
         setForm({
           make:         data.make         || '',
           model:        data.model        || '',
@@ -101,14 +102,17 @@ const SellCar = () => {
     return (
       <div className="min-h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-bg px-4 mt-16">
         <div className="bg-surface border border-bordercol rounded-xl shadow-sm p-12 max-w-md w-full text-center flex flex-col items-center">
-          <div className="w-16 h-16 bg-err/10 rounded-full flex items-center justify-center mb-6">
-            <ShieldAlert size={32} className="text-err" />
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+            <Car size={32} className="text-primary" />
           </div>
-          <h2 className="font-display font-semibold text-2xl text-textprimary mb-2">Seller Account Required</h2>
+          <h2 className="font-display font-semibold text-2xl text-textprimary mb-2">Become a Seller</h2>
           <p className="text-textsecondary mb-8 leading-relaxed">
-            You need a Seller account to list a car. Go to your profile to upgrade your account.
+            You're one step away from listing your car. Upgrade your account to a seller account — it takes less than a minute.
           </p>
-          <Link to="/" className="w-full h-11 bg-bg border border-bordercol text-textprimary font-medium rounded-md hover:bg-bordercol/30 transition-colors flex items-center justify-center">
+          <Link to="/become-seller" className="w-full h-11 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center">
+            Upgrade to Seller
+          </Link>
+          <Link to="/" className="w-full h-11 mt-3 bg-bg border border-bordercol text-textprimary font-medium rounded-md hover:bg-bordercol/30 transition-colors flex items-center justify-center">
             Return Home
           </Link>
         </div>
@@ -331,7 +335,7 @@ const SellCar = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-sm font-medium text-textprimary">Year *</label>
-                  <input type="number" value={form.year} onChange={e => update('year', e.target.value)} placeholder="e.g. 2021" min="1960" max="2026" className="form-input" />
+                  <input type="number" value={form.year} onChange={e => update('year', e.target.value)} placeholder="e.g. 2021" min="1960" max={new Date().getFullYear() + 1} className="form-input" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-sm font-medium text-textprimary">Price (GH₵) *</label>

@@ -181,7 +181,7 @@ const Home = () => {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
             {featuredCars.map(car => {
-              const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0].data) : null;
+              const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0]) : null;
               return (
                 <VehicleCard
                   key={car.id}
@@ -190,7 +190,7 @@ const Home = () => {
                   price={car.price}
                   location={car.location}
                   condition={car.condition}
-                  specs={[car.transmission, car.fuelType, `${car.mileage} km`].filter(Boolean)}
+                  specs={[car.transmission, car.fuelType, car.mileage != null ? `${car.mileage} km` : ''].filter(Boolean)}
                   sellerName={car.seller?.user?.name || 'Private Seller'}
                   verified={Boolean(car.seller?.verified)}
                   badge="Featured"

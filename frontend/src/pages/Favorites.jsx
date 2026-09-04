@@ -85,7 +85,7 @@ const Favorites = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {favorites.map(car => {
-               const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0].data) : null;
+               const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0]) : null;
                return (
                  <div key={car.id} className="relative group">
                    <VehicleCard 

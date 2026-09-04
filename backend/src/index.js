@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const path = require('path');
 const { errorHandler } = require('./middlewares/errorHandler');
 
@@ -19,17 +20,50 @@ if (missingEnvVars.length > 0) {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Deployed behind proxies/tunnels: without this, rate limiting keys on the
+// proxy IP (one shared bucket for everyone) and req.protocol is wrong.
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: false, // Allow inline styles & base64 / static images in demo mode
 }));
 
-// Flexible CORS for local dev + ngrok tunnels
+// Gzip/deflate all API + static responses (images already compressed formats stay cheap)
+app.use(compression());
+
+// CORS allowlist: production origins come from FRONTEND_URL (comma-separated).
+// Dev origins are always allowed. Requests without an Origin header (mobile
+// apps, curl, same-origin) are not subject to CORS and pass through.
+const DEV_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+];
+const allowedOrigins = new Set([
+  ...DEV_ORIGINS,
+  ...(process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean),
+]);
+
 app.use(cors({
   origin: (origin, callback) => {
-    callback(null, true);
+    if (!origin || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
   },
   credentials: true
 }));
+
+const { getImage } = require('./controllers/imageController');
+
+// Immutable-cached binary images, exempt from the API rate limiter: browsers
+// request these in bursts while scrolling lists and 304 responses are free.
+// Must be mounted BEFORE the /api/ limiter or every image counts against it.
+app.get('/api/images/:id', getImage);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -50,9 +84,12 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve static uploads directory (backend/uploads)
+// Serve static uploads directory (backend/uploads) with long-lived caching
 const uploadsFolder = path.resolve(__dirname, '../uploads');
-app.use('/uploads', express.static(uploadsFolder));
+app.use('/uploads', express.static(uploadsFolder, {
+  maxAge: '1y',
+  immutable: true,
+}));
 
 // API Routes
 app.get('/api', (req, res) => {
@@ -75,7 +112,17 @@ app.use('/api/billing', require('./routes/billingRoutes'));
 
 // Serve static frontend build if dist folder exists (for single-tunnel ngrok presentation)
 const distPath = path.join(__dirname, '../../frontend/dist');
-app.use(express.static(distPath));
+app.use(express.static(distPath, {
+  // Vite content-hashes /assets/* filenames: safe to cache forever.
+  // index.html stays uncached so new deploys appear on refresh.
+  setHeaders: (res, filePath) => {
+    if (filePath.startsWith(path.join(distPath, 'assets'))) {
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.set('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {

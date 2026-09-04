@@ -12,8 +12,8 @@ const protect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+      // Verify token (index.js hard-fails at boot if JWT_SECRET is missing)
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Get user from token
       req.user = await prisma.user.findUnique({

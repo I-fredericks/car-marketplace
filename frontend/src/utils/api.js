@@ -32,12 +32,41 @@ api.interceptors.request.use(
   }
 );
 
+// Expired/invalid session: drop the stale token and go to login once,
+// instead of leaving every page silently broken. Auth endpoints are exempt
+// so a wrong password doesn't redirect.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const url = error.config?.url || '';
+    const isAuthCall = url.startsWith('/auth/');
+    if (status === 401 && !isAuthCall && localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 /**
- * Resolves any image data string stored in the DB into a fully-qualified URL
- * the browser can load.
+ * Resolves an image reference into a URL the browser can load.
+ * - { id } objects from list APIs -> cached binary endpoint /api/images/:id
+ * - { data } objects (edit mode) / data URIs / upload paths -> handled directly
  */
-export const getImageUrl = (data) => {
-  if (!data) return '';
+export const getImageUrl = (image) => {
+  if (!image) return '';
+
+  // Image object from the API
+  if (typeof image === 'object') {
+    if (image.data) return getImageUrl(image.data);
+    if (image.id) return `${BACKEND_URL}/api/images/${image.id}`;
+    return '';
+  }
+
+  const data = String(image);
 
   // Already a full HTTP URL
   if (data.startsWith('http://') || data.startsWith('https://')) return data;
@@ -63,6 +92,9 @@ export const getImageUrl = (data) => {
   if (data.startsWith('uploads/') || data.startsWith('uploads\\')) {
     return `${BACKEND_URL}/${data}`;
   }
+
+  // Bare numeric id from the API
+  if (/^\d+$/.test(data)) return `${BACKEND_URL}/api/images/${data}`;
 
   return data;
 };

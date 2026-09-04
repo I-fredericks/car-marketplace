@@ -3,6 +3,14 @@ const bcrypt = require('bcrypt');
 
 const prisma = new PrismaClient();
 
+// Demo passwords are dev-only: production seeding must provide real ones.
+if (process.env.NODE_ENV === 'production' && !process.env.SEED_PASSWORD) {
+  console.error('❌ Refusing to seed in production with a default password. Set SEED_PASSWORD (and ADMIN_PASSWORD).');
+  process.exit(1);
+}
+const demoPassword = process.env.SEED_PASSWORD || 'Password123!';
+const adminPassword = process.env.ADMIN_PASSWORD || process.env.SEED_PASSWORD || 'AdminPassword123!';
+
 async function main() {
   console.log('🌱 Starting database seeding...');
 
@@ -17,13 +25,13 @@ async function main() {
   await prisma.sellerProfile.deleteMany({});
   await prisma.user.deleteMany({});
 
-  const hashedPassword = await bcrypt.hash('Password123!', 10);
+  const hashedPassword = await bcrypt.hash(demoPassword, 10);
 
   // 1. Create Admin User
   const admin = await prisma.user.create({
     data: {
       email: 'admin@carmarket.com',
-      password: hashedPassword,
+      password: await bcrypt.hash(adminPassword, 10),
       name: 'System Admin',
       phone: '+233201234567',
       role: 'ADMIN',
@@ -290,9 +298,9 @@ async function main() {
 
   console.log('\n🎉 Database Seeding Complete!');
   console.log('\n🔑 Demo Credentials:');
-  console.log('   Admin:  admin@carmarket.com      / Password123!');
-  console.log('   Seller: kwame.dealer@carmarket.com / Password123!');
-  console.log('   Buyer:  abena.buyer@carmarket.com  / Password123!');
+  console.log(`   Admin:  admin@carmarket.com      / ${adminPassword}`);
+  console.log(`   Seller: kwame.dealer@carmarket.com / ${demoPassword}`);
+  console.log(`   Buyer:  abena.buyer@carmarket.com  / ${demoPassword}`);
 }
 
 main()

@@ -111,7 +111,10 @@ const Navbar = () => {
               </div>
             )}
             
-            <Link to="/sell" className="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primarylight transition-colors shadow-sm">
+            <Link
+              to={user && user.role === 'BUYER' ? '/become-seller' : '/sell'}
+              className="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primarylight transition-colors shadow-sm"
+            >
               Sell Your Car
             </Link>
           </div>
@@ -179,7 +182,10 @@ const Navbar = () => {
               </div>
             )}
             
-            <Link to="/sell" className="block w-full text-center py-3 bg-accent text-primarydark font-bold rounded-md shadow-sm mt-4">
+            <Link
+              to={user && user.role === 'BUYER' ? '/become-seller' : '/sell'}
+              className="block w-full text-center py-3 bg-accent text-primarydark font-bold rounded-md shadow-sm mt-4"
+            >
               Sell Your Car
             </Link>
           </div>
