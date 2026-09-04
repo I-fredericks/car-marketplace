@@ -181,20 +181,18 @@ const markConversationRead = async (req, res) => {
       return res.status(400).json({ message: 'Invalid conversation ids' });
     }
 
-    const unreadRows = await prisma.notification.findMany({
-      where: { userId: req.user.id, type: 'NEW_MESSAGE', readAt: null },
-      select: { id: true, data: true },
+    // senderId/vehicleId are indexed columns: single indexed UPDATE instead
+    // of filtering JSON in JS (MySQL rejects Prisma JSON path filters)
+    const updated = await prisma.notification.updateMany({
+      where: {
+        userId: req.user.id,
+        type: 'NEW_MESSAGE',
+        readAt: null,
+        senderId: otherUserId,
+        vehicleId,
+      },
+      data: { readAt: new Date() },
     });
-    const ids = unreadRows
-      .filter((n) => n.data?.senderId === otherUserId && n.data?.vehicleId === vehicleId)
-      .map((n) => n.id);
-
-    const updated = ids.length
-      ? await prisma.notification.updateMany({
-          where: { id: { in: ids } },
-          data: { readAt: new Date() },
-        })
-      : { count: 0 };
 
     res.json({ message: 'Conversation marked as read', updated: updated.count });
   } catch (error) {
