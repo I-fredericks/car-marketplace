@@ -6,10 +6,12 @@ const NOTIFICATION_TYPES = ['NEW_MESSAGE', 'LISTING_SAVED', 'LISTING_APPROVED', 
 /**
  * Create a notification row and push it over the user's SSE stream.
  * Returns the created notification (data carries routing info for clients).
+ * senderId/vehicleId are stored as columns for NEW_MESSAGE so a single
+ * conversation's badge can be cleared with read-all?senderId=&vehicleId=.
  */
-async function createNotification({ userId, type, title, body = null, data = null }) {
+async function createNotification({ userId, type, title, body = null, data = null, senderId = null, vehicleId = null }) {
   const notification = await prisma.notification.create({
-    data: { userId, type, title, body, data },
+    data: { userId, type, title, body, data, senderId, vehicleId },
   });
   pushToUser(userId, 'notification:new', notification);
   return notification;
@@ -54,16 +56,22 @@ const markNotificationRead = async (req, res) => {
   }
 };
 
-// @desc    Mark all notifications as read (optionally only one type)
-// @route   PUT /api/notifications/read-all?type=NEW_MESSAGE
+// @desc    Mark notifications as read (optionally scoped to one type and/or
+//          one chat via senderId + vehicleId)
+// @route   PUT /api/notifications/read-all?type=NEW_MESSAGE&senderId=1&vehicleId=2
 // @access  Private
 const markAllRead = async (req, res) => {
   try {
+    const parse = (v) => (v !== undefined && v !== '' ? parseInt(v, 10) : null);
+    const senderId = parse(req.query.senderId);
+    const vehicleId = parse(req.query.vehicleId);
     const updated = await prisma.notification.updateMany({
       where: {
         userId: req.user.id,
         readAt: null,
         ...(req.query.type ? { type: req.query.type } : {}),
+        ...(senderId ? { senderId } : {}),
+        ...(vehicleId ? { vehicleId } : {}),
       },
       data: { readAt: new Date() },
     });

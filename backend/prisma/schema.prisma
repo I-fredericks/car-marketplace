@@ -44,10 +44,13 @@ model Notification {
   title     String
   body      String?  @db.Text
   data      Json?    // e.g. { senderId, vehicleId, vehicleTitle }
+  senderId  Int?     // routing columns for NEW_MESSAGE: lets clients clear the
+  vehicleId Int?     // badge for one conversation (read-all?senderId=&vehicleId=)
   readAt    DateTime?
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, type, senderId, vehicleId])
   @@map("notification")
 }
 

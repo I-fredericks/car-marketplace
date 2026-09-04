@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronRight, ShieldCheck, BadgeCheck, PhoneCall, Car,
   LayoutGrid, CarFront, Truck, Bus, MapPin, Sparkles,
 } from 'lucide-react';
-import api, { getImageUrl } from '../utils/api';
+import api, { getImageThumbUrl } from '../utils/api';
 import { getSellerPlanBadge } from '../utils/sellerPlan';
+import useSEO from '../hooks/useSEO';
 import VehicleCard from '../components/VehicleCard';
 
 // Body-type shortcuts shown as category tiles (jiji-style)
@@ -19,28 +21,23 @@ const CATEGORIES = [
 ];
 
 const Home = () => {
+  useSEO({
+    title: 'Buy & Sell Cars in Ghana',
+    description: 'Browse verified new and used cars for sale in Ghana from trusted dealers and private sellers. Compare prices, contact sellers, and find your next car today.',
+  });
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
   const [advanced, setAdvanced] = useState({
     make: '', minPrice: '', maxPrice: '', year: '',
   });
-  const [featuredCars, setFeaturedCars] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchFeatured = async () => {
-      try {
-        const { data } = await api.get('/vehicles/featured');
-        setFeaturedCars(data);
-      } catch (err) {
-        console.error('Error fetching featured cars:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeatured();
-  }, []);
+  const { data: featuredCars = [], isLoading: loading } = useQuery({
+    queryKey: ['featured-cars'],
+    queryFn: async () => {
+      const { data } = await api.get('/vehicles/featured');
+      return data;
+    },
+  });
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -181,7 +178,7 @@ const Home = () => {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
             {featuredCars.map(car => {
-              const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0]) : null;
+              const imageUrl = car.images?.length > 0 ? getImageThumbUrl(car.images[0]) : null;
               return (
                 <VehicleCard
                   key={car.id}

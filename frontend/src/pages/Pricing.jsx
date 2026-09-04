@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
+import useBillingStatus from '../hooks/useBillingStatus';
 import api from '../utils/api';
+import useSEO from '../hooks/useSEO';
 import { Sparkles, Crown, Building2, Check, Smartphone, Loader2, Lock, Info } from 'lucide-react';
 
 const Pricing = () => {
@@ -9,34 +12,25 @@ const Pricing = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [plans, setPlans] = useState([]);
-  const [loading, setLoading] = useState(true);
+  useSEO({
+    title: 'Pricing & Seller Plans',
+    description: 'Affordable listing plans for selling your car in Ghana — from single listings to dealer subscriptions with featured placement.',
+  });
+
   const [selected, setSelected] = useState(null); // plan being purchased
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
-  const [currentPlanKey, setCurrentPlanKey] = useState(null);
+  const { data: billingStatus } = useBillingStatus();
+  const currentPlanKey = billingStatus ? (billingStatus.isSubscribed ? billingStatus.plan.key : 'FREE') : null;
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { data } = await api.get('/billing/plans');
-        setPlans(data.plans);
-      } catch {
-        setError('Could not load pricing. Please refresh.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  // Highlight the plan the seller is currently on
-  useEffect(() => {
-    if (!user || user.role !== 'SELLER') return;
-    api.get('/billing/status')
-      .then(({ data }) => setCurrentPlanKey(data.isSubscribed ? data.plan.key : 'FREE'))
-      .catch(() => {});
-  }, [user]);
+  const { data: plansData, isLoading: loading } = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: async () => {
+      const { data } = await api.get('/billing/plans');
+      return data.plans;
+    },
+  });
+  const plans = plansData ?? [];
 
   useEffect(() => {
     if (!user) return;

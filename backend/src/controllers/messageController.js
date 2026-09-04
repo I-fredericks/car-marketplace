@@ -149,6 +149,8 @@ const sendMessage = async (req, res) => {
         type: 'NEW_MESSAGE',
         title: `New message from ${req.user.name}`,
         body: trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed,
+        senderId: req.user.id,
+        vehicleId: vehicleIdNum,
         data: {
           senderId: req.user.id,
           senderName: req.user.name,

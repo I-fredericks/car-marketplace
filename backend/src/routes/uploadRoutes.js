@@ -1,54 +1,35 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { protect, seller } = require('../middlewares/authMiddleware');
+const { saveUpload } = require('../services/storage');
 
 const router = express.Router();
 
-const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Disk storage for fast file uploads & tiny DB footprint
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-// Match on extension OR mimetype: phones frequently report generic mimetypes
-// (application/octet-stream) for gallery files, so requiring both rejected
-// perfectly good photos.
-const ALLOWED_TYPES = /jpg|jpeg|png|webp|heic|heif|pdf/;
-
-function checkFileType(req, file, cb) {
-  const extname = ALLOWED_TYPES.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = ALLOWED_TYPES.test(file.mimetype);
-
-  if (extname || mimetype) {
-    return cb(null, true);
-  }
-  // Skip the file but remember its name so the response can say what failed
-  // (a string passed to cb here used to surface as a generic "Server Error").
-  req.rejectedFiles = req.rejectedFiles || [];
-  req.rejectedFiles.push(file.originalname);
-  cb(null, false);
-}
-
+// Memory storage: files are persisted by the storage service (S3 or disk)
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max file size per image
-  fileFilter: checkFileType,
+  fileFilter: (req, file, cb) => {
+    // Match on extension OR mimetype: phones frequently report generic
+    // mimetypes (application/octet-stream) for gallery files, so requiring
+    // both rejected perfectly good photos.
+    const ALLOWED_TYPES = /jpg|jpeg|png|webp|heic|heif|pdf/;
+    const extname = ALLOWED_TYPES.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = ALLOWED_TYPES.test(file.mimetype);
+
+    if (extname || mimetype) {
+      return cb(null, true);
+    }
+    // Skip the file but remember its name so the response can say what failed
+    req.rejectedFiles = req.rejectedFiles || [];
+    req.rejectedFiles.push(file.originalname);
+    cb(null, false);
+  },
 });
 
 router.post('/', protect, seller, (req, res) => {
-  upload.array('images', 15)(req, res, (err) => {
+  upload.array('images', 15)(req, res, async (err) => {
     if (err) {
       const message = err.code === 'LIMIT_FILE_SIZE'
         ? 'Each image must be under 15MB.'
@@ -67,13 +48,21 @@ router.post('/', protect, seller, (req, res) => {
       });
     }
 
-    const fileUrls = files.map(file => `/uploads/${file.filename}`);
+    try {
+      const results = await Promise.all(
+        files.map((file) => saveUpload(file.buffer, file.originalname, file.mimetype))
+      );
 
-    res.send({
-      message: 'Images Uploaded',
-      urls: fileUrls,
-      ...(rejected.length > 0 ? { rejected } : {}),
-    });
+      res.send({
+        message: 'Images Uploaded',
+        urls: results.map((r) => r.url),
+        thumbs: results.map((r) => r.thumbUrl),
+        ...(rejected.length > 0 ? { rejected } : {}),
+      });
+    } catch (uploadErr) {
+      console.error('Error persisting uploads:', uploadErr);
+      res.status(500).json({ message: 'Failed to store uploaded files' });
+    }
   });
 });
 

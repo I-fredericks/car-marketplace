@@ -1,6 +1,7 @@
 const prisma = require('../config/db');
 const { getActiveSubscription } = require('./billingController');
 const { getListingLimit, getPlanRank } = require('../config/plans');
+const cache = require('../services/cache');
 
 // How long a free-plan listing stays public before it must be renewed by upgrading
 const FREE_LISTING_DAYS = 90;
@@ -157,6 +158,7 @@ const createVehicle = async (req, res) => {
       }
     });
 
+    cache.bumpVehicleVersion();
     res.status(201).json(vehicle);
   } catch (error) {
     console.error('Error creating vehicle:', error);
@@ -218,7 +220,38 @@ const getVehicles = async (req, res) => {
     const take = parseInt(limit);
     const dir = order === 'asc' ? 1 : -1;
 
-    // Lightweight pass over all matches to rank by seller plan tier before pagination
+    // Cache the full listing response per query for a short window. The key
+    // embeds a vehicle version counter that any listing write bumps, so
+    // stale entries are orphaned instantly instead of expiring late.
+    const queryParams = {
+      make, model, condition, transmission, fuelType, bodyType,
+      minPrice, maxPrice, location, verifiedOnly, search, sortBy, order, page, limit,
+    };
+    const cacheKey = cache.stableKey('vehicles:list', queryParams);
+    const cached = await cache.getJSON(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Keyword relevance: exact make/model matches outrank incidental
+    // mentions in description/location (case-insensitive)
+    const q = (search || '').toLowerCase().trim();
+    const relevance = (v) => {
+      if (!q) return 0;
+      const makeLc = (v.make || '').toLowerCase();
+      const modelLc = (v.model || '').toLowerCase();
+      let score = 0;
+      if (makeLc === q) score += 4;
+      else if (makeLc.includes(q)) score += 2;
+      if (modelLc === q) score += 3;
+      else if (modelLc.includes(q)) score += 2;
+      if ((v.location || '').toLowerCase().includes(q)) score += 1;
+      if ((v.description || '').toLowerCase().includes(q)) score += 0.5;
+      return score;
+    };
+
+    // Lightweight pass over all matches to rank by relevance and seller
+    // plan tier before pagination
     const candidates = await prisma.vehicle.findMany({
       where,
       select: {
@@ -229,15 +262,26 @@ const getVehicles = async (req, res) => {
         price: true,
         year: true,
         mileage: true,
+        make: true,
+        model: true,
+        location: true,
+        description: true,
         seller: { select: { user: { select: { subscription: { select: { plan: true, status: true, periodEnd: true } } } } } },
       },
     });
 
-    candidates.sort((a, b) =>
-      (sellerPlanRank(b.seller) - sellerPlanRank(a.seller)) ||
-      (b.featured - a.featured) ||
-      ((a[sortBy] ?? 0) - (b[sortBy] ?? 0)) * dir
-    );
+    // Explicit sorts (price/year/mileage) must be honored literally: plan
+    // and featured boosts only apply to the default newest-first browsing.
+    const explicitSort = Boolean(req.query.sortBy);
+
+    candidates.sort((a, b) => {
+      const rel = relevance(b) - relevance(a);
+      if (rel !== 0) return rel;
+      if (explicitSort) return ((a[sortBy] ?? 0) - (b[sortBy] ?? 0)) * dir;
+      return (sellerPlanRank(b.seller) - sellerPlanRank(a.seller)) ||
+        (b.featured - a.featured) ||
+        ((a[sortBy] ?? 0) - (b[sortBy] ?? 0)) * dir;
+    });
 
     const pageIds = candidates.slice(skip, skip + take).map((v) => v.id);
 
@@ -246,7 +290,7 @@ const getVehicles = async (req, res) => {
       prisma.vehicle.count({ where })
     ]);
 
-    res.json({
+    const response = {
       vehicles,
       pagination: {
         total,
@@ -254,7 +298,10 @@ const getVehicles = async (req, res) => {
         limit: parseInt(limit),
         totalPages: Math.ceil(total / limit)
       }
-    });
+    };
+
+    await cache.setJSON(cacheKey, response, 30);
+    res.json(response);
   } catch (error) {
     console.error('Error fetching vehicles:', error);
     res.status(500).json({ message: 'Server error fetching vehicles' });
@@ -435,6 +482,7 @@ const updateVehicle = async (req, res) => {
       }
     });
 
+    cache.bumpVehicleVersion();
     res.json(updatedVehicle);
   } catch (error) {
     console.error('Error updating vehicle:', error);
@@ -473,6 +521,7 @@ const deleteVehicle = async (req, res) => {
       where: { id: vehicleId }
     });
 
+    cache.bumpVehicleVersion();
     res.json({ message: 'Vehicle removed successfully' });
   } catch (error) {
     console.error('Error deleting vehicle:', error);

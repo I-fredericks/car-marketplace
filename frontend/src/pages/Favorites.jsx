@@ -1,34 +1,28 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
-import api, { getImageUrl } from '../utils/api';
+import api, { getImageThumbUrl } from '../utils/api';
 import { Heart, Search, Lock } from 'lucide-react';
 import VehicleCard from '../components/VehicleCard';
 
 const Favorites = () => {
   const { user, loading: authLoading } = useContext(AuthContext);
-  const [favorites, setFavorites] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!user) return;
-    const fetchFavorites = async () => {
-      try {
-        const { data } = await api.get('/favorites');
-        setFavorites(data);
-      } catch (err) {
-        console.error('Error fetching favorites:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFavorites();
-  }, [user]);
+  const { data: favorites = [], isLoading: loading } = useQuery({
+    queryKey: ['favorites', user?.id ?? null],
+    queryFn: async () => {
+      const { data } = await api.get('/favorites');
+      return data;
+    },
+    enabled: Boolean(user),
+  });
 
   const removeFavorite = async (vehicleId) => {
     try {
       await api.delete(`/favorites/${vehicleId}`);
-      setFavorites(prev => prev.filter(v => v.id !== vehicleId));
+      queryClient.invalidateQueries({ queryKey: ['favorites', user.id] });
     } catch (err) {
       console.error('Error removing favorite:', err);
     }
@@ -93,7 +87,7 @@ const Favorites = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {favorites.map(car => {
-               const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0]) : null;
+               const imageUrl = car.images?.length > 0 ? getImageThumbUrl(car.images[0]) : null;
                return (
                  <div key={car.id} className="relative group">
                    <VehicleCard 

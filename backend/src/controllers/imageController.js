@@ -1,5 +1,8 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const prisma = require('../config/db');
+const { makeThumbBuffer, diskThumbName, uploadsDir } = require('../services/storage');
 
 // Images are stored in the DB in several legacy formats. List APIs no longer
 // ship the raw data; the browser loads each image from here once and then
@@ -93,4 +96,89 @@ const getImage = async (req, res) => {
   }
 };
 
-module.exports = { getImage };
+// @desc    Serve a lightweight thumbnail of a vehicle image
+// @route   GET /api/images/:id/thumb
+// @access  Public
+//
+// List views hit this instead of the full-size image: base64 rows are
+// resized on the fly (immutable-cached by ETag), disk/S3 rows resolve to
+// the _thumb.webp sibling generated at upload time.
+const getImageThumb = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: 'Invalid image id' });
+    }
+
+    const image = await prisma.vehicleImage.findUnique({
+      where: { id },
+      select: { data: true },
+    });
+    if (!image || !image.data) {
+      return res.status(404).json({ message: 'Image not found' });
+    }
+    const data = image.data;
+
+    // Base64 data URI -> resize on the fly
+    const base64Match = BASE64_URI_RE.exec(data);
+    if (base64Match) {
+      const thumb = await makeThumbBuffer(Buffer.from(base64Match[2], 'base64'));
+      if (thumb) {
+        return sendWithCaching(req, res, thumb, 'image/webp');
+      }
+      return res.status(404).json({ message: 'Thumbnail unavailable' });
+    }
+
+    // File on disk -> serve (or lazily generate) the _thumb.webp sibling
+    if (data.startsWith('/uploads/') || data.startsWith('uploads/')) {
+      const filename = path.basename(data);
+      const thumbPath = path.join(uploadsDir, diskThumbName(filename));
+      if (!fs.existsSync(thumbPath)) {
+        const original = path.join(uploadsDir, filename);
+        if (!fs.existsSync(original)) {
+          return res.status(404).json({ message: 'Image not found' });
+        }
+        const thumb = await makeThumbBuffer(fs.readFileSync(original));
+        if (!thumb) {
+          return res.redirect(301, `/uploads/${filename}`);
+        }
+        fs.writeFileSync(thumbPath, thumb);
+      }
+      return sendWithCaching(req, res, fs.readFileSync(thumbPath), 'image/webp');
+    }
+
+    // External URL (our S3 uploads follow the _thumb.webp convention) ->
+    // redirect to the sibling thumbnail on a trusted host, else the original
+    if (data.startsWith('http://') || data.startsWith('https://')) {
+      try {
+        const url = new URL(data);
+        const trustedHosts = (process.env.EXTERNAL_IMAGE_HOSTS || 'images.unsplash.com,res.cloudinary.com')
+          .split(',')
+          .map((h) => h.trim().toLowerCase())
+          .filter(Boolean);
+        if (process.env.S3_PUBLIC_URL) {
+          trustedHosts.push(new URL(process.env.S3_PUBLIC_URL).hostname.toLowerCase());
+        }
+        if (trustedHosts.includes(url.hostname)) {
+          const ext = path.extname(url.pathname);
+          const thumbUrl = `${url.origin}${path.dirname(url.pathname)}/${path.basename(url.pathname, ext)}_thumb.webp`;
+          return res.redirect(301, thumbUrl);
+        }
+        return res.redirect(301, data);
+      } catch {
+        // malformed URL falls through to 404
+      }
+    }
+
+    // SVG and unknown formats: no thumbnail, hand back the original
+    if (SVG_URI_RE.test(data) || data.startsWith('data:')) {
+      return res.redirect(301, `/api/images/${id}`);
+    }
+    return res.status(404).json({ message: 'Image data in unknown format' });
+  } catch (error) {
+    console.error('Error serving image thumbnail:', error);
+    res.status(500).json({ message: 'Server error serving image thumbnail' });
+  }
+};
+
+module.exports = { getImage, getImageThumb };

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Check, X, Car, ShieldCheck } from 'lucide-react';
-import api, { getImageUrl } from '../utils/api';
+import api, { getImageThumbUrl } from '../utils/api';
+import useSEO from '../hooks/useSEO';
 
 const Compare = () => {
   const [searchParams] = useSearchParams();
@@ -9,35 +11,33 @@ const Compare = () => {
   const idsParam = searchParams.get('ids') || '';
   const ids = idsParam.split(',').map(id => id.trim()).filter(Boolean);
 
-  const [cars, setCars] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [brokenImages, setBrokenImages] = useState(new Set());
+  useSEO({
+    title: 'Compare Cars',
+    description: 'Compare car specifications, prices and features side by side to find the right car for you.',
+  });
 
-  useEffect(() => {
+  const [error, setError] = useState(null);
+
+  const { data: cars = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['compare', ids.join(',')],
+    queryFn: async () => {
+      const responses = await Promise.all(
+        ids.slice(0, 2).map(id => api.get(`/vehicles/${id}`))
+      );
+      return responses.map(res => res.data);
+    },
+    enabled: ids.length === 2,
+    retry: false,
+  });
+
+  React.useEffect(() => {
     if (ids.length < 2) {
       setError('Please select two vehicles to compare.');
-      setLoading(false);
-      return;
+    } else {
+      setError(null);
     }
-
-    const fetchCars = async () => {
-      setLoading(true);
-      try {
-        const responses = await Promise.all(
-          ids.slice(0, 2).map(id => api.get(`/vehicles/${id}`))
-        );
-        setCars(responses.map(res => res.data));
-      } catch (err) {
-        console.error('Error fetching cars for comparison:', err);
-        setError('Could not load one or both vehicles for comparison.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCars();
   }, [idsParam]);
+  const [brokenImages, setBrokenImages] = useState(new Set());
 
   const handleImageError = (carId) => {
     setBrokenImages(prev => new Set(prev).add(carId));
@@ -55,12 +55,12 @@ const Compare = () => {
     );
   }
 
-  if (error || cars.length < 2) {
+  if (error || queryError || (!loading && cars.length < 2)) {
     return (
       <div className="min-h-screen pt-24 pb-20 flex flex-col items-center justify-center bg-bg px-4">
         <div className="bg-surface border border-bordercol rounded-xl p-8 max-w-md w-full text-center">
           <h2 className="font-display font-bold text-2xl text-err mb-2">Comparison Error</h2>
-          <p className="text-textsecondary mb-6">{error || 'Insufficient vehicles selected.'}</p>
+          <p className="text-textsecondary mb-6">{error || queryError?.message || 'Insufficient vehicles selected.'}</p>
           <button 
             onClick={() => navigate('/search')} 
             className="w-full py-3 bg-primary text-white font-medium rounded-md hover:bg-primarylight transition-colors flex items-center justify-center gap-2"
@@ -126,7 +126,7 @@ const Compare = () => {
               <div key={car.id} className={`flex flex-col items-center text-center ${idx === 0 ? 'pr-2' : 'pl-2'}`}>
                 <div className="w-full aspect-[4/3] bg-bg rounded-md overflow-hidden mb-4 border border-bordercol flex items-center justify-center">
                   {car.images && car.images.length > 0 && !brokenImages.has(car.id) ? (
-                    <img src={getImageUrl(car.images[0])} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
+                    <img src={getImageThumbUrl(car.images[0])} alt={car.make} loading="lazy" decoding="async" onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
                   ) : (
                     <Car size={32} className="text-bordercol" />
                   )}

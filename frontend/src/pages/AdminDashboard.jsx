@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import api, { getImageUrl } from '../utils/api';
+import api, { getImageThumbUrl } from '../utils/api';
 import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
   Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard
@@ -264,7 +264,7 @@ const AdminDashboard = () => {
               <div className="flex gap-4 mb-4">
                 <div className="w-24 h-24 bg-bg rounded-md border border-bordercol flex-shrink-0 flex items-center justify-center overflow-hidden">
                   {car.images && car.images.length > 0 && !brokenImages.has(car.id)
-                    ? <img src={getImageUrl(car.images[0])} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
+                    ? <img src={getImageThumbUrl(car.images[0])} alt={car.make} loading="lazy" decoding="async" onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
                     : <Car size={24} className="text-textmuted" />
                   }
                 </div>
@@ -335,7 +335,7 @@ const AdminDashboard = () => {
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-10 bg-bg border border-bordercol rounded overflow-hidden flex-shrink-0">
                         {car.images && car.images.length > 0 && !brokenImages.has(`all-${car.id}`) ? (
-                          <img src={getImageUrl(car.images[0])} alt={car.make} onError={() => handleImageError(`all-${car.id}`)} className="w-full h-full object-cover" />
+                          <img src={getImageThumbUrl(car.images[0])} alt={car.make} loading="lazy" decoding="async" onError={() => handleImageError(`all-${car.id}`)} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center"><Car size={16} className="text-textmuted" /></div>
                         )}

@@ -1,7 +1,8 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import api, { getImageUrl } from '../utils/api';
+import useBillingStatus from '../hooks/useBillingStatus';
+import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import { compressImage, MIN_RECOMMENDED_WIDTH } from '../utils/imageCompression';
 import { Car, Check, X, UploadCloud, ChevronRight, ChevronLeft, Save, ShieldAlert } from 'lucide-react';
 
@@ -36,14 +37,7 @@ const SellCar = () => {
   const [uploading, setUploading] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
-  const [billing, setBilling] = useState(null);
-
-  useEffect(() => {
-    if (!user || user.role === 'BUYER') return;
-    api.get('/billing/status')
-      .then(({ data }) => setBilling(data))
-      .catch(() => {});
-  }, [user]);
+  const { data: billing } = useBillingStatus();
 
   useEffect(() => {
     if (!isEdit) return;
@@ -488,7 +482,7 @@ const SellCar = () => {
                   {uploadedImages.map((src, i) => (
                     <div key={`${src}-${i}`} className="relative group aspect-[4/3] rounded-md overflow-hidden bg-bg border border-bordercol">
                       <img
-                        src={getImageUrl(src)}
+                        src={getImageThumbUrl(src)}
                         alt={`upload-${i}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {

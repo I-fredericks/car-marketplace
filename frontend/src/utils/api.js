@@ -99,4 +99,38 @@ export const getImageUrl = (image) => {
   return data;
 };
 
+/**
+ * List-friendly thumbnail URL: same resolution rules as getImageUrl but
+ * points id-based references at the lightweight /thumb variant. Falls back
+ * to the full image for formats without thumbnails (SVG, base64 strings).
+ */
+export const getImageThumbUrl = (image) => {
+  if (!image) return '';
+
+  if (typeof image === 'object') {
+    if (image.data) return getImageThumbUrl(image.data);
+    if (image.id) return `${BACKEND_URL}/api/images/${image.id}/thumb`;
+    return '';
+  }
+
+  const data = String(image);
+
+  // Relative upload paths follow the _thumb.webp sibling convention
+  if (data.startsWith('/uploads/')) {
+    const dot = data.lastIndexOf('.');
+    if (dot > data.lastIndexOf('/')) return `${BACKEND_URL}${data.slice(0, dot)}_thumb.webp`;
+    return `${BACKEND_URL}${data}`;
+  }
+  if (data.startsWith('uploads/')) {
+    const dot = data.lastIndexOf('.');
+    if (dot > data.lastIndexOf('/')) return `${BACKEND_URL}/${data.slice(0, dot)}_thumb.webp`;
+    return `${BACKEND_URL}/${data}`;
+  }
+
+  // Everything else (http URLs, base64, ids) resolves via the id route or
+  // the original URL
+  if (/^\d+$/.test(data)) return `${BACKEND_URL}/api/images/${data}/thumb`;
+  return getImageUrl(image);
+};
+
 export default api;

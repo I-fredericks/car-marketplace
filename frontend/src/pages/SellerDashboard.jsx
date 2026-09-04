@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import api, { getImageUrl } from '../utils/api';
+import useBillingStatus from '../hooks/useBillingStatus';
+import api, { getImageThumbUrl } from '../utils/api';
 import { Car, Plus, ShieldAlert, Eye, Edit2, CheckCircle, Trash2, CreditCard } from 'lucide-react';
 import Badge from '../components/Badge';
 
@@ -18,7 +19,7 @@ const SellerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [brokenImages, setBrokenImages] = useState(new Set());
-  const [billing, setBilling] = useState(null);
+  const { data: billing } = useBillingStatus();
 
   const fetchListings = async () => {
     setLoading(true);
@@ -34,11 +35,6 @@ const SellerDashboard = () => {
 
   useEffect(() => {
     fetchListings();
-    if (user && (user.role === 'SELLER' || user.role === 'ADMIN')) {
-      api.get('/billing/status')
-        .then(({ data }) => setBilling(data))
-        .catch(() => {});
-    }
   }, [user]);
 
   const handleDelete = async (id) => {
@@ -237,7 +233,7 @@ const SellerDashboard = () => {
                         <div className="flex items-center gap-4">
                           <div className="w-16 h-12 bg-bg border border-bordercol rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center">
                             {car.images && car.images.length > 0 && !brokenImages.has(car.id) ? (
-                              <img src={getImageUrl(car.images[0])} alt={car.make} onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
+                              <img src={getImageThumbUrl(car.images[0])} alt={car.make} loading="lazy" decoding="async" onError={() => handleImageError(car.id)} className="w-full h-full object-cover" />
                             ) : (
                               <Car size={20} className="text-textmuted" />
                             )}

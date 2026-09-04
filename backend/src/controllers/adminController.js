@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { applyVerifiedPayment } = require('./billingController');
+const cache = require('../services/cache');
 
 // @desc    Get all pending vehicle listings
 // @route   GET /api/admin/vehicles/pending
@@ -67,6 +68,7 @@ const updateListingStatus = async (req, res) => {
       data: { status },
       include: { seller: { select: { userId: true } } }
     });
+    cache.bumpVehicleVersion();
 
     // Tell the seller their listing was approved or rejected.
     const ownerId = vehicle.seller?.userId;
@@ -103,6 +105,7 @@ const toggleFeatured = async (req, res) => {
       where: { id: vehicleId },
       data: { featured: !vehicle.featured }
     });
+    cache.bumpVehicleVersion();
 
     res.json({ message: `Vehicle ${updated.featured ? 'featured' : 'unfeatured'}`, vehicle: updated });
   } catch (error) {

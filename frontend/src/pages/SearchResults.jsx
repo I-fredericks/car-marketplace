@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Filter, X, Search, SlidersHorizontal, GitCompareArrows } from 'lucide-react';
-import { AuthContext } from '../context/AuthContext';
-import api, { getImageUrl } from '../utils/api';
+import api, { getImageThumbUrl } from '../utils/api';
+import useSEO from '../hooks/useSEO';
 import { getSellerPlanBadge } from '../utils/sellerPlan';
 import VehicleCard from '../components/VehicleCard';
 
@@ -83,16 +84,14 @@ const FilterContent = ({ filters, setFilters, onApply, onClear }) => (
     </form>
   </div>
 );
-
 const SearchResults = () => {
+  useSEO({
+    title: 'Search Cars',
+    description: 'Filter thousands of car listings across Ghana by make, price, location, condition and more.',
+  });
+
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [vehicles, setVehicles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [compareList, setCompareList] = useState([]);
 
@@ -112,27 +111,28 @@ const SearchResults = () => {
     verifiedOnly: searchParams.get('verifiedOnly') || '',
   });
 
-  useEffect(() => {
-    const fetchVehicles = async () => {
-      setLoading(true);
-      try {
-        const params = Object.fromEntries(
-          Object.entries(filters).filter(([, v]) => v !== '')
-        );
-        params.page = searchParams.get('page') || 1;
-        const { data } = await api.get('/vehicles', { params });
-        setVehicles(data.vehicles || []);
-        setTotal(data.pagination?.total ?? data.total ?? (data.vehicles?.length || 0));
-        setCurrentPage(data.pagination?.page ?? data.page ?? 1);
-        setTotalPages(data.pagination?.totalPages ?? data.pages ?? 1);
-      } catch (err) {
-        console.error('Error fetching vehicles:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchVehicles();
-  }, [searchParams]);
+  const { data } = useQuery({
+    queryKey: ['vehicles', searchParams.toString()],
+    queryFn: async () => {
+      // searchParams are the applied filters + page (applyFilters writes them)
+      const params = Object.fromEntries(searchParams.entries());
+      if (!params.page) params.page = 1;
+      const { data: resp } = await api.get('/vehicles', { params });
+      return {
+        vehicles: resp.vehicles || [],
+        total: resp.pagination?.total ?? resp.total ?? (resp.vehicles?.length || 0),
+        currentPage: resp.pagination?.page ?? resp.page ?? 1,
+        totalPages: resp.pagination?.totalPages ?? resp.pages ?? 1,
+      };
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  const vehicles = data?.vehicles ?? [];
+  const total = data?.total ?? 0;
+  const currentPage = data?.currentPage ?? 1;
+  const totalPages = data?.totalPages ?? 1;
+  const loading = data === undefined;
 
   const applyFilters = (e) => {
     e.preventDefault();
@@ -188,7 +188,32 @@ const SearchResults = () => {
               <h1 className="font-display font-bold text-2xl text-textprimary">
                 {loading ? 'Searching...' : `${total} Cars Found`}
               </h1>
-              {/* Optional: Add sort dropdown here later */}
+              <select
+                value={`${searchParams.get('sortBy') || 'createdAt'}:${searchParams.get('order') || 'desc'}`}
+                onChange={(e) => {
+                  const [sortBy, order] = e.target.value.split(':');
+                  const next = Object.fromEntries(searchParams);
+                  if (sortBy === 'createdAt' && order === 'desc') {
+                    delete next.sortBy;
+                    delete next.order;
+                    delete next.page;
+                  } else {
+                    next.sortBy = sortBy;
+                    next.order = order;
+                    delete next.page;
+                  }
+                  setSearchParams(next);
+                }}
+                className="h-10 px-3 border border-bordercol rounded-md bg-surface text-sm text-textprimary focus:outline-none focus:border-primary"
+                aria-label="Sort results"
+              >
+                <option value="createdAt:desc">Newest First</option>
+                <option value="createdAt:asc">Oldest First</option>
+                <option value="price:asc">Price: Low to High</option>
+                <option value="price:desc">Price: High to Low</option>
+                <option value="year:desc">Year: Newest</option>
+                <option value="mileage:asc">Mileage: Lowest</option>
+              </select>
             </div>
 
             {loading ? (
@@ -209,7 +234,7 @@ const SearchResults = () => {
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 mb-10">
                   {vehicles.map(car => {
-                    const imageUrl = car.images?.length > 0 ? getImageUrl(car.images[0]) : null;
+                    const imageUrl = car.images?.length > 0 ? getImageThumbUrl(car.images[0]) : null;
                     return (
                       <VehicleCard 
                         key={car.id}

@@ -71,12 +71,13 @@ app.use(cors({
   credentials: true
 }));
 
-const { getImage } = require('./controllers/imageController');
+const { getImage, getImageThumb } = require('./controllers/imageController');
 
 // Immutable-cached binary images, exempt from the API rate limiter: browsers
 // request these in bursts while scrolling lists and 304 responses are free.
 // Must be mounted BEFORE the /api/ limiter or every image counts against it.
 app.get('/api/images/:id', getImage);
+app.get('/api/images/:id/thumb', getImageThumb);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -125,6 +126,8 @@ const vehicleRoutes = require('./routes/vehicleRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const prisma = require('./config/db');
+const cache = require('./services/cache');
+cache.initVehicleVersion();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/vehicles', vehicleRoutes);

@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
-import api, { getImageUrl } from '../utils/api';
+import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
+import useSEO from '../hooks/useSEO';
 import { Heart, Flag, MapPin, MessageCircle, Phone, CheckCircle, ShieldCheck, Car, Star } from 'lucide-react';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
@@ -11,41 +13,40 @@ const CarDetails = () => {
   const { id } = useParams();
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [car, setCar] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
-  const [isFavorite, setIsFavorite] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
-  useEffect(() => {
-    const fetchCar = async () => {
-      try {
-        const { data } = await api.get(`/vehicles/${id}`);
-        setCar(data);
-      } catch {
-        console.error('Error fetching car');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCar();
-  }, [id]);
+  const { data: car, isLoading: loading } = useQuery({
+    queryKey: ['vehicle', id],
+    queryFn: async () => {
+      const { data } = await api.get(`/vehicles/${id}`);
+      return data;
+    },
+    retry: false,
+  });
 
-  useEffect(() => {
-    if (!user || !car) return;
-    const checkFavorite = async () => {
-      try {
-        const { data } = await api.get('/favorites');
-        setIsFavorite(data.some(v => v.id === car.id));
-      } catch (err) {
-        console.error('Error checking favorite:', err);
-      }
-    };
-    checkFavorite();
-  }, [user, car]);
+  // Shared favorites list (deduped with the Favorites page via the cache);
+  // this listing's favorite state is derived from it
+  const { data: favorites = [] } = useQuery({
+    queryKey: ['favorites', user?.id ?? null],
+    queryFn: async () => {
+      const { data } = await api.get('/favorites');
+      return data;
+    },
+    enabled: Boolean(user),
+  });
+  const isFavorite = favorites.some((v) => String(v.id) === String(id));
+
+  useSEO(car ? {
+    title: `${car.year} ${car.make} ${car.model} for Sale`,
+    description: `${car.year} ${car.make} ${car.model} — GH₵${Number(car.price).toLocaleString()} in ${car.location}, Ghana. ${car.condition?.replace('_', ' ')} · ${car.mileage ? `${car.mileage.toLocaleString()} km` : 'low mileage'} · ${car.transmission}. Contact the seller on CarMarket Ghana.`,
+    image: car.images?.length > 0 ? getImageUrl(car.images[0]) : undefined,
+    type: 'product',
+  } : { title: 'Car Details' });
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -55,11 +56,10 @@ const CarDetails = () => {
     try {
       if (isFavorite) {
         await api.delete(`/favorites/${id}`);
-        setIsFavorite(false);
       } else {
         await api.post(`/favorites/${id}`);
-        setIsFavorite(true);
       }
+      queryClient.invalidateQueries({ queryKey: ['favorites', user.id] });
     } catch (err) {
       console.error('Error toggling favorite:', err);
     }
@@ -149,6 +149,8 @@ const CarDetails = () => {
                   <img 
                     src={getImageUrl(car.images[activeImg])} 
                     alt={`${car.make} ${car.model}`} 
+                    fetchPriority="high"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -167,7 +169,7 @@ const CarDetails = () => {
                       onClick={() => setActiveImg(i)}
                       className={`flex-shrink-0 w-24 h-18 rounded-md overflow-hidden border-2 ${activeImg === i ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'} transition-all`}
                     >
-                      <img src={getImageUrl(img)} alt={`Thumbnail ${i}`} className="w-full h-full object-cover" />
+                      <img src={getImageThumbUrl(img)} alt={`Thumbnail ${i}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>

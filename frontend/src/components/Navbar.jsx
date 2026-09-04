@@ -3,14 +3,14 @@ import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useEvents } from '../context/EventContext';
 import { Car, Heart, MessageCircle, Menu, X, User } from 'lucide-react';
-import api from '../utils/api';
+import useBillingStatus from '../hooks/useBillingStatus';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
   const { unread } = useEvents();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [billing, setBilling] = useState(null);
+  const { data: billing } = useBillingStatus();
   const location = useLocation();
 
   useEffect(() => {
@@ -24,14 +24,6 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  // Show the seller's current plan next to their name
-  useEffect(() => {
-    if (!user || user.role !== 'SELLER') return;
-    api.get('/billing/status')
-      .then(({ data }) => setBilling(data))
-      .catch(() => {});
-  }, [user]);
 
   const toggleMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
