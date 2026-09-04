@@ -70,3 +70,9 @@ footer .copyright {
   to { opacity: 1; }
 }
 
+/* Notification toast entrance (used by EventContext toast stack) */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+

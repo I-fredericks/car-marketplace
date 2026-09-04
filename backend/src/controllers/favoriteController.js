@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { createNotification } = require('./notificationController');
 
 // @desc    Add vehicle to favorites
 // @route   POST /api/favorites/:vehicleId
@@ -26,6 +27,26 @@ const addFavorite = async (req, res) => {
         vehicleId
       }
     });
+
+    // Let the listing's owner know their car caught someone's eye.
+    // Never blocks the response, and self-saves don't notify.
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: {
+        make: true, model: true, year: true,
+        seller: { select: { userId: true } },
+      },
+    });
+    const ownerId = vehicle?.seller?.userId;
+    if (ownerId && ownerId !== req.user.id) {
+      await createNotification({
+        userId: ownerId,
+        type: 'LISTING_SAVED',
+        title: `${req.user.name} saved your listing`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
+        data: { vehicleId, actorId: req.user.id, actorName: req.user.name },
+      }).catch(() => {});
+    }
 
     res.status(201).json({ message: 'Added to favorites' });
   } catch (error) {

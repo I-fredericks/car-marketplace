@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useEvents } from '../context/EventContext';
 import api from '../utils/api';
 import { MessageCircle, Send, ArrowLeft, Lock, User } from 'lucide-react';
 
 const Messages = () => {
   const { user } = useContext(AuthContext);
+  const { subscribeToMessages, setActiveConversation, markConversationRead } = useEvents();
   const { userId, vehicleId } = useParams();
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const chatScrollRef = useRef(null);
 
   const isConversationView = Boolean(userId) && Boolean(vehicleId);
 
@@ -31,6 +34,15 @@ const Messages = () => {
     fetchConversations();
   }, [user]);
 
+  // Tell the realtime layer which chat is open (suppresses toasts/unread
+  // for the conversation the user is already reading)
+  useEffect(() => {
+    setActiveConversation(
+      isConversationView ? { userId: Number(userId), vehicleId: Number(vehicleId) } : null
+    );
+    return () => setActiveConversation(null);
+  }, [isConversationView, userId, vehicleId, setActiveConversation]);
+
   useEffect(() => {
     if (!isConversationView) return;
     const loadMessages = async () => {
@@ -38,6 +50,8 @@ const Messages = () => {
       try {
         const { data } = await api.get(`/messages/${userId}/${vehicleId}`);
         setMessages(data);
+        // Clear the unread badge for this conversation
+        markConversationRead(userId, vehicleId);
       } catch (err) {
         console.error('Error fetching messages:', err);
       } finally {
@@ -45,7 +59,27 @@ const Messages = () => {
       }
     };
     loadMessages();
-  }, [isConversationView, userId, vehicleId]);
+  }, [isConversationView, userId, vehicleId, markConversationRead]);
+
+  // Live delivery: new messages arrive over SSE without any refresh
+  useEffect(() => {
+    if (!user) return undefined;
+    return subscribeToMessages((msg) => {
+      if (isConversationView && msg.senderId === Number(userId) && msg.vehicleId === Number(vehicleId)) {
+        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+        markConversationRead(userId, vehicleId);
+      } else if (!isConversationView) {
+        // List view: keep the conversation list fresh
+        fetchConversations();
+      }
+    });
+  }, [user, isConversationView, userId, vehicleId, subscribeToMessages, markConversationRead]);
+
+  // Keep the newest message in view as messages arrive
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -57,7 +91,7 @@ const Messages = () => {
         vehicleId: vehicleId,
         content: newMessage.trim()
       });
-      setMessages(prev => [...prev, data]);
+      setMessages(prev => (prev.some((m) => m.id === data.id) ? prev : [...prev, data]));
       setNewMessage('');
     } catch (err) {
       console.error('Error sending message:', err);
@@ -162,18 +196,16 @@ const Messages = () => {
                   </div>
                   <div>
                     <h2 className="font-medium text-textprimary line-clamp-1">
-                      {messages.length > 0 && messages[0].senderId !== user.id 
-                        ? messages[0].sender?.name 
-                        : (messages.length > 0 && messages[0].receiverId !== user.id 
-                            ? messages[0].receiver?.name 
-                            : 'Conversation')}
+                      {messages.find((m) => m.senderId === Number(userId))?.sender?.name
+                        || conversations.find((c) => c.otherUser?.id === Number(userId))?.otherUser?.name
+                        || 'Conversation'}
                     </h2>
                   </div>
                 </div>
               </div>
 
               {/* Chat Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-bg flex flex-col gap-4 custom-scrollbar">
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 bg-bg flex flex-col gap-4 custom-scrollbar">
                 {loading ? (
                   <div className="flex justify-center py-10 text-textmuted">
                     <div className="animate-spin w-6 h-6 border-2 border-bordercol border-t-primary rounded-full"></div>

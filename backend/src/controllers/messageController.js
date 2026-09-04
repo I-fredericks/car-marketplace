@@ -1,4 +1,6 @@
 const prisma = require('../config/db');
+const { pushToUser } = require('../services/eventBus');
+const { createNotification } = require('./notificationController');
 
 // @desc    Get conversations for current user
 // @route   GET /api/messages/conversations
@@ -110,7 +112,10 @@ const sendMessage = async (req, res) => {
 
     const [receiver, vehicle] = await Promise.all([
       prisma.user.findUnique({ where: { id: receiverIdNum }, select: { id: true } }),
-      prisma.vehicle.findUnique({ where: { id: vehicleIdNum }, select: { id: true } }),
+      prisma.vehicle.findUnique({
+        where: { id: vehicleIdNum },
+        select: { id: true, make: true, model: true, year: true },
+      }),
     ]);
     if (!receiver || !vehicle) {
       return res.status(400).json({ message: 'Receiver or vehicle does not exist' });
@@ -130,6 +135,32 @@ const sendMessage = async (req, res) => {
       }
     });
 
+    // Real-time delivery: push the message to the receiver's open SSE
+    // streams (live chat append) and persist a notification (badge/toast).
+    // Never blocks the response on failure — the row already exists.
+    const vehicleTitle = `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim();
+    try {
+      pushToUser(receiverIdNum, 'message:new', {
+        ...message,
+        vehicleTitle,
+      });
+      await createNotification({
+        userId: receiverIdNum,
+        type: 'NEW_MESSAGE',
+        title: `New message from ${req.user.name}`,
+        body: trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed,
+        data: {
+          senderId: req.user.id,
+          senderName: req.user.name,
+          vehicleId: vehicleIdNum,
+          vehicleTitle,
+          path: `/messages/${req.user.id}/${vehicleIdNum}`,
+        },
+      });
+    } catch (notifyError) {
+      console.error('Failed to notify receiver:', notifyError.message);
+    }
+
     res.status(201).json(message);
   } catch (error) {
     console.error('Error sending message:', error);
@@ -137,8 +168,42 @@ const sendMessage = async (req, res) => {
   }
 };
 
+// @desc    Mark a conversation's NEW_MESSAGE notifications as read
+// @route   PUT /api/messages/:userId/:vehicleId/read
+// @access  Private
+const markConversationRead = async (req, res) => {
+  try {
+    const otherUserId = parseInt(req.params.userId, 10);
+    const vehicleId = parseInt(req.params.vehicleId, 10);
+    if (!Number.isInteger(otherUserId) || !Number.isInteger(vehicleId)) {
+      return res.status(400).json({ message: 'Invalid conversation ids' });
+    }
+
+    const unreadRows = await prisma.notification.findMany({
+      where: { userId: req.user.id, type: 'NEW_MESSAGE', readAt: null },
+      select: { id: true, data: true },
+    });
+    const ids = unreadRows
+      .filter((n) => n.data?.senderId === otherUserId && n.data?.vehicleId === vehicleId)
+      .map((n) => n.id);
+
+    const updated = ids.length
+      ? await prisma.notification.updateMany({
+          where: { id: { in: ids } },
+          data: { readAt: new Date() },
+        })
+      : { count: 0 };
+
+    res.json({ message: 'Conversation marked as read', updated: updated.count });
+  } catch (error) {
+    console.error('Error marking conversation read:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getConversations,
   getMessages,
-  sendMessage
+  sendMessage,
+  markConversationRead
 };

@@ -64,8 +64,24 @@ const updateListingStatus = async (req, res) => {
 
     const vehicle = await prisma.vehicle.update({
       where: { id: parseInt(req.params.id) },
-      data: { status }
+      data: { status },
+      include: { seller: { select: { userId: true } } }
     });
+
+    // Tell the seller their listing was approved or rejected.
+    const ownerId = vehicle.seller?.userId;
+    if (ownerId) {
+      const { createNotification } = require('./notificationController');
+      await createNotification({
+        userId: ownerId,
+        type: status === 'AVAILABLE' ? 'LISTING_APPROVED' : 'LISTING_REJECTED',
+        title: status === 'AVAILABLE'
+          ? 'Your listing was approved'
+          : 'Your listing was rejected',
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
+        data: { vehicleId: vehicle.id },
+      }).catch(() => {});
+    }
 
     res.json({ message: `Vehicle marked as ${status}`, vehicle });
   } catch (error) {

@@ -1,11 +1,13 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useEvents } from '../context/EventContext';
 import { Car, Heart, MessageCircle, Menu, X, User } from 'lucide-react';
 import api from '../utils/api';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
+  const { unread } = useEvents();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [billing, setBilling] = useState(null);
@@ -59,8 +61,13 @@ const Navbar = () => {
                 <Link to="/favorites" className="text-textsecondary hover:text-primary transition-colors" title="Saved">
                   <Heart size={20} />
                 </Link>
-                <Link to="/messages" className="text-textsecondary hover:text-primary transition-colors" title="Messages">
+                <Link to="/messages" className="relative text-textsecondary hover:text-primary transition-colors" title="Messages">
                   <MessageCircle size={20} />
+                  {unread > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
+                      {unread > 99 ? '99+' : unread}
+                    </span>
+                  )}
                 </Link>
                 
                 <div className="flex items-center gap-4 border-l border-bordercol pl-4">
@@ -158,7 +165,15 @@ const Navbar = () => {
                   <Heart size={20} /> Saved Cars
                 </Link>
                 <Link to="/messages" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
-                  <MessageCircle size={20} /> Messages
+                  <span className="relative">
+                    <MessageCircle size={20} />
+                    {unread > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
+                  </span>
+                  Messages
                 </Link>
                 
                 {(user.role === 'SELLER' || user.role === 'ADMIN') && (

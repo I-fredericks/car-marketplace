@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_URL = (() => {
+export const BACKEND_URL = (() => {
   // In dev mode (Vite on port 5173), point to local Express backend on 5000
   if (typeof window !== 'undefined' && window.location.port === '5173') {
     return 'http://localhost:5000';

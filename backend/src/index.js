@@ -28,6 +28,12 @@ app.use(helmet({
   contentSecurityPolicy: false, // Allow inline styles & base64 / static images in demo mode
 }));
 
+// SSE stream (live messages + notifications). Must be mounted BEFORE
+// compression: gzip buffers event-stream responses and breaks realtime
+// delivery. Auth via Authorization header or ?token= (EventSource can't
+// set headers).
+app.use('/api/events', require('./routes/eventRoutes'));
+
 // Gzip/deflate all API + static responses (images already compressed formats stay cheap)
 app.use(compression());
 
@@ -108,6 +114,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/favorites', require('./routes/favoriteRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/billing', require('./routes/billingRoutes'));
 
 // Serve static frontend build if dist folder exists (for single-tunnel ngrok presentation)

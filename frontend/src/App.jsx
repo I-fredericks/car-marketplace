@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { EventProvider } from './context/EventContext';
 
 // First-paint pages stay in the main bundle
 import Home from './pages/Home';
@@ -35,6 +36,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <EventProvider>
         <div className="app-container page-fade-in">
           <Navbar />
           <main className="main-content">
@@ -69,6 +71,7 @@ function App() {
           <Footer />
           <BottomNav />
         </div>
+        </EventProvider>
       </Router>
     </AuthProvider>
   );

@@ -31,8 +31,24 @@ model User {
   payments      Payment[]
   subscription  Subscription?
   authTokens    AuthToken[]
+  notifications Notification[]
 
   @@map("user")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // NEW_MESSAGE, LISTING_APPROVED, LISTING_REJECTED, ...
+  title     String
+  body      String?  @db.Text
+  data      Json?    // e.g. { senderId, vehicleId, vehicleTitle }
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("notification")
 }
 
 model AuthToken {
