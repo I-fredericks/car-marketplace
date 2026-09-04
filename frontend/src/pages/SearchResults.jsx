@@ -13,6 +13,77 @@ const FUEL_TYPES = ['PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC'];
 const CONDITIONS = ['BRAND_NEW', 'FOREIGN_USED', 'LOCALLY_USED'];
 const SELLER_TYPES = ['PRIVATE', 'DEALER', 'COMPANY'];
 
+// Module-level so the filter form keeps input focus: a component defined
+// inside SearchResults' render remounts on every keystroke.
+const FilterContent = ({ filters, setFilters, onApply, onClear }) => (
+  <div className="flex flex-col gap-6">
+    <div className="flex items-center justify-between">
+      <h3 className="font-display font-semibold text-lg text-textprimary flex items-center gap-2">
+        <Filter size={20} /> Filters
+      </h3>
+      <button onClick={onClear} className="text-sm font-medium text-textsecondary hover:text-primary transition-colors">
+        Clear All
+      </button>
+    </div>
+
+    <form onSubmit={onApply} className="space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-textsecondary">Make</label>
+        <select value={filters.make} onChange={(e) => setFilters({...filters, make: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
+          <option value="">Any Make</option>
+          {MAKES.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-textsecondary">Model</label>
+        <input type="text" placeholder="e.g. Camry" value={filters.model} onChange={(e) => setFilters({...filters, model: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary" />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-textsecondary">Price Range (GH₵)</label>
+        <div className="flex gap-2">
+          <input type="number" placeholder="Min" value={filters.minPrice} onChange={(e) => setFilters({...filters, minPrice: e.target.value})} className="w-1/2 h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary" />
+          <input type="number" placeholder="Max" value={filters.maxPrice} onChange={(e) => setFilters({...filters, maxPrice: e.target.value})} className="w-1/2 h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary" />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-textsecondary">Location</label>
+        <select value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
+          <option value="">Any Location</option>
+          {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-textsecondary">Condition</label>
+        <select value={filters.condition} onChange={(e) => setFilters({...filters, condition: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
+          <option value="">Any Condition</option>
+          {CONDITIONS.map(c => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-textsecondary">Transmission</label>
+        <select value={filters.transmission} onChange={(e) => setFilters({...filters, transmission: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
+          <option value="">Any</option>
+          {TRANSMISSIONS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" checked={filters.verifiedOnly === 'true'} onChange={(e) => setFilters({...filters, verifiedOnly: e.target.checked ? 'true' : ''})} className="w-4 h-4 text-primary rounded border-bordercol focus:ring-primary" />
+        <span className="text-sm font-medium text-textprimary">Verified Sellers Only</span>
+      </label>
+
+      <button type="submit" className="w-full py-3 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors mt-4">
+        Apply Filters
+      </button>
+    </form>
+  </div>
+);
+
 const SearchResults = () => {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
@@ -85,75 +156,6 @@ const SearchResults = () => {
     }
   };
 
-  const FilterContent = () => (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h3 className="font-display font-semibold text-lg text-textprimary flex items-center gap-2">
-          <Filter size={20} /> Filters
-        </h3>
-        <button onClick={clearFilters} className="text-sm font-medium text-textsecondary hover:text-primary transition-colors">
-          Clear All
-        </button>
-      </div>
-
-      <div className="space-y-5">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-textsecondary">Make</label>
-          <select value={filters.make} onChange={(e) => setFilters({...filters, make: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
-            <option value="">Any Make</option>
-            {MAKES.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-textsecondary">Model</label>
-          <input type="text" placeholder="e.g. Camry" value={filters.model} onChange={(e) => setFilters({...filters, model: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary" />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-textsecondary">Price Range (GH₵)</label>
-          <div className="flex gap-2">
-            <input type="number" placeholder="Min" value={filters.minPrice} onChange={(e) => setFilters({...filters, minPrice: e.target.value})} className="w-1/2 h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary" />
-            <input type="number" placeholder="Max" value={filters.maxPrice} onChange={(e) => setFilters({...filters, maxPrice: e.target.value})} className="w-1/2 h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary" />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-textsecondary">Location</label>
-          <select value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
-            <option value="">Any Location</option>
-            {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-textsecondary">Condition</label>
-          <select value={filters.condition} onChange={(e) => setFilters({...filters, condition: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
-            <option value="">Any Condition</option>
-            {CONDITIONS.map(c => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
-          </select>
-        </div>
-        
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-textsecondary">Transmission</label>
-          <select value={filters.transmission} onChange={(e) => setFilters({...filters, transmission: e.target.value})} className="w-full h-10 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary">
-            <option value="">Any</option>
-            {TRANSMISSIONS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={filters.verifiedOnly === 'true'} onChange={(e) => setFilters({...filters, verifiedOnly: e.target.checked ? 'true' : ''})} className="w-4 h-4 text-primary rounded border-bordercol focus:ring-primary" />
-          <span className="text-sm font-medium text-textprimary">Verified Sellers Only</span>
-        </label>
-
-        <button onClick={applyFilters} className="w-full py-3 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors mt-4">
-          Apply Filters
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="bg-bg min-h-screen pt-20 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -176,7 +178,7 @@ const SearchResults = () => {
           {/* Desktop Sidebar */}
           <aside className="hidden md:block sticky top-24 h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
             <div className="bg-surface border border-bordercol rounded-lg p-5">
-              <FilterContent />
+              <FilterContent filters={filters} setFilters={setFilters} onApply={applyFilters} onClear={clearFilters} />
             </div>
           </aside>
 
@@ -264,7 +266,7 @@ const SearchResults = () => {
             >
               <X size={20} />
             </button>
-            <FilterContent />
+            <FilterContent filters={filters} setFilters={setFilters} onApply={applyFilters} onClear={clearFilters} />
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+const morgan = require('morgan');
 const path = require('path');
 const { errorHandler } = require('./middlewares/errorHandler');
 
@@ -26,6 +27,12 @@ app.set('trust proxy', 1);
 
 app.use(helmet({
   contentSecurityPolicy: false, // Allow inline styles & base64 / static images in demo mode
+}));
+
+// HTTP request logging: concise in dev, standard combined format in prod.
+// Health probes are skipped so uptime checks don't flood the log.
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+  skip: (req) => req.path === '/api/health' || req.path === '/api',
 }));
 
 // SSE stream (live messages + notifications). Must be mounted BEFORE
@@ -102,10 +109,22 @@ app.get('/api', (req, res) => {
   res.json({ message: 'Car Marketplace API is running', status: 'OK', timestamp: new Date() });
 });
 
+// Liveness + DB readiness for uptime checks and deploy health gates
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'OK', db: 'up', timestamp: new Date() });
+  } catch (err) {
+    console.error('Health check DB failure:', err.message);
+    res.status(503).json({ status: 'ERROR', db: 'down', timestamp: new Date() });
+  }
+});
+
 const authRoutes = require('./routes/authRoutes');
 const vehicleRoutes = require('./routes/vehicleRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const prisma = require('./config/db');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/vehicles', vehicleRoutes);
@@ -148,7 +167,39 @@ app.use(errorHandler);
 module.exports = app;
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+  });
+
+  // Graceful shutdown: stop accepting connections, let in-flight requests
+  // finish, release the DB pool, then exit. Deploy platforms send SIGTERM.
+  const shutdown = async (signal) => {
+    console.log(`\n${signal} received: shutting down gracefully...`);
+    server.close(async () => {
+      try {
+        await prisma.$disconnect();
+        process.exit(0);
+      } catch (err) {
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+      }
+    });
+    // Drain deadline: force-exit if connections refuse to close
+    setTimeout(() => {
+      console.error('Forced exit: connections did not drain in time');
+      process.exit(1);
+    }, 10000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason);
+  });
+
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+    shutdown('uncaughtException');
   });
 }

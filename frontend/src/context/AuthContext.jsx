@@ -75,7 +75,10 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, logout, loading }}>
-      {!loading && children}
+      {/* Render children immediately: gating on `loading` blanks the whole
+          app for every visitor until /auth/me resolves. Protected pages
+          consume `loading` themselves to avoid flashing login prompts. */}
+      {children}
     </AuthContext.Provider>
   );
 };

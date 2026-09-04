@@ -6,7 +6,7 @@ import { Heart, Search, Lock } from 'lucide-react';
 import VehicleCard from '../components/VehicleCard';
 
 const Favorites = () => {
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +33,14 @@ const Favorites = () => {
       console.error('Error removing favorite:', err);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-bg mt-16">
+        <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

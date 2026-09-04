@@ -6,7 +6,7 @@ import api from '../utils/api';
 import { MessageCircle, Send, ArrowLeft, Lock, User } from 'lucide-react';
 
 const Messages = () => {
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const { subscribeToMessages, setActiveConversation, markConversationRead } = useEvents();
   const { userId, vehicleId } = useParams();
   const [conversations, setConversations] = useState([]);
@@ -99,6 +99,14 @@ const Messages = () => {
       setSending(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-bg mt-16">
+        <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

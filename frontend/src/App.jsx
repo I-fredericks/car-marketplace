@@ -28,6 +28,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import BottomNav from './components/BottomNav';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Global styles
 import './App.css';
@@ -40,6 +41,7 @@ function App() {
         <div className="app-container page-fade-in">
           <Navbar />
           <main className="main-content">
+            <ErrorBoundary>
             <Suspense fallback={
               <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-bg mt-16">
                 <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
@@ -67,6 +69,7 @@ function App() {
               <Route path="*"        element={<NotFound />} />
             </Routes>
             </Suspense>
+            </ErrorBoundary>
           </main>
           <Footer />
           <BottomNav />
