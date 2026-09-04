@@ -54,4 +54,23 @@ const seller = (req, res, next) => {
   }
 };
 
-module.exports = { protect, admin, seller };
+// Attaches req.user when a valid Bearer token is present; anonymous requests
+// pass through untouched. For public endpoints with owner-only extras.
+const optionalAuth = async (req, res, next) => {
+  if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
+    return next();
+  }
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, name: true, email: true, role: true },
+    });
+  } catch (_) {
+    // Invalid/expired token on a public route: treat as anonymous
+  }
+  next();
+};
+
+module.exports = { protect, admin, seller, optionalAuth };

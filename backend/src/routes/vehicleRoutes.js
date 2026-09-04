@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const { createVehicle, getVehicles, getVehicleById, getFeaturedCars, getSellerListings, updateVehicle, markAsSold, deleteVehicle } = require('../controllers/vehicleController');
-const { protect, seller } = require('../middlewares/authMiddleware');
+const { protect, seller, optionalAuth } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
 const { vehicleSchema, updateVehicleSchema } = require('../middlewares/validation');
 
 router.get('/', getVehicles);
 router.get('/featured', getFeaturedCars);
-router.get('/:id', getVehicleById);
+router.get('/:id', optionalAuth, getVehicleById);
 router.get('/seller/my-listings', protect, seller, getSellerListings);
 
 router.post('/', protect, seller, validate(vehicleSchema), createVehicle);

@@ -292,6 +292,10 @@ const verifyPayment = async (req, res) => {
     }
 
     const updated = await applyVerifiedPayment(payment);
+    if (!updated) {
+      // Another caller (webhook/verify) applied it between our read and write
+      return res.status(409).json({ message: 'Payment was already processed concurrently.' });
+    }
 
     res.json({ message: `Payment verified. Plan activated.`, payment: updated });
   } catch (error) {

@@ -118,6 +118,11 @@ model Vehicle {
   payments     Payment[]
 
   @@index([sellerId])
+  // Hot-path composite indexes for search/home queries
+  @@index([status, createdAt])
+  @@index([status, price])
+  @@index([make, model])
+  @@index([featured, status])
   @@map("vehicle")
 }
 
@@ -205,6 +210,7 @@ model Message {
   @@index([receiverId])
   @@index([senderId])
   @@index([vehicleId])
+  @@index([vehicleId, createdAt])
   @@map("message")
 }
 
@@ -256,7 +262,7 @@ model Payment {
   userId      Int
   user        User          @relation(fields: [userId], references: [id])
   plan        PaymentPlan
-  amount      Float
+  amount      Int // integer pesewas (GHS * 100) — never floats for money
   reference   String        @unique
   status      PaymentStatus @default(PENDING)
   method      String        @default("PAYSTACK")

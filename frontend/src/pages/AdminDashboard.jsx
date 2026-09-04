@@ -623,7 +623,7 @@ const AdminDashboard = () => {
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="font-display font-bold text-lg text-primary">GH₵{Number(p.amount).toLocaleString()}</span>
+                        <span className="font-display font-bold text-lg text-primary">GH₵{Number(p.amount / 100).toLocaleString()}</span>
                         <button
                           onClick={() => handleVerifyPayment(p.id)}
                           className="px-4 py-2 bg-success/10 text-success border border-success/20 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
@@ -664,7 +664,7 @@ const AdminDashboard = () => {
                           <td className="px-6 py-4 font-medium text-textprimary">{p.reference}</td>
                           <td className="px-6 py-4 text-textsecondary">{p.plan.replace('_', ' ')}</td>
                           <td className="px-6 py-4 text-textsecondary">{p.user?.name}</td>
-                          <td className="px-6 py-4 font-medium text-textprimary">GH₵{Number(p.amount).toLocaleString()}</td>
+                          <td className="px-6 py-4 font-medium text-textprimary">GH₵{Number(p.amount / 100).toLocaleString()}</td>
                           <td className="px-6 py-4">{statusBadge(p.status)}</td>
                           <td className="px-6 py-4 text-textsecondary">{new Date(p.createdAt).toLocaleDateString()}</td>
                         </tr>

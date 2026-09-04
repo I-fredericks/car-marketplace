@@ -78,12 +78,9 @@ const MOMO = {
 };
 
 function generateReference() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `CM-${code}`;
+  // Cryptographically random: predictable Math.random references could be
+  // guessed, and collisions would hit the unique constraint.
+  return `CM-${require('crypto').randomBytes(5).toString('hex').toUpperCase()}`;
 }
 
 module.exports = { PLANS, FREE_TIER, MOMO, generateReference, getListingLimit, getPlanRank };

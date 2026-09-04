@@ -315,7 +315,7 @@ const getFeaturedCars = async (req, res) => {
 
 // @desc    Get single vehicle by ID
 // @route   GET /api/vehicles/:id
-// @access  Public
+// @access  Public (AVAILABLE listings only; owner/admin see any status)
 const getVehicleById = async (req, res) => {
   try {
     const vehicle = await prisma.vehicle.findUnique({
@@ -323,21 +323,46 @@ const getVehicleById = async (req, res) => {
       include: {
         seller: {
           include: {
-            user: { select: { id: true, name: true, phone: true, email: true } },
-            reviews: true
-          }
+            // email is deliberately excluded: public viewers get phone only
+            user: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                subscription: { select: { plan: true, status: true, periodEnd: true } },
+              },
+            },
+            reviews: true,
+          },
         },
         features: true,
         images: req.query.withImageData === 'true' ? true : imageIdSelect,
-        documents: true
-      }
+      },
     });
 
     if (!vehicle) {
       return res.status(404).json({ message: 'Vehicle not found' });
     }
 
-    res.json(vehicle);
+    const isOwner = req.user && vehicle.seller.userId === req.user.id;
+    const isAdmin = req.user && req.user.role === 'ADMIN';
+    const isExpired = vehicle.expiresAt && vehicle.expiresAt <= new Date();
+
+    // Anonymous/public viewers only see live, available, unexpired listings.
+    if (!isOwner && !isAdmin) {
+      if (vehicle.status !== 'AVAILABLE' || isExpired) {
+        return res.status(404).json({ message: 'Vehicle not found' });
+      }
+      // Never ship registration documents to the public
+      return res.json(vehicle);
+    }
+
+    // Owner/admin view: include document metadata (never the raw blobs)
+    const withDocs = await prisma.vehicleDocument.findMany({
+      where: { vehicleId: vehicle.id },
+      select: { id: true, documentType: true },
+    });
+    res.json({ ...vehicle, documents: withDocs });
   } catch (error) {
     console.error('Error fetching vehicle:', error);
     res.status(500).json({ message: 'Server error fetching vehicle' });

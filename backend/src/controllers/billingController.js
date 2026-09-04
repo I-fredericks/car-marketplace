@@ -43,53 +43,69 @@ async function getActiveSubscription(userId) {
 /**
  * Idempotently activate a payment's plan (subscription allowance).
  * Used by the Paystack webhook, server-side verify, and manual admin approval.
+ *
+ * Race-safe: the payment row is claimed inside a transaction with a status
+ * guard, so two concurrent webhook + verify calls can never double-extend.
+ * Returns the updated payment, or null if another caller already applied it.
  */
 async function applyVerifiedPayment(payment, { channel } = {}) {
-  if (payment.status === 'VERIFIED') return payment; // already applied
+  if (payment.status === 'VERIFIED') return payment;
 
   const plan = PLANS[payment.plan];
-  const now = new Date();
-  const periodEnd = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
-  // Extend from the current period if the subscription is still active
-  const existing = await prisma.subscription.findUnique({ where: { userId: payment.userId } });
-  const base = existing && existing.status === 'ACTIVE' && existing.periodEnd > now
-    ? existing.periodEnd
-    : now;
-  const newEnd = new Date(base.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+  return prisma.$transaction(async (tx) => {
+    // Atomic claim: only a caller that flips PENDING -> VERIFIED proceeds.
+    // Everyone else (concurrent webhook/verify/admin) sees count 0 and stops.
+    const claim = await tx.payment.updateMany({
+      where: { id: payment.id, status: 'PENDING' },
+      data: {
+        status: 'VERIFIED',
+        channel: channel || payment.channel || null,
+        paidAt: payment.paidAt || new Date(),
+      },
+    });
+    if (claim.count === 0) return null;
 
-  await prisma.subscription.upsert({
-    where: { userId: payment.userId },
-    create: {
-      userId: payment.userId,
-      plan: plan.key,
-      status: 'ACTIVE',
-      periodStart: now,
-      periodEnd: newEnd,
-    },
-    update: {
-      plan: plan.key,
-      status: 'ACTIVE',
-      periodStart: base,
-      periodEnd: newEnd,
-    },
-  });
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
-  // Upgrading lifts the 90-day free-listing expiry: reactivate any taken-down listings
-  await prisma.vehicle.updateMany({
-    where: { seller: { userId: payment.userId }, expiresAt: { not: null } },
-    data: { expiresAt: null },
-  });
+    // Extend from the current period if the subscription is still active
+    const existing = await tx.subscription.findUnique({ where: { userId: payment.userId } });
+    const base = existing && existing.status === 'ACTIVE' && existing.periodEnd > now
+      ? existing.periodEnd
+      : now;
+    const newEnd = new Date(base.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
-  return prisma.payment.update({
-    where: { id: payment.id },
-    data: {
-      status: 'VERIFIED',
-      periodStart: now,
-      periodEnd,
-      channel: channel || payment.channel || null,
-      paidAt: payment.paidAt || now,
-    },
+    await tx.subscription.upsert({
+      where: { userId: payment.userId },
+      create: {
+        userId: payment.userId,
+        plan: plan.key,
+        status: 'ACTIVE',
+        periodStart: now,
+        periodEnd: newEnd,
+      },
+      update: {
+        plan: plan.key,
+        status: 'ACTIVE',
+        periodStart: base,
+        periodEnd: newEnd,
+      },
+    });
+
+    // Upgrading lifts the 90-day free-listing expiry: reactivate any taken-down listings
+    await tx.vehicle.updateMany({
+      where: { seller: { userId: payment.userId }, expiresAt: { not: null } },
+      data: { expiresAt: null },
+    });
+
+    return tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        periodStart: now,
+        periodEnd,
+      },
+    });
   });
 }
 
@@ -144,7 +160,7 @@ const createPayment = async (req, res) => {
       data: {
         userId: req.user.id,
         plan: plan.key,
-        amount: plan.price,
+        amount: Math.round(plan.price * 100), // integer pesewas
         reference: generateReference(),
       },
     });
@@ -180,7 +196,7 @@ const initializePayment = async (req, res) => {
 
     const init = await initializeTransaction({
       email: payment.user.email,
-      amountGhs: payment.amount,
+      amountGhs: payment.amount / 100, // stored pesewas -> GHS for Paystack
       reference: payment.reference,
       callbackUrl,
       metadata: {
@@ -219,8 +235,8 @@ const verifyPayment = async (req, res) => {
 
     const result = await verifyTransaction(payment.reference);
     if (result.status === 'success') {
-      // Confirm the paid amount matches the plan price before activating
-      if (result.amount + 0.001 < payment.amount) {
+      // Both integer pesewas — exact comparison, no epsilon
+      if (result.amount < payment.amount) {
         return res.status(400).json({ message: 'Amount paid does not match the plan price.', status: 'amount_mismatch' });
       }
       const updated = await applyVerifiedPayment(payment, { channel: result.channel });
@@ -245,7 +261,14 @@ const paystackWebhook = async (req, res) => {
       .update(req.rawBody)
       .digest('hex');
 
-    if (hash !== signature) {
+    // timingSafeEqual guards against signature-oracle timing attacks; the
+    // length check is required first or it throws on unequal buffer lengths.
+    const expectedSig = Buffer.from(hash, 'utf8');
+    const receivedSig = Buffer.from(String(signature || ''), 'utf8');
+    const signatureValid = expectedSig.length === receivedSig.length
+      && crypto.timingSafeEqual(expectedSig, receivedSig);
+
+    if (!signatureValid) {
       return res.status(401).json({ message: 'Invalid signature' });
     }
 
@@ -256,8 +279,9 @@ const paystackWebhook = async (req, res) => {
         where: { reference: data.reference },
       });
       if (payment && payment.status !== 'VERIFIED') {
-        const paidAmount = data.amount / 100;
-        if (paidAmount + 0.001 >= payment.amount) {
+        // Both sides are integer pesewas — exact comparison, no epsilon
+        const paidAmount = data.amount;
+        if (paidAmount >= payment.amount) {
           await applyVerifiedPayment(payment, {
             channel: data.channel || null,
           });
