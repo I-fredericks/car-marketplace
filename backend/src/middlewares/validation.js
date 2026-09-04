@@ -62,7 +62,8 @@ const vehicleSchema = z.object({
     isPrimary: z.boolean().optional()
   })).max(15, 'Maximum 15 images per listing').optional()
     .refine(
-      (imgs) => imgs.every((img) => {
+      // Zod v4 runs refines for undefined optional fields too — guard first.
+      (imgs) => !imgs || imgs.every((img) => {
         // Accept base64 raster images and uploaded/external URLs only — SVG
         // can carry scripts (stored XSS), so it is rejected at creation time.
         if (/^data:image\/(jpeg|jpg|png|webp|gif);base64,/i.test(img.data)) return true;
@@ -73,7 +74,7 @@ const vehicleSchema = z.object({
       { message: 'Images must be JPEG, PNG, WebP or GIF' }
     )
     .refine(
-      (imgs) => imgs.every((img) => img.data.length <= 12_000_000),
+      (imgs) => !imgs || imgs.every((img) => img.data.length <= 12_000_000),
       { message: 'Each image must be under ~9MB' }
     ),
   documents: z.array(z.object({
@@ -81,7 +82,9 @@ const vehicleSchema = z.object({
     documentType: z.string().optional()
   })).max(5, 'Maximum 5 documents per listing').optional()
     .refine(
-      (docs) => docs.every((doc) => {
+      // Zod v4 runs refines even for undefined optional fields, so guard
+      // before reading — clients that omit documents crashed here.
+      (docs) => !docs || docs.every((doc) => {
         if (/^data:(image\/(jpeg|jpg|png|webp)|application\/pdf);base64,/i.test(doc.data)) return true;
         if (/^\/?uploads\//.test(doc.data)) return true;
         return false;
@@ -89,7 +92,7 @@ const vehicleSchema = z.object({
       { message: 'Documents must be images or PDFs' }
     )
     .refine(
-      (docs) => docs.every((doc) => doc.data.length <= 12_000_000),
+      (docs) => !docs || docs.every((doc) => doc.data.length <= 12_000_000),
       { message: 'Each document must be under ~9MB' }
     )
 });

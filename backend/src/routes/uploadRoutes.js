@@ -22,36 +22,58 @@ const storage = multer.diskStorage({
   }
 });
 
-function checkFileType(file, cb) {
-  const filetypes = /jpg|jpeg|png|webp|pdf/;
-  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = filetypes.test(file.mimetype);
+// Match on extension OR mimetype: phones frequently report generic mimetypes
+// (application/octet-stream) for gallery files, so requiring both rejected
+// perfectly good photos.
+const ALLOWED_TYPES = /jpg|jpeg|png|webp|heic|heif|pdf/;
 
-  if (extname && mimetype) {
+function checkFileType(req, file, cb) {
+  const extname = ALLOWED_TYPES.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = ALLOWED_TYPES.test(file.mimetype);
+
+  if (extname || mimetype) {
     return cb(null, true);
-  } else {
-    cb('Images and PDFs only!');
   }
+  // Skip the file but remember its name so the response can say what failed
+  // (a string passed to cb here used to surface as a generic "Server Error").
+  req.rejectedFiles = req.rejectedFiles || [];
+  req.rejectedFiles.push(file.originalname);
+  cb(null, false);
 }
 
 const upload = multer({
   storage,
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max file size per image
-  fileFilter: function (req, file, cb) {
-    checkFileType(file, cb);
-  },
+  fileFilter: checkFileType,
 });
 
-router.post('/', protect, seller, upload.array('images', 15), (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({ message: 'No files uploaded' });
-  }
+router.post('/', protect, seller, (req, res) => {
+  upload.array('images', 15)(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE'
+        ? 'Each image must be under 15MB.'
+        : `Upload failed: ${err.message || 'please try again.'}`;
+      return res.status(400).json({ message });
+    }
 
-  const fileUrls = req.files.map(file => `/uploads/${file.filename}`);
+    const files = req.files || [];
+    const rejected = req.rejectedFiles || [];
 
-  res.send({
-    message: 'Images Uploaded',
-    urls: fileUrls,
+    if (files.length === 0) {
+      return res.status(400).json({
+        message: rejected.length
+          ? `Unsupported file type: ${rejected.join(', ')}. Use JPG, PNG, WEBP, HEIC or PDF.`
+          : 'No files uploaded',
+      });
+    }
+
+    const fileUrls = files.map(file => `/uploads/${file.filename}`);
+
+    res.send({
+      message: 'Images Uploaded',
+      urls: fileUrls,
+      ...(rejected.length > 0 ? { rejected } : {}),
+    });
   });
 });
 
