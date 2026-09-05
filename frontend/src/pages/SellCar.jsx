@@ -73,6 +73,14 @@ const SellCar = () => {
     loadVehicle();
   }, [id, isEdit]);
 
+  const revokeBlob = (url) => {
+    if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
+  };
+
+  // Revoke any lingering local previews when the page unmounts (must precede
+  // all early returns to keep hook order stable)
+  useEffect(() => () => uploadedImages.forEach(revokeBlob), []);
+
   if (!user) {
     return (
       <div className="min-h-[calc(100vh-64px)] flex flex-col items-center justify-center bg-bg px-4 mt-16">
@@ -133,13 +141,6 @@ const SellCar = () => {
         : [...prev.features, feat]
     }));
   };
-
-  const revokeBlob = (url) => {
-    if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
-  };
-
-  // Revoke any lingering local previews when the page unmounts
-  useEffect(() => () => uploadedImages.forEach(revokeBlob), []);
 
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files || []);

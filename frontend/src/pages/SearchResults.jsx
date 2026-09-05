@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Filter, X, Search, SlidersHorizontal, GitCompareArrows } from 'lucide-react';
+import { X, Search, SlidersHorizontal, GitCompareArrows } from 'lucide-react';
 import api, { getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
 import useModalA11y from '../hooks/useModalA11y';
