@@ -50,10 +50,10 @@ const Navbar = () => {
             
             {user ? (
               <div className="flex items-center space-x-4 ml-4">
-                <Link to="/favorites" className="text-textsecondary hover:text-primary transition-colors" title="Saved">
+                <Link to="/favorites" className="text-textsecondary hover:text-primary transition-colors" title="Saved" aria-label="Saved cars">
                   <Heart size={20} />
                 </Link>
-                <Link to="/messages" className="relative text-textsecondary hover:text-primary transition-colors" title="Messages">
+                <Link to="/messages" className="relative text-textsecondary hover:text-primary transition-colors" title="Messages" aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}>
                   <MessageCircle size={20} />
                   {unread > 0 && (
                     <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
@@ -120,7 +120,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center">
-            <button onClick={toggleMenu} className="text-textprimary p-2 focus:outline-none">
+            <button onClick={toggleMenu} aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={isMobileMenuOpen} className="text-textprimary p-2 focus:outline-none">
               {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
             </button>
           </div>

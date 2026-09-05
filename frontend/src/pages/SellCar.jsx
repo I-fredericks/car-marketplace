@@ -134,6 +134,13 @@ const SellCar = () => {
     }));
   };
 
+  const revokeBlob = (url) => {
+    if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
+  };
+
+  // Revoke any lingering local previews when the page unmounts
+  useEffect(() => () => uploadedImages.forEach(revokeBlob), []);
+
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -172,10 +179,14 @@ const SellCar = () => {
       });
       setUploadedImages(prev => {
         const without = prev.filter(url => !url.startsWith('blob:'));
+        prev.filter(url => url.startsWith('blob:')).forEach(revokeBlob);
         return [...without, ...data.urls];
       });
     } catch (err) {
-      setUploadedImages(prev => prev.filter(url => !url.startsWith('blob:')));
+      setUploadedImages(prev => {
+        prev.filter(url => url.startsWith('blob:')).forEach(revokeBlob);
+        return prev.filter(url => !url.startsWith('blob:'));
+      });
       setError('Image upload failed. Please try again.');
     } finally {
       setUploading(false);
@@ -184,7 +195,10 @@ const SellCar = () => {
   };
 
   const removeImage = (index) => {
-    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    setUploadedImages(prev => {
+      revokeBlob(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSubmit = async () => {

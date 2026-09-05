@@ -23,6 +23,8 @@ const BillingCallback = lazy(() => import('./pages/BillingCallback'));
 const BecomeSeller = lazy(() => import('./pages/BecomeSeller'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Terms = lazy(() => import('./pages/Terms'));
 
 // Components
 import Navbar from './components/Navbar';
@@ -64,7 +66,9 @@ function App() {
               <Route path="/messages/:userId/:vehicleId" element={<Messages />} />
               <Route path="/admin"    element={<AdminDashboard />} />
               <Route path="/compare"  element={<Compare />} />
-              <Route path="/pricing"  element={<Pricing />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="/billing/callback" element={<BillingCallback />} />
               <Route path="*"        element={<NotFound />} />
             </Routes>

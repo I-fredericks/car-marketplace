@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
+import useModalA11y from '../hooks/useModalA11y';
 import { Heart, Flag, MapPin, MessageCircle, Phone, CheckCircle, ShieldCheck, Car, Star } from 'lucide-react';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
@@ -80,6 +81,8 @@ const CarDetails = () => {
     }
   };
 
+  const reportModalRef = useModalA11y(showReportModal, () => setShowReportModal(false));
+
   if (loading) return (
     <div className="min-h-screen pt-24 pb-20 flex flex-col items-center justify-center bg-bg">
       <div className="animate-spin w-10 h-10 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
@@ -99,7 +102,9 @@ const CarDetails = () => {
   const sellerName = seller?.user?.name || 'Seller';
   const sellerPhone = seller?.user?.phone || '';
   const sellerWhatsApp = seller?.whatsapp || sellerPhone;
-  const isVerified = seller?.role === 'ADMIN' || seller?.role === 'SELLER';
+  // "Verified" means CarMarket reviewed the seller's documents — never just
+  // their account role
+  const isVerified = Boolean(seller?.verified);
 
   const whatsappMsg = encodeURIComponent(
     `Hello, I'm interested in your ${car.year} ${car.make} ${car.model} listed on CarMarket Ghana for GH₵${Number(car.price).toLocaleString()}. Is it still available?`
@@ -164,9 +169,11 @@ const CarDetails = () => {
               {car.images && car.images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto p-1 custom-scrollbar">
                   {car.images.map((img, i) => (
-                    <button 
+                    <button
                       key={img.id}
                       onClick={() => setActiveImg(i)}
+                      aria-label={`View photo ${i + 1}`}
+                      aria-current={activeImg === i}
                       className={`flex-shrink-0 w-24 h-18 rounded-md overflow-hidden border-2 ${activeImg === i ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'} transition-all`}
                     >
                       <img src={getImageThumbUrl(img)} alt={`Thumbnail ${i}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
@@ -346,7 +353,7 @@ const CarDetails = () => {
       {/* Report Modal */}
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-textprimary/60 backdrop-blur-sm" onClick={() => setShowReportModal(false)}>
-          <div className="bg-surface rounded-xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div ref={reportModalRef} role="dialog" aria-modal="true" aria-label="Report listing" className="bg-surface rounded-xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display font-bold text-xl text-textprimary mb-2">Report Listing</h3>
             <p className="text-sm text-textsecondary mb-4">Please provide a reason for reporting this listing.</p>
             <form onSubmit={handleReport}>

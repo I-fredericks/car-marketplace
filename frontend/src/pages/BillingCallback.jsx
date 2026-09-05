@@ -29,6 +29,7 @@ const BillingCallback = () => {
       setMessage('No payment reference found in the URL.');
       return;
     }
+    let retryTimer;
     const verify = async (attempt = 0) => {
       try {
         const { data } = await api.get(`/billing/verify/${reference}`);
@@ -44,7 +45,7 @@ const BillingCallback = () => {
         }
         // pending / abandoned — retry a couple of times before giving up
         if (attempt < 2) {
-          setTimeout(() => verify(attempt + 1), 2500);
+          retryTimer = setTimeout(() => verify(attempt + 1), 2500);
         } else {
           setState('pending');
           setMessage('Your payment is still processing. If you were charged, your plan will activate automatically within a few minutes.');
@@ -55,6 +56,7 @@ const BillingCallback = () => {
       }
     };
     verify();
+    return () => clearTimeout(retryTimer);
   }, [user, reference, navigate]);
 
   return (

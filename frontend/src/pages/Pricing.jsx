@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import useBillingStatus from '../hooks/useBillingStatus';
 import api from '../utils/api';
 import useSEO from '../hooks/useSEO';
+import useModalA11y from '../hooks/useModalA11y';
 import { Sparkles, Crown, Building2, Check, Smartphone, Loader2, Lock, Info } from 'lucide-react';
 
 const Pricing = () => {
@@ -21,6 +22,7 @@ const Pricing = () => {
   const [error, setError] = useState('');
   const [starting, setStarting] = useState(false);
   const { data: billingStatus } = useBillingStatus();
+  const checkoutModalRef = useModalA11y(Boolean(selected), () => { if (!starting) setSelected(null); });
   const currentPlanKey = billingStatus ? (billingStatus.isSubscribed ? billingStatus.plan.key : 'FREE') : null;
 
   const { data: plansData, isLoading: loading } = useQuery({
@@ -212,7 +214,7 @@ const Pricing = () => {
       {/* Checkout Modal */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-textprimary/60 backdrop-blur-sm" onClick={() => !starting && setSelected(null)}>
-          <div className="bg-surface rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div ref={checkoutModalRef} role="dialog" aria-modal="true" aria-label={`Checkout: ${selectedPlan?.label || 'plan'}`} className="bg-surface rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display font-bold text-xl text-textprimary mb-1">
               {selectedPlan?.label}
             </h3>

@@ -47,10 +47,10 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold text-lg text-textprimary mb-4">Support & Legal</h4>
             <ul className="space-y-3">
-              <li><a href="#" className="text-textsecondary hover:text-primary transition-colors text-sm">Help Center</a></li>
-              <li><a href="#" className="text-textsecondary hover:text-primary transition-colors text-sm">Privacy Policy</a></li>
-              <li><a href="#" className="text-textsecondary hover:text-primary transition-colors text-sm">Terms of Service</a></li>
-              <li><a href="#" className="text-textsecondary hover:text-primary transition-colors text-sm">Contact Us</a></li>
+              <li><a href="mailto:support@carmarket.com.gh" className="text-textsecondary hover:text-primary transition-colors text-sm">Help Center</a></li>
+              <li><Link to="/privacy" className="text-textsecondary hover:text-primary transition-colors text-sm">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="text-textsecondary hover:text-primary transition-colors text-sm">Terms of Service</Link></li>
+              <li><a href="mailto:support@carmarket.com.gh" className="text-textsecondary hover:text-primary transition-colors text-sm">Contact Us</a></li>
             </ul>
           </div>
         </div>
