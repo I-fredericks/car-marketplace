@@ -15,6 +15,12 @@ if (smtpConfigured) {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    // Gmail silently drops some datacenter IPs and revoked app passwords hang
+    // during the handshake. Fail fast (~25s worst case) instead of pinning
+    // the request thread for minutes — this already killed registration.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
   });
 }
 

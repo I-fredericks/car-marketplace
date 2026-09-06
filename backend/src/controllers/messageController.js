@@ -10,9 +10,9 @@ const getConversations = async (req, res) => {
     const userId = req.user.id;
 
     const latest = await prisma.$queryRaw`
-      SELECT MAX(id) AS maxId FROM message WHERE senderId = ${userId} GROUP BY receiverId, vehicleId
+      SELECT MAX(id) AS "maxId" FROM "message" WHERE "senderId" = ${userId} GROUP BY "receiverId", "vehicleId"
       UNION
-      SELECT MAX(id) AS maxId FROM message WHERE receiverId = ${userId} GROUP BY senderId, vehicleId
+      SELECT MAX(id) AS "maxId" FROM "message" WHERE "receiverId" = ${userId} GROUP BY "senderId", "vehicleId"
     `;
     const ids = latest.map((row) => Number(row.maxId)).filter(Number.isInteger);
     if (ids.length === 0) {

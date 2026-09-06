@@ -38,7 +38,12 @@ const findValidAuthToken = async (rawToken, type) => {
 const issueVerificationToken = async (user, origin) => {
   await prisma.authToken.deleteMany({ where: { userId: user.id, type: 'EMAIL_VERIFICATION' } });
   const rawToken = await createAuthToken(user.id, 'EMAIL_VERIFICATION', VERIFICATION_TOKEN_MINUTES);
-  await sendVerificationEmail(user, rawToken, origin);
+  // Fire-and-forget: the user's inbox is not on the request critical path.
+  // A slow/hanging SMTP transport must never block register/resend —
+  // it already caused Vercel->Render timeouts and "registration failed".
+  sendVerificationEmail(user, rawToken, origin).catch((error) =>
+    console.error('Verification email failed:', error.message)
+  );
   return rawToken;
 };
 
@@ -371,11 +376,11 @@ const forgotPassword = async (req, res) => {
     if (user) {
       await prisma.authToken.deleteMany({ where: { userId: user.id, type: 'PASSWORD_RESET' } });
       const rawToken = await createAuthToken(user.id, 'PASSWORD_RESET', RESET_TOKEN_MINUTES);
-      try {
-        await sendPasswordResetEmail(user, rawToken, originFromReq(req));
-      } catch (error) {
-        console.error('Failed to send reset email:', error.message);
-      }
+      // Fire-and-forget for the same reason as register: never let SMTP
+      // latency or failures hold the HTTP response hostage.
+      sendPasswordResetEmail(user, rawToken, originFromReq(req)).catch((error) =>
+        console.error('Failed to send reset email:', error.message)
+      );
       return res.json({
         message: 'If that email is registered, a password reset link has been sent. It expires in 1 hour.',
         ...(smtpConfigured || process.env.NODE_ENV === 'production' ? {} : { devResetToken: rawToken }),
