@@ -1,8 +1,8 @@
 {
-  "$comment": "Vercel deployment config. Replace <your-api-service> with your Render service hostname after step 4 (e.g. carmarket-api.onrender.com). Rewrites are evaluated in order — the /api and /uploads rules MUST stay above the /index.html catch-all.",
+  "$comment": "Vercel deployment config. Rewrites are evaluated in order — the /api and /uploads rules MUST stay above the /index.html catch-all, so browser API calls hit the Render backend.",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://<your-api-service>.onrender.com/api/$1" },
-    { "source": "/uploads/(.*)", "destination": "https://<your-api-service>.onrender.com/uploads/$1" },
+    { "source": "/api/(.*)", "destination": "https://carmarket-api-uk2b.onrender.com/api/$1" },
+    { "source": "/uploads/(.*)", "destination": "https://carmarket-api-uk2b.onrender.com/uploads/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
