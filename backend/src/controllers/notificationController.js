@@ -1,7 +1,7 @@
 const prisma = require('../config/db');
 const { pushToUser } = require('../services/eventBus');
 
-const NOTIFICATION_TYPES = ['NEW_MESSAGE', 'LISTING_SAVED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_SOLD', 'SYSTEM'];
+const NOTIFICATION_TYPES = ['NEW_MESSAGE', 'LISTING_SAVED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_REMOVED', 'LISTING_EXPIRED', 'LISTING_SOLD', 'PROFILE_PHOTO_APPROVED', 'PROFILE_PHOTO_REJECTED', 'SYSTEM'];
 
 /**
  * Create a notification row and push it over the user's SSE stream.
@@ -22,7 +22,7 @@ async function createNotification({ userId, type, title, body = null, data = nul
 // @access  Private
 const getNotifications = async (req, res) => {
   try {
-    const [notifications, unreadCount] = await Promise.all([
+    const [notifications, unreadCount, unreadMessageCount] = await Promise.all([
       prisma.notification.findMany({
         where: { userId: req.user.id },
         orderBy: { createdAt: 'desc' },
@@ -31,8 +31,13 @@ const getNotifications = async (req, res) => {
       prisma.notification.count({
         where: { userId: req.user.id, readAt: null },
       }),
+      // Chat-only badge: the Chats tab counts unread messages, not every
+      // listing update, so it clears once all conversations are read.
+      prisma.notification.count({
+        where: { userId: req.user.id, readAt: null, type: 'NEW_MESSAGE' },
+      }),
     ]);
-    res.json({ notifications, unreadCount });
+    res.json({ notifications, unreadCount, unreadMessageCount });
   } catch (error) {
     console.error('Error fetching notifications:', error);
     res.status(500).json({ message: 'Server error' });
@@ -49,6 +54,10 @@ const markNotificationRead = async (req, res) => {
       where: { id, userId: req.user.id, readAt: null },
       data: { readAt: new Date() },
     });
+    if (updated.count > 0) {
+      // Let the user's other sessions clear their badge immediately.
+      pushToUser(req.user.id, 'notification:read', { count: updated.count });
+    }
     res.json({ message: 'Notification marked as read', updated: updated.count });
   } catch (error) {
     console.error('Error marking notification:', error);
@@ -75,6 +84,13 @@ const markAllRead = async (req, res) => {
       },
       data: { readAt: new Date() },
     });
+    if (updated.count > 0) {
+      pushToUser(req.user.id, 'notification:read', {
+        ...(senderId ? { senderId } : {}),
+        ...(vehicleId ? { vehicleId } : {}),
+        count: updated.count,
+      });
+    }
     res.json({ message: 'Notifications marked as read', updated: updated.count });
   } catch (error) {
     console.error('Error marking notifications:', error);

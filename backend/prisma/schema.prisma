@@ -18,7 +18,16 @@ model User {
   phone     String?
   role      Role     @default(BUYER)
   verified  Boolean  @default(false)
+  isActive  Boolean  @default(true)
   emailVerified Boolean @default(false)
+
+  // Profile photo, moderated like listings: uploads go PENDING until an admin
+  // approves or rejects them. `avatar` uses the same storage format as
+  // VehicleImage.data (/uploads path, S3 URL or base64 data URI).
+  avatar                String?       @db.MediumText
+  avatarStatus          AvatarStatus  @default(NONE)
+  avatarRejectionReason String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -71,6 +80,14 @@ enum Role {
   BUYER
   SELLER
   ADMIN
+}
+
+// Moderation state of a user's profile photo.
+enum AvatarStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model SellerProfile {
@@ -168,6 +185,8 @@ enum VehicleStatus {
   AVAILABLE
   REJECTED
   SOLD
+  DEACTIVATED // taken down by an admin; recoverable via the admin listings screen
+  REMOVED // soft-closed by the seller; chats about the car are kept
 }
 
 model VehicleImage {
@@ -311,4 +330,25 @@ model Subscription {
   updatedAt   DateTime    @updatedAt
 
   @@map("subscription")
+}
+
+// Moderation trail: every admin action and seller listing mutation lands here.
+// actorId is deliberately a plain column (no FK) so deleting a user never
+// breaks old entries; actorName/actorRole are denormalised for the same reason.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int?
+  actorRole  String?
+  actorName  String?
+  action     String // LISTING.APPROVE, USER.DEACTIVATE, PAYMENT.VERIFY, ...
+  entityType String // VEHICLE | USER | PAYMENT | REPORT
+  entityId   Int?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("auditlog")
 }

@@ -1,6 +1,121 @@
 const prisma = require('../config/db');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { applyVerifiedPayment } = require('./billingController');
 const cache = require('../services/cache');
+const audit = require('../services/audit');
+
+// Identity of the acting admin, spread into every audit logAction call.
+const actorFrom = (req) => ({
+  actorId: req.user.id,
+  actorRole: req.user.role,
+  actorName: req.user.name,
+});
+
+const VEHICLE_STATUSES = ['PENDING', 'AVAILABLE', 'REJECTED', 'SOLD', 'DEACTIVATED', 'REMOVED'];
+
+// Seller-facing copy for each moderation outcome.
+const LISTING_STATUS_NOTIFICATIONS = {
+  AVAILABLE: { type: 'LISTING_APPROVED', title: 'Your listing was approved' },
+  REJECTED: { type: 'LISTING_REJECTED', title: 'Your listing was rejected' },
+  DEACTIVATED: {
+    type: 'LISTING_REMOVED',
+    title: 'Your listing was taken down',
+    body: 'Your listing is no longer visible to buyers. Contact admin for review if you think this is a mistake.',
+  },
+};
+
+// @desc    List users whose profile photo awaits moderation
+// @route   GET /api/admin/avatars/pending
+// @access  Private (Admin only)
+const getPendingAvatars = async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { avatarStatus: 'PENDING' },
+      select: { id: true, name: true, email: true, role: true, isActive: true, updatedAt: true },
+      orderBy: { updatedAt: 'asc' },
+    });
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching pending avatars:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Shared approve/reject body: only PENDING photos can be moderated, and the
+// owner is told the outcome the same way listing moderation notifies sellers.
+const setAvatarStatus = async (req, res, status) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ message: 'Invalid user id' });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, avatarStatus: true },
+  });
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  if (user.avatarStatus !== 'PENDING') {
+    return res.status(409).json({ message: 'This user has no profile photo awaiting review' });
+  }
+
+  const reason = status === 'REJECTED' ? String(req.body?.reason || '').trim() || null : null;
+  const updated = await prisma.user.update({
+    where: { id },
+    data: { avatarStatus: status, avatarRejectionReason: reason },
+    select: { id: true, avatarStatus: true, avatarRejectionReason: true },
+  });
+
+  // Tell the user the verdict, mirroring LISTING_STATUS_NOTIFICATIONS.
+  const { createNotification } = require('./notificationController');
+  await createNotification({
+    userId: id,
+    type: status === 'APPROVED' ? 'PROFILE_PHOTO_APPROVED' : 'PROFILE_PHOTO_REJECTED',
+    title: status === 'APPROVED' ? 'Your profile photo was approved' : 'Your profile photo was rejected',
+    body: status === 'APPROVED'
+      ? 'It is now visible on your profile.'
+      : reason || 'It did not pass review — you can upload a different photo.',
+  }).catch(() => {});
+
+  audit.logAction({
+    ...actorFrom(req),
+    action: `USER.AVATAR_${status === 'APPROVED' ? 'APPROVE' : 'REJECT'}`,
+    entityType: 'USER',
+    entityId: id,
+    meta: { userName: user.name, from: 'PENDING', to: status, ...(reason ? { reason } : {}) },
+  });
+
+  res.json({
+    message: `Profile photo ${status === 'APPROVED' ? 'approved' : 'rejected'}`,
+    avatarStatus: updated.avatarStatus,
+  });
+};
+
+// @desc    Approve a pending profile photo
+// @route   PUT /api/admin/users/:id/avatar/approve
+// @access  Private (Admin only)
+const approveAvatar = async (req, res) => {
+  try {
+    await setAvatarStatus(req, res, 'APPROVED');
+  } catch (error) {
+    console.error('Error approving avatar:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Reject a pending profile photo (optional { reason })
+// @route   PUT /api/admin/users/:id/avatar/reject
+// @access  Private (Admin only)
+const rejectAvatar = async (req, res) => {
+  try {
+    await setAvatarStatus(req, res, 'REJECTED');
+  } catch (error) {
+    console.error('Error rejecting avatar:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
 // @desc    Get all pending vehicle listings
 // @route   GET /api/admin/vehicles/pending
@@ -28,13 +143,19 @@ const getPendingVehicles = async (req, res) => {
   }
 };
 
-// @desc    Get all available vehicle listings (for admin management)
-// @route   GET /api/admin/vehicles/all
+// @desc    Get vehicle listings (for admin management; ?status= filters)
+// @route   GET /api/admin/vehicles/all?status=AVAILABLE,DEACTIVATED
 // @access  Private (Admin only)
 const getAllVehicles = async (req, res) => {
   try {
+    const requested = String(req.query.status || '')
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => VEHICLE_STATUSES.includes(s));
+    const statuses = requested.length > 0 ? requested : ['AVAILABLE'];
+
     const vehicles = await prisma.vehicle.findMany({
-      where: { status: 'AVAILABLE' },
+      where: { status: { in: statuses } },
       include: {
         images: { take: 1, select: { id: true, isPrimary: true } },
         seller: {
@@ -52,38 +173,57 @@ const getAllVehicles = async (req, res) => {
   }
 };
 
-// @desc    Approve or reject a vehicle listing
+// @desc    Approve, reject or take down a vehicle listing
 // @route   PUT /api/admin/vehicles/:id/status
 // @access  Private (Admin only)
 const updateListingStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!['AVAILABLE', 'REJECTED'].includes(status)) {
+    if (!['AVAILABLE', 'REJECTED', 'DEACTIVATED'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status update' });
+    }
+
+    const existing = await prisma.vehicle.findUnique({
+      where: { id: parseInt(req.params.id) },
+      select: { status: true, featured: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ message: 'Vehicle not found' });
     }
 
     const vehicle = await prisma.vehicle.update({
       where: { id: parseInt(req.params.id) },
-      data: { status },
+      data: { status, featured: status === 'AVAILABLE' ? undefined : false },
       include: { seller: { select: { userId: true } } }
     });
     cache.bumpVehicleVersion();
 
-    // Tell the seller their listing was approved or rejected.
+    // Tell the seller what happened to their listing.
     const ownerId = vehicle.seller?.userId;
-    if (ownerId) {
+    const notification = LISTING_STATUS_NOTIFICATIONS[status];
+    if (ownerId && notification) {
       const { createNotification } = require('./notificationController');
       await createNotification({
         userId: ownerId,
-        type: status === 'AVAILABLE' ? 'LISTING_APPROVED' : 'LISTING_REJECTED',
-        title: status === 'AVAILABLE'
-          ? 'Your listing was approved'
-          : 'Your listing was rejected',
-        body: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
+        type: notification.type,
+        title: notification.title,
+        body: notification.body || `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
         data: { vehicleId: vehicle.id },
       }).catch(() => {});
     }
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: `LISTING.${status === 'AVAILABLE' ? 'APPROVE' : status === 'REJECTED' ? 'REJECT' : 'DEACTIVATE'}`,
+      entityType: 'VEHICLE',
+      entityId: vehicle.id,
+      meta: {
+        title: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
+        from: existing.status,
+        to: status,
+      },
+    });
 
     res.json({ message: `Vehicle marked as ${status}`, vehicle });
   } catch (error) {
@@ -107,6 +247,14 @@ const toggleFeatured = async (req, res) => {
     });
     cache.bumpVehicleVersion();
 
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'LISTING.FEATURE',
+      entityType: 'VEHICLE',
+      entityId: vehicleId,
+      meta: { title: `${updated.year} ${updated.make} ${updated.model}`.trim(), to: updated.featured },
+    });
+
     res.json({ message: `Vehicle ${updated.featured ? 'featured' : 'unfeatured'}`, vehicle: updated });
   } catch (error) {
     console.error('Error toggling featured:', error);
@@ -126,6 +274,7 @@ const getAllUsers = async (req, res) => {
         email: true,
         role: true,
         verified: true,
+        isActive: true,
         createdAt: true,
         sellerProfile: {
           select: { verified: true, sellerType: true, rating: true }
@@ -159,6 +308,14 @@ const verifySeller = async (req, res) => {
       });
     }
 
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'USER.VERIFY',
+      entityType: 'USER',
+      entityId: userId,
+      meta: { email: user.email },
+    });
+
     res.json({ message: 'Seller verified successfully' });
   } catch (error) {
     console.error('Error verifying seller:', error);
@@ -169,16 +326,61 @@ const verifySeller = async (req, res) => {
 // @desc    Delete a user
 // @route   DELETE /api/admin/users/:id
 // @access  Private (Admin only)
+// @desc    Delete a user (PII scrub + deactivate; records are kept)
+// @route   DELETE /api/admin/users/:id
+// @access  Private (Admin only)
+//
+// A true hard delete is impossible without destroying records the platform
+// must keep: payments/subscriptions (accounting, Paystack references),
+// reports (disputes) and chat history are all FK-RESTRICTed to the user.
+// "Deleting" therefore scrubs identity and kills access instead:
+// credentials are scrambled, email/name/phone replaced, listings closed.
 const deleteUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    await prisma.$transaction([
-      prisma.sellerProfile.deleteMany({ where: { userId } }),
-      prisma.user.delete({ where: { id: userId } })
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, role: true, isActive: true },
+    });
+    if (!target) return res.status(404).json({ message: 'User not found' });
+    if (target.id === req.user.id) {
+      return res.status(400).json({ message: 'You cannot delete your own account.' });
+    }
+    if (target.role === 'ADMIN') {
+      return res.status(403).json({ message: 'Admin accounts cannot be deleted.' });
+    }
+
+    const scrambled = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+
+    const [, vehicles] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: {
+          isActive: false,
+          email: `deleted-${userId}@deleted.carmarket.local`,
+          name: 'Deleted user',
+          phone: null,
+          password: scrambled,
+        },
+      }),
+      prisma.authToken.deleteMany({ where: { userId } }),
+      prisma.vehicle.updateMany({
+        where: { seller: { userId }, status: { in: ['PENDING', 'AVAILABLE'] } },
+        data: { status: 'REMOVED', featured: false },
+      }),
     ]);
 
-    res.json({ message: 'User deleted successfully' });
+    cache.bumpVehicleVersion();
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'USER.DELETE',
+      entityType: 'USER',
+      entityId: userId,
+      meta: { email: target.email, listingsAffected: vehicles.count },
+    });
+
+    res.json({ message: 'Account deleted. Personal details removed; listings and payment records are kept.' });
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ message: 'Server error deleting user' });
@@ -198,6 +400,8 @@ const getStats = async (req, res) => {
       availableListings,
       soldListings,
       rejectedListings,
+      deactivatedListings,
+      removedListings,
       featuredListings,
       totalFavorites,
       totalMessages,
@@ -211,6 +415,8 @@ const getStats = async (req, res) => {
       prisma.vehicle.count({ where: { status: 'AVAILABLE' } }),
       prisma.vehicle.count({ where: { status: 'SOLD' } }),
       prisma.vehicle.count({ where: { status: 'REJECTED' } }),
+      prisma.vehicle.count({ where: { status: 'DEACTIVATED' } }),
+      prisma.vehicle.count({ where: { status: 'REMOVED' } }),
       prisma.vehicle.count({ where: { featured: true } }),
       prisma.favorite.count(),
       prisma.message.count(),
@@ -225,8 +431,11 @@ const getStats = async (req, res) => {
         available: availableListings,
         sold: soldListings,
         rejected: rejectedListings,
+        deactivated: deactivatedListings,
+        removed: removedListings,
         featured: featuredListings,
-        total: pendingListings + availableListings + soldListings + rejectedListings,
+        total: pendingListings + availableListings + soldListings + rejectedListings
+          + deactivatedListings + removedListings,
       },
       engagement: {
         favorites: totalFavorites,
@@ -271,6 +480,15 @@ const resolveReport = async (req, res) => {
       where: { id: parseInt(req.params.id) },
       data: { status: 'RESOLVED' }
     });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'REPORT.RESOLVE',
+      entityType: 'REPORT',
+      entityId: report.id,
+      meta: { vehicleId: report.vehicleId },
+    });
+
     res.json({ message: 'Report resolved', report });
   } catch (error) {
     console.error('Error resolving report:', error);
@@ -316,6 +534,14 @@ const verifyPayment = async (req, res) => {
       return res.status(409).json({ message: 'Payment was already processed concurrently.' });
     }
 
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'PAYMENT.VERIFY',
+      entityType: 'PAYMENT',
+      entityId: payment.id,
+      meta: { plan: payment.plan, amount: payment.amount, userId: payment.userId },
+    });
+
     res.json({ message: `Payment verified. Plan activated.`, payment: updated });
   } catch (error) {
     console.error('Error verifying payment:', error);
@@ -332,9 +558,128 @@ const rejectPayment = async (req, res) => {
       where: { id: parseInt(req.params.id) },
       data: { status: 'REJECTED' },
     });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'PAYMENT.REJECT',
+      entityType: 'PAYMENT',
+      entityId: payment.id,
+      meta: { plan: payment.plan, amount: payment.amount, userId: payment.userId },
+    });
+
     res.json({ message: 'Payment rejected', payment });
   } catch (error) {
     console.error('Error rejecting payment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Deactivate / reactivate a user account
+// @route   PUT /api/admin/users/:id/status
+// @access  Private (Admin only)
+//
+// Deactivating also takes down the user's pending/live listings so nothing
+// they posted stays publicly reachable. Reactivating deliberately does NOT
+// restore listings — the admin re-enables each one from the listings screen.
+const setUserStatus = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { isActive } = req.body;
+
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
+    });
+    if (!target) return res.status(404).json({ message: 'User not found' });
+    if (target.id === req.user.id) {
+      return res.status(400).json({ message: 'You cannot change the status of your own account.' });
+    }
+    if (target.role === 'ADMIN') {
+      return res.status(403).json({ message: 'Admin accounts cannot be deactivated.' });
+    }
+    if (target.isActive === isActive) {
+      return res.status(400).json({ message: `Account is already ${isActive ? 'active' : 'deactivated'}.` });
+    }
+
+    let listingsAffected = 0;
+    if (!isActive) {
+      const [, vehicles] = await prisma.$transaction([
+        prisma.user.update({ where: { id: userId }, data: { isActive: false } }),
+        prisma.vehicle.updateMany({
+          where: { seller: { userId }, status: { in: ['PENDING', 'AVAILABLE'] } },
+          data: { status: 'DEACTIVATED', featured: false },
+        }),
+      ]);
+      listingsAffected = vehicles.count;
+
+      const { createNotification } = require('./notificationController');
+      await createNotification({
+        userId,
+        type: 'SYSTEM',
+        title: 'Your account was deactivated',
+        body: 'Your listings are no longer visible to buyers. Contact support for help.',
+      }).catch(() => {});
+    } else {
+      await prisma.user.update({ where: { id: userId }, data: { isActive: true } });
+    }
+    cache.bumpVehicleVersion();
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: isActive ? 'USER.REACTIVATE' : 'USER.DEACTIVATE',
+      entityType: 'USER',
+      entityId: userId,
+      meta: { email: target.email, listingsAffected },
+    });
+
+    res.json({
+      message: `Account ${isActive ? 'reactivated' : 'deactivated'}`,
+      user: { id: userId, isActive },
+      listingsAffected,
+    });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Audit trail of admin and listing actions
+// @route   GET /api/admin/audit-logs?page=&limit=&action=&entityType=&entityId=&actorId=&from=&to=
+// @access  Private (Admin only)
+const getAuditLogs = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const where = {};
+    // Prefix match so "?action=LISTING." covers every listing action.
+    if (req.query.action) where.action = { startsWith: String(req.query.action) };
+    if (req.query.entityType) where.entityType = String(req.query.entityType).toUpperCase();
+    if (req.query.entityId) where.entityId = parseInt(req.query.entityId, 10) || undefined;
+    if (req.query.actorId) where.actorId = parseInt(req.query.actorId, 10) || undefined;
+    if (req.query.from || req.query.to) {
+      where.createdAt = {
+        ...(req.query.from ? { gte: new Date(String(req.query.from)) } : {}),
+        ...(req.query.to ? { lte: new Date(String(req.query.to)) } : {}),
+      };
+    }
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.auditLog.count({ where }),
+    ]);
+
+    res.json({
+      logs,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -347,10 +692,15 @@ module.exports = {
   getAllUsers,
   verifySeller,
   deleteUser,
+  setUserStatus,
+  getAuditLogs,
   getStats,
   getReports,
   resolveReport,
   getPayments,
   verifyPayment,
   rejectPayment,
+  getPendingAvatars,
+  approveAvatar,
+  rejectAvatar,
 };

@@ -30,6 +30,15 @@ const sendMail = async ({ to, subject, html, text }) => {
 
 const appUrl = () => (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 
+// Verification links point straight at the API (not the SPA): the inbox can be
+// opened on any device, and the endpoint returns a self-contained HTML page,
+// so the flow works even without the web frontend running. PUBLIC_API_URL
+// overrides everything for deployments where the API lives on its own origin.
+const apiUrl = () => (
+  process.env.PUBLIC_API_URL ||
+  (process.env.FRONTEND_URL ? appUrl() : 'http://localhost:5000')
+).replace(/\/$/, '');
+
 const emailTemplate = (heading, bodyHtml, ctaLabel, ctaUrl) => `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
     <h2 style="color:#1B2A4A;margin-bottom:16px;">CarMarket Ghana</h2>
@@ -57,7 +66,20 @@ const sendPasswordResetEmail = async (user, rawToken) => {
   });
 };
 
+const sendVerificationEmail = async (user, rawToken) => {
+  const url = `${apiUrl()}/api/auth/verify-email?token=${rawToken}`;
+  const subject = 'Confirm your CarMarket Ghana email';
+  const body = `Hi ${user.name}, welcome to CarMarket Ghana! Confirm this email address to activate your account. This link is valid for 24 hours.`;
+  return sendMail({
+    to: user.email,
+    subject,
+    text: `${body}\n\nConfirm here: ${url}`,
+    html: emailTemplate('Confirm your email', body, 'Confirm Email', url),
+  });
+};
+
 module.exports = {
   sendPasswordResetEmail,
+  sendVerificationEmail,
   smtpConfigured,
 };

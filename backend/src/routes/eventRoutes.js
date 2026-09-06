@@ -25,13 +25,17 @@ router.get('/', async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, role: true },
+      select: { id: true, name: true, role: true, isActive: true },
     });
   } catch (_) {
     return res.status(401).json({ message: 'Not authorized, invalid token' });
   }
   if (!user) {
     return res.status(401).json({ message: 'Not authorized, invalid token' });
+  }
+  // Deactivated accounts may not open (or keep refreshing) a live stream.
+  if (!user.isActive) {
+    return res.status(401).json({ message: 'This account has been deactivated.' });
   }
 
   res.writeHead(200, {

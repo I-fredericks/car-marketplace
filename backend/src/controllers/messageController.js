@@ -9,48 +9,66 @@ const getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const sent = await prisma.message.findMany({
-      where: { senderId: userId },
+    const latest = await prisma.$queryRaw`
+      SELECT MAX(id) AS maxId FROM message WHERE senderId = ${userId} GROUP BY receiverId, vehicleId
+      UNION
+      SELECT MAX(id) AS maxId FROM message WHERE receiverId = ${userId} GROUP BY senderId, vehicleId
+    `;
+    const ids = latest.map((row) => Number(row.maxId)).filter(Number.isInteger);
+    if (ids.length === 0) {
+      return res.json([]);
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { id: { in: ids } },
       include: {
         receiver: {
           select: { id: true, name: true, email: true }
         },
-        vehicle: {
-          select: { id: true, make: true, model: true, year: true, images: { where: { isPrimary: true }, take: 1 } }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    const received = await prisma.message.findMany({
-      where: { receiverId: userId },
-      include: {
         sender: {
           select: { id: true, name: true, email: true }
         },
         vehicle: {
-          select: { id: true, make: true, model: true, year: true, images: { where: { isPrimary: true }, take: 1 } }
+          select: { id: true, make: true, model: true, year: true, status: true, images: { where: { isPrimary: true }, take: 1 } }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    const conversations = new Map();
-
-    [...sent, ...received].forEach(msg => {
-      const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
-      const key = `${otherUser.id}-${msg.vehicleId}`;
-      if (!conversations.has(key)) {
-        conversations.set(key, {
-          otherUser,
-          vehicle: msg.vehicle,
-          lastMessage: msg.content,
-          lastMessageAt: msg.createdAt
-        });
-      }
+    const unreadCounts = await prisma.notification.groupBy({
+      by: ['senderId', 'vehicleId'],
+      where: {
+        userId,
+        type: 'NEW_MESSAGE',
+        readAt: null,
+      },
+      _count: { id: true },
     });
 
-    res.json(Array.from(conversations.values()));
+    const spamCounts = await prisma.report.groupBy({
+      by: ['vehicleId'],
+      _count: { id: true },
+    });
+
+    const conversations = messages.map(msg => {
+      const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
+      const unreadCount = unreadCounts.find(
+        u => u.senderId === otherUser.id && u.vehicleId === msg.vehicle.id
+      )?._count.id || 0;
+
+      const spamCount = spamCounts.find(s => s.vehicleId === msg.vehicle.id)?._count.id || 0;
+
+      return {
+        otherUser,
+        vehicle: msg.vehicle,
+        lastMessage: msg.content,
+        lastMessageAt: msg.createdAt,
+        unreadCount,
+        spamCount,
+      };
+    });
+
+    res.json(conversations);
   } catch (error) {
     console.error('Error fetching conversations:', error);
     res.status(500).json({ message: 'Server error' });
@@ -194,9 +212,73 @@ const markConversationRead = async (req, res) => {
       data: { readAt: new Date() },
     });
 
+    if (updated.count > 0) {
+      // Sync the badge on the user's other sessions/devices right away.
+      pushToUser(req.user.id, 'notification:read', { senderId: otherUserId, vehicleId, count: updated.count });
+    }
+
     res.json({ message: 'Conversation marked as read', updated: updated.count });
   } catch (error) {
     console.error('Error marking conversation read:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Delete an entire conversation between current user and another user for a vehicle
+// @route   DELETE /api/messages/:userId/:vehicleId
+// @access  Private
+const deleteConversation = async (req, res) => {
+  try {
+    const otherUserId = parseInt(req.params.userId, 10);
+    const vehicleId = parseInt(req.params.vehicleId, 10);
+    if (!Number.isInteger(otherUserId) || !Number.isInteger(vehicleId)) {
+      return res.status(400).json({ message: 'Invalid conversation ids' });
+    }
+
+    const result = await prisma.message.deleteMany({
+      where: {
+        OR: [
+          { senderId: req.user.id, receiverId: otherUserId, vehicleId },
+          { senderId: otherUserId, receiverId: req.user.id, vehicleId },
+        ],
+      },
+    });
+
+    res.json({ message: 'Conversation deleted', deletedCount: result.count });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Delete a single message
+// @route   DELETE /api/messages/message/:id
+// @access  Private
+const deleteMessage = async (req, res) => {
+  try {
+    const messageId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(messageId)) {
+      return res.status(400).json({ message: 'Invalid message id' });
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, senderId: true, receiverId: true },
+    });
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+    if (message.senderId !== req.user.id && message.receiverId !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to delete this message' });
+    }
+
+    await prisma.message.delete({
+      where: { id: messageId },
+    });
+
+    res.json({ message: 'Message deleted' });
+  } catch (error) {
+    console.error('Error deleting message:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -205,5 +287,7 @@ module.exports = {
   getConversations,
   getMessages,
   sendMessage,
-  markConversationRead
+  markConversationRead,
+  deleteConversation,
+  deleteMessage,
 };

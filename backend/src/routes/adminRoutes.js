@@ -8,16 +8,24 @@ const {
   getAllUsers,
   verifySeller,
   deleteUser,
+  setUserStatus,
+  getAuditLogs,
   getStats,
   getReports,
   resolveReport,
   getPayments,
   verifyPayment,
   rejectPayment,
+  getPendingAvatars,
+  approveAvatar,
+  rejectAvatar,
 } = require('../controllers/adminController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
-const { updateListingStatusSchema } = require('../middlewares/validation');
+const {
+  updateListingStatusSchema,
+  updateUserStatusSchema,
+} = require('../middlewares/validation');
 
 router.use(protect, admin);
 
@@ -32,8 +40,19 @@ router.put('/vehicles/:id/featured', toggleFeatured);
 
 // User management
 router.get('/users', getAllUsers);
+
+// Profile photo moderation (registered before /users/:id/* so the 3-segment
+// path never collides with status/verify handlers).
+router.get('/avatars/pending', getPendingAvatars);
+router.put('/users/:id/avatar/approve', approveAvatar);
+router.put('/users/:id/avatar/reject', rejectAvatar);
+
 router.put('/users/:id/verify', verifySeller);
+router.put('/users/:id/status', validate(updateUserStatusSchema), setUserStatus);
 router.delete('/users/:id', deleteUser);
+
+// Audit trail
+router.get('/audit-logs', getAuditLogs);
 
 // Reports
 router.get('/reports', getReports);

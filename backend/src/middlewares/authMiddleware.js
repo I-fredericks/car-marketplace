@@ -16,16 +16,31 @@ const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Get user from token
-      req.user = await prisma.user.findUnique({
+      const user = await prisma.user.findUnique({
         where: { id: decoded.id },
         select: {
           id: true,
           name: true,
           email: true,
           role: true,
+          isActive: true,
         },
       });
 
+      // Token is valid but the account is gone or deactivated: refuse.
+      // (req.user is reloaded from the DB on every request, so a deactivation
+      // takes effect immediately without waiting for the 7-day JWT to expire.)
+      if (!user) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+      if (!user.isActive) {
+        return res.status(401).json({
+          message: 'This account has been deactivated.',
+          deactivated: true,
+        });
+      }
+
+      req.user = user;
       next();
     } catch (error) {
       console.error(error);
@@ -63,10 +78,12 @@ const optionalAuth = async (req, res, next) => {
   try {
     const token = req.headers.authorization.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
     });
+    // Deactivated accounts get the anonymous view, never owner-only extras.
+    if (user && user.isActive) req.user = user;
   } catch (_) {
     // Invalid/expired token on a public route: treat as anonymous
   }

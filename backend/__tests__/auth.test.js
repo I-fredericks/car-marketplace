@@ -3,8 +3,12 @@ const app = require('../src/index');
 
 describe('Auth API', () => {
   const testEmail = `test-${Date.now()}@example.com`;
+  let devVerificationToken;
 
-  it('should register a new user', async () => {
+  const verifyEmail = async (token) =>
+    request(app).get('/api/auth/verify-email').query({ token });
+
+  it('should register a new user and issue a verification token', async () => {
     const res = await request(app)
       .post('/api/auth/register')
       .send({
@@ -15,15 +19,28 @@ describe('Auth API', () => {
       });
     expect(res.statusCode).toEqual(201);
     expect(res.body.message).toEqual('User registered successfully');
+    expect(res.body.requiresEmailVerification).toEqual(true);
+    devVerificationToken = res.body.devVerificationToken;
+    expect(devVerificationToken).toBeDefined();
   });
 
-  it('should login immediately after registration without email activation', async () => {
+  it('should block login until the email is verified', async () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({ email: testEmail, password: 'password123' });
+    expect(res.statusCode).toEqual(403);
+    expect(res.body.emailNotVerified).toEqual(true);
+  });
+
+  it('should reject an invalid verification token', async () => {
+    const res = await verifyEmail('totally-invalid-token');
+    expect(res.statusCode).toEqual(400);
+  });
+
+  it('should confirm the email with the inbox link', async () => {
+    const res = await verifyEmail(devVerificationToken);
     expect(res.statusCode).toEqual(200);
-    expect(res.body.token).toBeDefined();
-    expect(res.body.user.email).toEqual(testEmail);
+    expect(res.text).toContain('Email confirmed');
   });
 
   it('should not register a user with existing email', async () => {

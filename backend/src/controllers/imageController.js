@@ -45,10 +45,16 @@ const getImage = async (req, res) => {
     }
     const data = image.data;
 
-    // Base64 data URI -> raw bytes
+    // Base64 data URI -> raw bytes. SVG sneaks in through this branch too
+    // (image/svg+xml is a legal base64 MIME), so it gets the same sandbox as
+    // the inline-utf8 path — it can carry <script>.
     const base64Match = BASE64_URI_RE.exec(data);
     if (base64Match) {
-      return sendWithCaching(req, res, Buffer.from(base64Match[2], 'base64'), base64Match[1]);
+      const contentType = base64Match[1].toLowerCase();
+      const extra = contentType.includes('svg')
+        ? { 'Content-Security-Policy': 'sandbox', 'X-Content-Type-Options': 'nosniff' }
+        : {};
+      return sendWithCaching(req, res, Buffer.from(base64Match[2], 'base64'), contentType, extra);
     }
 
     // Inline utf8 SVG -> serve the markup, sandboxed. SVG can carry <script>,

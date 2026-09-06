@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE `user` ADD COLUMN `avatar` MEDIUMTEXT NULL,
+    ADD COLUMN `avatarRejectionReason` VARCHAR(191) NULL,
+    ADD COLUMN `avatarStatus` ENUM('NONE', 'PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'NONE';

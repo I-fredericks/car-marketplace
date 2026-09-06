@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const { getActiveSubscription } = require('./billingController');
 const { getListingLimit, getPlanRank } = require('../config/plans');
 const cache = require('../services/cache');
+const audit = require('../services/audit');
 
 // How long a free-plan listing stays public before it must be renewed by upgrading
 const FREE_LISTING_DAYS = 90;
@@ -17,6 +18,7 @@ const sellerInclude = {
     include: {
       user: {
         select: {
+          id: true, // lets clients render the seller's approved avatar (/api/users/:id/avatar)
           name: true,
           phone: true,
           subscription: { select: { plan: true, status: true, periodEnd: true } },
@@ -159,6 +161,15 @@ const createVehicle = async (req, res) => {
     });
 
     cache.bumpVehicleVersion();
+    audit.logAction({
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      actorName: req.user.name,
+      action: 'LISTING.CREATE',
+      entityType: 'VEHICLE',
+      entityId: vehicle.id,
+      meta: { title: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim() },
+    });
     res.status(201).json(vehicle);
   } catch (error) {
     console.error('Error creating vehicle:', error);
@@ -362,7 +373,8 @@ const getFeaturedCars = async (req, res) => {
 
 // @desc    Get single vehicle by ID
 // @route   GET /api/vehicles/:id
-// @access  Public (AVAILABLE listings only; owner/admin see any status)
+// @access  Public (AVAILABLE listings only; owner/admin see any status; chat
+//          participants also see listings that have since been closed)
 const getVehicleById = async (req, res) => {
   try {
     const vehicle = await prisma.vehicle.findUnique({
@@ -394,14 +406,35 @@ const getVehicleById = async (req, res) => {
     const isOwner = req.user && vehicle.seller.userId === req.user.id;
     const isAdmin = req.user && req.user.role === 'ADMIN';
     const isExpired = vehicle.expiresAt && vehicle.expiresAt <= new Date();
+    const isPrivileged = isOwner || isAdmin;
+
+    // Full-resolution image payloads are only for the owner's edit screen;
+    // everyone else gets lightweight /api/images/:id references.
+    const withoutImageData = (list) =>
+      (list || []).map(({ data, ...rest }) => rest);
 
     // Anonymous/public viewers only see live, available, unexpired listings.
-    if (!isOwner && !isAdmin) {
+    if (!isPrivileged) {
       if (vehicle.status !== 'AVAILABLE' || isExpired) {
+        // Chat participants keep their vehicle context card after a listing
+        // is closed or taken down — the conversation stays coherent. Like the
+        // public view, registration documents are never included.
+        if (req.user) {
+          const participant = await prisma.message.findFirst({
+            where: {
+              vehicleId: vehicle.id,
+              OR: [{ senderId: req.user.id }, { receiverId: req.user.id }],
+            },
+            select: { id: true },
+          });
+          if (participant) {
+            return res.json({ ...vehicle, images: withoutImageData(vehicle.images), documents: [] });
+          }
+        }
         return res.status(404).json({ message: 'Vehicle not found' });
       }
-      // Never ship registration documents to the public
-      return res.json(vehicle);
+      // Never ship registration documents or raw image blobs to the public
+      return res.json({ ...vehicle, images: withoutImageData(vehicle.images) });
     }
 
     // Owner/admin view: include document metadata (never the raw blobs)
@@ -436,6 +469,14 @@ const updateVehicle = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to update this vehicle' });
     }
 
+    // A seller editing their listing must go back through admin approval.
+    // Admin edits use the dedicated status endpoint instead and keep the
+    // current status; a SOLD sale is finished and is never resurrected.
+    const isOwner = existingVehicle.seller.userId === req.user.id;
+    const nextStatus = isOwner && existingVehicle.status !== 'SOLD'
+      ? 'PENDING'
+      : existingVehicle.status;
+
     const {
       make, model, year, price, location, condition,
       mileage, transmission, fuelType, engineSize, bodyType, color,
@@ -461,7 +502,7 @@ const updateVehicle = async (req, res) => {
         bodyType,
         color,
         description,
-        status: 'PENDING',
+        status: nextStatus,
         features: features ? {
           deleteMany: {},
           create: features.map(f => ({ featureName: f }))
@@ -483,6 +524,19 @@ const updateVehicle = async (req, res) => {
     });
 
     cache.bumpVehicleVersion();
+    audit.logAction({
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      actorName: req.user.name,
+      action: 'LISTING.UPDATE',
+      entityType: 'VEHICLE',
+      entityId: vehicleId,
+      meta: {
+        title: `${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`.trim(),
+        from: existingVehicle.status,
+        to: updatedVehicle.status,
+      },
+    });
     res.json(updatedVehicle);
   } catch (error) {
     console.error('Error updating vehicle:', error);
@@ -491,7 +545,8 @@ const updateVehicle = async (req, res) => {
   }
 };
 
-// @desc    Delete a vehicle
+// @desc    Delete a vehicle. Live listings are soft-closed (chats kept);
+//          an already-closed listing (REMOVED/DEACTIVATED) is wiped for good.
 // @route   DELETE /api/vehicles/:id
 // @access  Private (Seller only)
 const deleteVehicle = async (req, res) => {
@@ -511,21 +566,111 @@ const deleteVehicle = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this vehicle' });
     }
 
-    await prisma.vehicleFeature.deleteMany({ where: { vehicleId } });
-    await prisma.vehicleImage.deleteMany({ where: { vehicleId } });
-    await prisma.vehicleDocument.deleteMany({ where: { vehicleId } });
-    await prisma.favorite.deleteMany({ where: { vehicleId } });
-    await prisma.report.deleteMany({ where: { vehicleId } });
+    const title = `${existingVehicle.year} ${existingVehicle.make} ${existingVehicle.model}`.trim();
 
-    await prisma.vehicle.delete({
-      where: { id: vehicleId }
+    // Second stage: the listing is already off-market, so the owner may wipe
+    // it entirely — messages, favourites and reports on it go with it
+    // (RESTRICT FKs demand it). Payments only reference vehicles SET NULL, so
+    // financial records survive.
+    if (['REMOVED', 'DEACTIVATED'].includes(existingVehicle.status)) {
+      await prisma.$transaction([
+        prisma.message.deleteMany({ where: { vehicleId } }),
+        prisma.favorite.deleteMany({ where: { vehicleId } }),
+        prisma.report.deleteMany({ where: { vehicleId } }),
+        prisma.vehicleImage.deleteMany({ where: { vehicleId } }),
+        prisma.vehicleFeature.deleteMany({ where: { vehicleId } }),
+        prisma.vehicleDocument.deleteMany({ where: { vehicleId } }),
+        prisma.vehicle.delete({ where: { id: vehicleId } }),
+      ]);
+      cache.bumpVehicleVersion();
+      audit.logAction({
+        actorId: req.user.id,
+        actorRole: req.user.role,
+        actorName: req.user.name,
+        action: 'LISTING.DELETE',
+        entityType: 'VEHICLE',
+        entityId: vehicleId,
+        meta: { title },
+      });
+      return res.json({ message: 'Listing permanently deleted.' });
+    }
+
+    // First stage: soft close rather than a hard delete — chat history must
+    // survive the listing, so the row is kept and hidden instead. Public
+    // queries only ever surface AVAILABLE.
+    const closed = await prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { status: 'REMOVED', featured: false }
     });
 
     cache.bumpVehicleVersion();
-    res.json({ message: 'Vehicle removed successfully' });
+    audit.logAction({
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      actorName: req.user.name,
+      action: 'LISTING.REMOVE',
+      entityType: 'VEHICLE',
+      entityId: vehicleId,
+      meta: { title },
+    });
+    res.json({ message: 'Listing closed. Your chats about this car are kept.', vehicle: closed });
   } catch (error) {
     console.error('Error deleting vehicle:', error);
     res.status(500).json({ message: 'Server error deleting vehicle' });
+  }
+};
+
+// @desc    Seller reactivates a closed or taken-down listing
+// @route   PUT /api/vehicles/:id/reactivate
+// @access  Private (Seller only)
+//
+// Reactivating never goes live by itself: the listing returns to PENDING and
+// must be approved by an admin again.
+const reactivateVehicle = async (req, res) => {
+  try {
+    const vehicleId = parseInt(req.params.id);
+
+    const existingVehicle = await prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      include: { seller: true }
+    });
+
+    if (!existingVehicle) {
+      return res.status(404).json({ message: 'Vehicle not found' });
+    }
+
+    if (existingVehicle.seller.userId !== req.user.id && req.user.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Not authorized to update this vehicle' });
+    }
+
+    if (!['REMOVED', 'DEACTIVATED'].includes(existingVehicle.status)) {
+      return res.status(400).json({ message: 'Only closed or taken-down listings can be reactivated.' });
+    }
+
+    const reactivated = await prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { status: 'PENDING' },
+      include: {
+        features: true,
+        images: imageIdSelect,
+        documents: true
+      }
+    });
+
+    cache.bumpVehicleVersion();
+    audit.logAction({
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      actorName: req.user.name,
+      action: 'LISTING.REACTIVATE',
+      entityType: 'VEHICLE',
+      entityId: vehicleId,
+      meta: { title: `${reactivated.year} ${reactivated.make} ${reactivated.model}`.trim(), from: existingVehicle.status, to: 'PENDING' },
+    });
+    res.json({ message: 'Listing reactivated — waiting for admin approval.', vehicle: reactivated });
+  } catch (error) {
+    console.error('Error reactivating vehicle:', error);
+    res.status(500).json({ message: 'Server error reactivating vehicle' });
   }
 };
 
@@ -588,6 +733,16 @@ const markAsSold = async (req, res) => {
       data: { status: 'SOLD' }
     });
 
+    cache.bumpVehicleVersion();
+    audit.logAction({
+      actorId: req.user.id,
+      actorRole: req.user.role,
+      actorName: req.user.name,
+      action: 'LISTING.MARK_SOLD',
+      entityType: 'VEHICLE',
+      entityId: vehicleId,
+      meta: { title: `${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model}`.trim() },
+    });
     res.json(updatedVehicle);
   } catch (error) {
     console.error('Error marking vehicle as sold:', error);
@@ -602,6 +757,7 @@ module.exports = {
   getVehicleById,
   updateVehicle,
   deleteVehicle,
+  reactivateVehicle,
   getSellerListings,
   markAsSold
 };

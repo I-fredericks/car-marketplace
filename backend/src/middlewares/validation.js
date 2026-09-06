@@ -28,6 +28,11 @@ const resetPasswordSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters')
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters')
+});
+
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required')
@@ -97,12 +102,25 @@ const vehicleSchema = z.object({
     )
 });
 
-const updateVehicleSchema = vehicleSchema.partial().extend({
-  status: z.enum(['PENDING', 'AVAILABLE', 'REJECTED', 'SOLD']).optional()
-});
+// Status is deliberately NOT client-settable here: edits by the owner go back
+// to PENDING for re-approval (vehicleController), and admins change status via
+// the dedicated /admin/vehicles/:id/status endpoint.
+const updateVehicleSchema = vehicleSchema.partial();
 
 const updateListingStatusSchema = z.object({
-  status: z.enum(['AVAILABLE', 'REJECTED'])
+  status: z.enum(['AVAILABLE', 'REJECTED', 'DEACTIVATED'])
+});
+
+const updateUserStatusSchema = z.object({
+  isActive: z.boolean({ message: 'isActive must be true or false' })
+});
+
+const updateProfileSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
+  phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  location: z.string().optional(),
+  sellerType: z.enum(['PRIVATE', 'DEALER', 'COMPANY']).optional()
 });
 
 module.exports = {
@@ -112,7 +130,10 @@ module.exports = {
   upgradeToSellerSchema,
   emailOnlySchema,
   resetPasswordSchema,
+  changePasswordSchema,
   vehicleSchema,
   updateVehicleSchema,
-  updateListingStatusSchema
+  updateListingStatusSchema,
+  updateUserStatusSchema,
+  updateProfileSchema
 };

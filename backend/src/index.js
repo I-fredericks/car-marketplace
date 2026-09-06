@@ -18,6 +18,12 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
+// Password reset is email-only, so production without SMTP has a dead auth
+// recovery path. Warn at boot; forgot-password returns 503 in this state.
+if (process.env.NODE_ENV === 'production' && !(process.env.SMTP_HOST && process.env.SMTP_USER)) {
+  console.warn('⚠️  SMTP is not configured — password reset emails cannot be delivered. Set SMTP_HOST/SMTP_USER/SMTP_PASS.');
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -79,6 +85,14 @@ const { getImage, getImageThumb } = require('./controllers/imageController');
 app.get('/api/images/:id', getImage);
 app.get('/api/images/:id/thumb', getImageThumb);
 
+// Public profile photos (own-profile preview + admin review load this UA-free):
+// same rate-limit exemption as vehicle images.
+// Public profile photos: APPROVED photos render anywhere a user identity is
+// shown (navbar, chats, seller cards); PENDING/REJECTED load only for their
+// owner and admins (own-profile preview + review). optionalAuth identifies
+// the requester without blocking anonymous visitors.
+app.get('/api/users/:id/avatar', require('./middlewares/authMiddleware').optionalAuth, require('./controllers/avatarController').getAvatar);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200
@@ -130,6 +144,7 @@ const cache = require('./services/cache');
 cache.initVehicleVersion();
 
 app.use('/api/auth', authRoutes);
+app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin', adminRoutes);
@@ -173,6 +188,10 @@ if (require.main === module) {
   const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
+
+  // Daily maintenance: demote ended subscriptions, notify sellers of lapsed
+  // free listings (see src/jobs/expiry.js for why statuses stay untouched).
+  require('./jobs/expiry').startExpiryScheduler();
 
   // Graceful shutdown: stop accepting connections, let in-flight requests
   // finish, release the DB pool, then exit. Deploy platforms send SIGTERM.
