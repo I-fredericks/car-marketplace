@@ -19,3 +19,6 @@ scratch/
 
 # Test coverage
 coverage/
+deploy.txt
+supabaseDatabasePass
+backend/.env

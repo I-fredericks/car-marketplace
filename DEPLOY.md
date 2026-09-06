@@ -126,3 +126,57 @@ port) with:
 - [ ] Privacy Policy + Terms links in the footer point at the new domain
 - [ ] First backup restored to a scratch DB to prove it works
 - [ ] `/api/health` added to an uptime monitor
+
+## 8. Vercel + Supabase deploy (split frontend/API/database)
+
+Alternative managed path: SPA on **Vercel**, the Express API on a Node host
+(Render / Railway / Fly.io), database on **Supabase**.
+
+| Layer | Where | Key env var |
+|---|---|---|
+| Frontend (Vite SPA) | Vercel | `FRONTEND_URL=https://<your-app>.vercel.app` (set on the API!) |
+| Express API | Render/Railway/etc. | `PUBLIC_API_URL=https://<your-api-host>` |
+| Database | Supabase | `DATABASE_URL=` (see caveat) |
+
+### Email links (account activation + password reset)
+
+These links are built **server-side at send time** and point at the API, not
+the SPA. They work when:
+
+- `PUBLIC_API_URL=https://<your-api-host>` on the API host — links are
+  absolute and correct everywhere. If unset, links fall back to the incoming
+  request's origin (`trust proxy` is enabled), but the explicit value is the
+  safe choice for any non-request-triggered send.
+- `FRONTEND_URL=https://<your-app>.vercel.app` on the API host — used for
+  the "Continue to sign in" buttons and for CORS.
+- Real SMTP vars (`SMTP_HOST/USER/PASS`, `EMAIL_FROM`) — without them,
+  production registration and reset return 503 by design.
+- On Vercel, point the SPA at the API with a rewrite in `vercel.json` so
+  relative `/api/*` calls hit the API host:
+  ```json
+  { "rewrites": [
+      { "source": "/api/(.*)", "destination": "https://<your-api-host>/api/$1" },
+      { "source": "/uploads/(.*)", "destination": "https://<your-api-host>/uploads/$1" }
+  ] }
+  ```
+  (the same paths the Vite dev proxy handles locally).
+
+### Database caveat: Supabase is Postgres
+
+The schema is currently Prisma `provider = "mysql"`. Supabase only offers
+PostgreSQL, so before pointing `DATABASE_URL` at it you must:
+
+1. In `backend/prisma/schema.prisma`, change the datasource to
+   `provider = "postgresql"`.
+2. Regenerate migrations for Postgres (or keep MySQL locally and create a
+   fresh initial Postgres migration targeting Supabase):
+   `npx prisma migrate dev --name switch_to_postgres --create-only`, review,
+   then `npx prisma migrate deploy` against the Supabase `DATABASE_URL`.
+3. Use the Supabase **connection pooler** URL (`aws-0-<region>.pooler.supabase.com:5432`)
+   for the app, and the direct connection for migrations.
+4. Verify every Postgres-incompatible piece — this schema is mostly fine
+   (enums, JSON, text mapping), but test smoke flows (register, verify-email,
+   create listing, upload image) after switching.
+
+Skipping the provider switch and pointing at Supabase directly **will fail**
+— Prisma rejects the mismatched provider.

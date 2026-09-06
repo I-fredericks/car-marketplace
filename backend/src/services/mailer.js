@@ -30,14 +30,28 @@ const sendMail = async ({ to, subject, html, text }) => {
 
 const appUrl = () => (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 
-// Verification links point straight at the API (not the SPA): the inbox can be
-// opened on any device, and the endpoint returns a self-contained HTML page,
-// so the flow works even without the web frontend running. PUBLIC_API_URL
-// overrides everything for deployments where the API lives on its own origin.
-const apiUrl = () => (
-  process.env.PUBLIC_API_URL ||
-  (process.env.FRONTEND_URL ? appUrl() : 'http://localhost:5000')
-).replace(/\/$/, '');
+// The public origin of the request currently being served. `trust proxy` is
+// enabled in index.js, so req.protocol/host are the real public URL behind
+// Vercel/Render/nginx. Email links are built from this so they keep working
+// even when PUBLIC_API_URL is not set.
+const originFromReq = (req) =>
+  req ? `${req.protocol}://${req.get('host')}`.replace(/\/$/, '') : '';
+
+// Verification/reset links point straight at the API (not the SPA): the inbox
+// can be opened on any device, and the endpoints return self-contained HTML
+// pages, so the flow works even without the web frontend running.
+// Resolution order: explicit PUBLIC_API_URL -> origin of the request that
+// triggered the email -> localhost dev default.
+// NOTE: never fall back to FRONTEND_URL here — that is the SPA's origin and
+// has no /api/* routes on static hosts like Vercel, which 404s these links.
+const apiUrl = (origin) => {
+  const base = process.env.PUBLIC_API_URL || origin || `http://localhost:${process.env.PORT || 5000}`;
+  return base.replace(/\/$/, '');
+};
+
+if (process.env.NODE_ENV === 'production' && !process.env.PUBLIC_API_URL) {
+  console.warn('[mailer] PUBLIC_API_URL is not set in production — email links will be built from incoming request origins. Set it to your canonical API URL (e.g. https://api.yourdomain.com).');
+}
 
 const emailTemplate = (heading, bodyHtml, ctaLabel, ctaUrl) => `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
@@ -54,8 +68,10 @@ const emailTemplate = (heading, bodyHtml, ctaLabel, ctaUrl) => `
   </div>
 `;
 
-const sendPasswordResetEmail = async (user, rawToken) => {
-  const url = `${appUrl()}/reset-password?token=${rawToken}`;
+const sendPasswordResetEmail = async (user, rawToken, origin) => {
+  // API-hosted reset page (same pattern as verify-email): the link works from
+  // any device's browser without the web frontend being reachable.
+  const url = `${apiUrl(origin)}/api/auth/reset-password?token=${rawToken}`;
   const subject = 'Reset your CarMarket Ghana password';
   const body = `Hi ${user.name}, we received a request to reset your password. This link is valid for 1 hour.`;
   return sendMail({
@@ -66,8 +82,8 @@ const sendPasswordResetEmail = async (user, rawToken) => {
   });
 };
 
-const sendVerificationEmail = async (user, rawToken) => {
-  const url = `${apiUrl()}/api/auth/verify-email?token=${rawToken}`;
+const sendVerificationEmail = async (user, rawToken, origin) => {
+  const url = `${apiUrl(origin)}/api/auth/verify-email?token=${rawToken}`;
   const subject = 'Confirm your CarMarket Ghana email';
   const body = `Hi ${user.name}, welcome to CarMarket Ghana! Confirm this email address to activate your account. This link is valid for 24 hours.`;
   return sendMail({
@@ -82,4 +98,6 @@ module.exports = {
   sendPasswordResetEmail,
   sendVerificationEmail,
   smtpConfigured,
+  originFromReq,
+  appUrl,
 };

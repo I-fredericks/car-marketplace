@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -24,7 +24,7 @@ model User {
   // Profile photo, moderated like listings: uploads go PENDING until an admin
   // approves or rejects them. `avatar` uses the same storage format as
   // VehicleImage.data (/uploads path, S3 URL or base64 data URI).
-  avatar                String?       @db.MediumText
+  avatar                String?       
   avatarStatus          AvatarStatus  @default(NONE)
   avatarRejectionReason String?
 
@@ -51,7 +51,7 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String   // NEW_MESSAGE, LISTING_APPROVED, LISTING_REJECTED, ...
   title     String
-  body      String?  @db.Text
+  body      String?
   data      Json?    // e.g. { senderId, vehicleId, vehicleTitle }
   senderId  Int?     // routing columns for NEW_MESSAGE: lets clients clear the
   vehicleId Int?     // badge for one conversation (read-all?senderId=&vehicleId=)
@@ -136,7 +136,7 @@ model Vehicle {
   doors        Int?
   seats        Int?
 
-  description  String? @db.Text
+  description  String?
   status       VehicleStatus @default(PENDING)
   featured     Boolean       @default(false)
   featuredUntil DateTime?
@@ -193,7 +193,7 @@ model VehicleImage {
   id        Int      @id @default(autoincrement())
   vehicleId Int
   vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
-  data      String   @db.MediumText
+  data      String
   isPrimary Boolean  @default(false)
 
   @@index([vehicleId])
@@ -215,7 +215,7 @@ model VehicleDocument {
   vehicleId    Int
   vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
   documentType String
-  data         String   @db.MediumText
+  data         String
 
   @@index([vehicleId])
   @@map("vehicledocument")
@@ -242,7 +242,7 @@ model Message {
   receiver   User     @relation("MessageReceiver", fields: [receiverId], references: [id])
   vehicleId  Int
   vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-  content    String   @db.Text
+  content    String
   createdAt  DateTime @default(now())
 
   @@index([receiverId])
@@ -259,7 +259,7 @@ model Review {
   sellerId  Int
   seller    SellerProfile @relation("SellerReviews", fields: [sellerId], references: [id])
   rating    Int
-  comment   String?       @db.Text
+  comment   String?
   createdAt DateTime      @default(now())
 
   @@index([authorId])

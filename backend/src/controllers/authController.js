@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
-const { sendPasswordResetEmail, sendVerificationEmail, smtpConfigured } = require('../services/mailer');
+const { sendPasswordResetEmail, sendVerificationEmail, smtpConfigured, originFromReq, appUrl } = require('../services/mailer');
 
 const RESET_TOKEN_MINUTES = 60;
 const VERIFICATION_TOKEN_MINUTES = 24 * 60; // confirmation links live for a day
@@ -35,10 +35,10 @@ const findValidAuthToken = async (rawToken, type) => {
 
 // One verification token per account: issuing a new link retires the old ones.
 // Kept as its own function so register and resend-verification can't drift.
-const issueVerificationToken = async (user) => {
+const issueVerificationToken = async (user, origin) => {
   await prisma.authToken.deleteMany({ where: { userId: user.id, type: 'EMAIL_VERIFICATION' } });
   const rawToken = await createAuthToken(user.id, 'EMAIL_VERIFICATION', VERIFICATION_TOKEN_MINUTES);
-  await sendVerificationEmail(user, rawToken);
+  await sendVerificationEmail(user, rawToken, origin);
   return rawToken;
 };
 
@@ -52,7 +52,9 @@ const verifyPage = (title, message, ok) => `<!doctype html>
     <div style="font-size:44px;margin-bottom:8px;">${ok ? '&#10004;' : '&#10006;'}</div>
     <h2 style="color:#1B2A4A;margin:0 0 10px;">${title}</h2>
     <p style="color:#4B5563;line-height:1.6;margin:0 0 20px;">${message}</p>
-    <p style="color:#9CA3AF;font-size:12px;">${ok ? 'You can close this tab and sign in.' : 'Open the app and use "Resend verification email" to get a new link.'}</p>
+    ${ok ? `<p style="margin:0 0 20px;">
+      <a href="${appUrl()}/login" style="background:#1B2A4A;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Continue to sign in</a>
+    </p>` : '<p style="color:#9CA3AF;font-size:12px;">Open the app and use "Resend verification email" to get a new link.</p>'}
     <p style="color:#1B2A4A;font-weight:bold;font-size:13px;margin-top:24px;">CarMarket Ghana</p>
   </div>
 </body></html>`;
@@ -101,7 +103,7 @@ const register = async (req, res) => {
     // Account is created but cannot sign in until the email is confirmed.
     let devVerificationToken;
     try {
-      const rawToken = await issueVerificationToken(user);
+      const rawToken = await issueVerificationToken(user, originFromReq(req));
       if (!smtpConfigured && process.env.NODE_ENV !== 'production') {
         devVerificationToken = rawToken;
       }
@@ -370,7 +372,7 @@ const forgotPassword = async (req, res) => {
       await prisma.authToken.deleteMany({ where: { userId: user.id, type: 'PASSWORD_RESET' } });
       const rawToken = await createAuthToken(user.id, 'PASSWORD_RESET', RESET_TOKEN_MINUTES);
       try {
-        await sendPasswordResetEmail(user, rawToken);
+        await sendPasswordResetEmail(user, rawToken, originFromReq(req));
       } catch (error) {
         console.error('Failed to send reset email:', error.message);
       }
@@ -385,6 +387,74 @@ const forgotPassword = async (req, res) => {
     console.error('Forgot password error:', error);
     res.status(500).json({ message: 'Server error processing password reset' });
   }
+};
+
+// @desc    Browser entry point for the email reset link — a self-contained
+//          HTML form (no web frontend needed, works on any phone)
+// @route   GET /api/auth/reset-password?token=...
+// @access  Public
+const resetPasswordPage = async (req, res) => {
+  const token = String(req.query.token || '');
+  if (token.length < 10) {
+    return res.status(400).send(verifyPage(
+      'Invalid reset link',
+      'This password reset link is malformed. Request a new one from the app.',
+      false,
+    ));
+  }
+  res.send(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset password — CarMarket Ghana</title></head>
+<body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#F4F6F9;display:flex;justify-content:center;padding:40px 16px;">
+  <div style="max-width:440px;width:100%;background:#fff;border-radius:16px;padding:32px 28px;box-shadow:0 2px 12px rgba(27,42,74,.08);">
+    <h2 style="color:#1B2A4A;margin:0 0 6px;">Choose a new password</h2>
+    <p style="color:#4B5563;line-height:1.6;margin:0 0 20px;font-size:14px;">CarMarket Ghana — this link expires in 1 hour.</p>
+    <div id="form">
+      <input id="pw1" type="password" placeholder="New password (min 6 characters)"
+        style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #D1D5DB;border-radius:8px;font-size:15px;margin-bottom:12px;">
+      <input id="pw2" type="password" placeholder="Confirm new password"
+        style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #D1D5DB;border-radius:8px;font-size:15px;margin-bottom:16px;">
+      <p id="msg" style="color:#DC2626;font-size:13px;min-height:18px;margin:0 0 10px;"></p>
+      <button id="btn" onclick="submitReset()"
+        style="width:100%;background:#1B2A4A;color:#fff;padding:13px;border:none;border-radius:8px;font-size:15px;font-weight:bold;cursor:pointer;">Set new password</button>
+    </div>
+    <div id="done" style="display:none;text-align:center;">
+      <div style="font-size:44px;margin-bottom:8px;">&#10004;</div>
+      <h3 style="color:#1B2A4A;">Password updated</h3>
+      <p style="color:#4B5563;margin:0 0 20px;">Your new password is active.</p>
+      <a href="${appUrl()}/login" style="background:#1B2A4A;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Go to sign in</a>
+    </div>
+  </div>
+<script>
+async function submitReset() {
+  const pw1 = document.getElementById('pw1').value;
+  const pw2 = document.getElementById('pw2').value;
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btn');
+  msg.textContent = '';
+  if (pw1.length < 6) { msg.textContent = 'Password must be at least 6 characters.'; return; }
+  if (pw1 !== pw2) { msg.textContent = 'Passwords do not match.'; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: ${JSON.stringify(token)}, password: pw1 }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { msg.textContent = data.message || 'Something went wrong. Please try again.'; }
+    else {
+      document.getElementById('form').style.display = 'none';
+      document.getElementById('done').style.display = 'block';
+      return;
+    }
+  } catch {
+    msg.textContent = 'No connection. Check your internet and try again.';
+  }
+  btn.disabled = false; btn.textContent = 'Set new password';
+}
+</script>
+</body></html>`);
 };
 
 // @desc    Set a new password using a reset token
@@ -462,7 +532,7 @@ const resendVerification = async (req, res) => {
 
     if (user && !user.emailVerified) {
       try {
-        const rawToken = await issueVerificationToken(user);
+        const rawToken = await issueVerificationToken(user, originFromReq(req));
         return res.json({
           message,
           ...(!smtpConfigured && process.env.NODE_ENV !== 'production' ? { devVerificationToken: rawToken } : {}),
@@ -582,6 +652,7 @@ module.exports = {
   upgradeToSeller,
   forgotPassword,
   resetPassword,
+  resetPasswordPage,
   verifyEmail,
   resendVerification,
   changePassword,

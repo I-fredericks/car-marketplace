@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, googleLogin, getMe, upgradeToSeller, forgotPassword, resetPassword, verifyEmail, resendVerification, changePassword, logout, updateProfile } = require('../controllers/authController');
+const { register, login, googleLogin, getMe, upgradeToSeller, forgotPassword, resetPassword, resetPasswordPage, verifyEmail, resendVerification, changePassword, logout, updateProfile } = require('../controllers/authController');
 const { protect } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
 const { registerSchema, loginSchema, upgradeToSellerSchema, emailOnlySchema, resetPasswordSchema, changePasswordSchema, updateProfileSchema } = require('../middlewares/validation');
@@ -9,6 +9,8 @@ router.post('/register', validate(registerSchema), register);
 router.post('/login', validate(loginSchema), login);
 router.post('/google', googleLogin);
 router.post('/forgot-password', validate(emailOnlySchema), forgotPassword);
+// GET serves the browser form for the email link; POST does the actual reset.
+router.get('/reset-password', resetPasswordPage);
 router.post('/reset-password', validate(resetPasswordSchema), resetPassword);
 
 // Email confirmation: the link from the inbox (HTML page) + resend request
