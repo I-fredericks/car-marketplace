@@ -1,5 +1,4 @@
 {
-  "$comment": "Vercel deployment config. Rewrites are evaluated in order — the /api and /uploads rules MUST stay above the /index.html catch-all, so browser API calls hit the Render backend.",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://carmarket-api-uk2b.onrender.com/api/$1" },
     { "source": "/uploads/(.*)", "destination": "https://carmarket-api-uk2b.onrender.com/uploads/$1" },
