@@ -13,7 +13,7 @@ export const BACKEND_URL = (() => {
 })();
 
 const api = axios.create({
-  baseURL: `${BACKEND_URL}/api`,
+  baseURL: '/api',
 });
 
 api.interceptors.request.use(
@@ -62,7 +62,7 @@ export const getImageUrl = (image) => {
   // Image object from the API
   if (typeof image === 'object') {
     if (image.data) return getImageUrl(image.data);
-    if (image.id) return `${BACKEND_URL}/api/images/${image.id}`;
+    if (image.id) return `/api/images/${image.id}`;
     return '';
   }
 
@@ -87,14 +87,14 @@ export const getImageUrl = (image) => {
 
   // Relative path saved by multer disk storage
   if (data.startsWith('/uploads/') || data.startsWith('/uploads\\')) {
-    return `${BACKEND_URL}${data}`;
+    return data;
   }
   if (data.startsWith('uploads/') || data.startsWith('uploads\\')) {
-    return `${BACKEND_URL}/${data}`;
+    return `/${data}`;
   }
 
   // Bare numeric id from the API
-  if (/^\d+$/.test(data)) return `${BACKEND_URL}/api/images/${data}`;
+  if (/^\d+$/.test(data)) return `/api/images/${data}`;
 
   return data;
 };
@@ -109,7 +109,7 @@ export const getImageThumbUrl = (image) => {
 
   if (typeof image === 'object') {
     if (image.data) return getImageThumbUrl(image.data);
-    if (image.id) return `${BACKEND_URL}/api/images/${image.id}/thumb`;
+    if (image.id) return `/api/images/${image.id}/thumb`;
     return '';
   }
 
@@ -118,18 +118,18 @@ export const getImageThumbUrl = (image) => {
   // Relative upload paths follow the _thumb.webp sibling convention
   if (data.startsWith('/uploads/')) {
     const dot = data.lastIndexOf('.');
-    if (dot > data.lastIndexOf('/')) return `${BACKEND_URL}${data.slice(0, dot)}_thumb.webp`;
-    return `${BACKEND_URL}${data}`;
+    if (dot > data.lastIndexOf('/')) return `${data.slice(0, dot)}_thumb.webp`;
+    return data;
   }
   if (data.startsWith('uploads/')) {
     const dot = data.lastIndexOf('.');
-    if (dot > data.lastIndexOf('/')) return `${BACKEND_URL}/${data.slice(0, dot)}_thumb.webp`;
-    return `${BACKEND_URL}/${data}`;
+    if (dot > data.lastIndexOf('/')) return `/${data.slice(0, dot)}_thumb.webp`;
+    return `/${data}`;
   }
 
   // Everything else (http URLs, base64, ids) resolves via the id route or
   // the original URL
-  if (/^\d+$/.test(data)) return `${BACKEND_URL}/api/images/${data}/thumb`;
+  if (/^\d+$/.test(data)) return `/api/images/${data}/thumb`;
   return getImageUrl(image);
 };
 

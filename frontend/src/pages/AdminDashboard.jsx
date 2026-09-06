@@ -4,9 +4,10 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageThumbUrl } from '../utils/api';
 import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
-  Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard
+  Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera
 } from 'lucide-react';
 import Badge from '../components/Badge';
+import Avatar from '../components/Avatar';
 
 const AdminDashboard = () => {
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -19,6 +20,18 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [deactivatedCars, setDeactivatedCars] = useState([]);
+  const [pendingAvatars, setPendingAvatars] = useState([]);
+  const [processingAvatar, setProcessingAvatar] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditPagination, setAuditPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [auditFilters, setAuditFilters] = useState({
+    action: '',
+    entityType: '',
+    actorId: '',
+    from: '',
+    to: '',
+  });
   const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState('');
   const [brokenImages, setBrokenImages] = useState(new Set());
@@ -28,6 +41,34 @@ const AdminDashboard = () => {
     setActionMsg(msg);
     setTimeout(() => setActionMsg(''), 3000);
   };
+
+  const fetchAuditLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('page', String(auditPagination.page));
+      params.set('limit', String(auditPagination.limit));
+      if (auditFilters.action) params.set('action', auditFilters.action);
+      if (auditFilters.entityType) params.set('entityType', auditFilters.entityType);
+      if (auditFilters.actorId) params.set('actorId', auditFilters.actorId);
+      if (auditFilters.from) params.set('from', auditFilters.from);
+      if (auditFilters.to) params.set('to', auditFilters.to);
+
+      const { data } = await api.get(`/admin/audit-logs?${params.toString()}`);
+      setAuditLogs(data.logs || []);
+      setAuditPagination(prev => ({ ...prev, ...data.pagination }));
+    } catch (err) {
+      console.error('Audit fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [auditPagination.page, auditPagination.limit, auditFilters]);
+
+  useEffect(() => {
+    if (tab === 'audit') {
+      fetchAuditLogs();
+    }
+  }, [tab, fetchAuditLogs]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -41,6 +82,12 @@ const AdminDashboard = () => {
       } else if (tab === 'allListings') {
         const { data } = await api.get('/admin/vehicles/all');
         setAllCars(data);
+      } else if (tab === 'takenDown') {
+        const { data } = await api.get('/admin/vehicles/all?status=DEACTIVATED');
+        setDeactivatedCars(data);
+      } else if (tab === 'photos') {
+        const { data } = await api.get('/admin/avatars/pending');
+        setPendingAvatars(data);
       } else if (tab === 'reports') {
         const { data } = await api.get('/admin/reports');
         setReports(data);
@@ -90,8 +137,16 @@ const AdminDashboard = () => {
   const handleListingAction = async (id, status) => {
     try {
       await api.put(`/admin/vehicles/${id}/status`, { status });
-      toast(`Listing ${status === 'AVAILABLE' ? 'approved ✅' : 'rejected ❌'}`);
+      if (status === 'AVAILABLE') {
+        toast('Listing restored ✅');
+      } else if (status === 'DEACTIVATED') {
+        toast('Listing taken down. Seller notified to contact admin.');
+      } else {
+        toast(`Listing ${status === 'AVAILABLE' ? 'approved ✅' : 'rejected ❌'}`);
+      }
       setPendingCars(prev => prev.filter(c => c.id !== id));
+      setAllCars(prev => prev.map(c => c.id === id ? { ...c, status, featured: false } : c));
+      setDeactivatedCars(prev => prev.map(c => c.id === id ? { ...c, status, featured: false } : c));
     } catch {
       toast('Action failed.');
     }
@@ -104,6 +159,23 @@ const AdminDashboard = () => {
       setAllCars(prev => prev.map(c => c.id === id ? { ...c, featured: !c.featured } : c));
     } catch {
       toast('Featured toggle failed.');
+    }
+  };
+
+  const handleAvatarAction = async (userId, action) => {
+    let reason;
+    if (action === 'REJECTED') {
+      reason = window.prompt('Reason for rejection (optional, shown to the user):') || '';
+    }
+    setProcessingAvatar(userId);
+    try {
+      await api.put(`/admin/users/${userId}/avatar/${action === 'APPROVED' ? 'approve' : 'reject'}`, { reason });
+      setPendingAvatars(prev => prev.filter(u => u.id !== userId));
+      toast(action === 'APPROVED' ? 'Profile photo approved ✅' : 'Profile photo rejected. User notified.');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Action failed.');
+    } finally {
+      setProcessingAvatar(null);
     }
   };
 
@@ -159,8 +231,157 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleImageError = (id) => {
-    setBrokenImages(prev => new Set(prev).add(id));
+  const renderAuditLogs = () => {
+    const updateFilter = (key, value) => {
+      setAuditFilters(prev => ({ ...prev, [key]: value }));
+      setAuditPagination(prev => ({ ...prev, page: 1 }));
+    };
+
+    const actionColor = (action) => {
+      if (action.startsWith('LISTING')) return 'text-primary';
+      if (action.startsWith('USER')) return 'text-accent';
+      if (action.startsWith('PAYMENT')) return 'text-success';
+      if (action.startsWith('REPORT')) return 'text-[#EAB308]';
+      return 'text-textsecondary';
+    };
+
+    const formatMeta = (meta) => {
+      if (!meta) return '—';
+      if (typeof meta === 'string') return meta;
+      const entries = Object.entries(meta);
+      return entries.slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    };
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Audit Log</h2>
+          <p className="text-sm text-textsecondary">Full moderation trail across listings, users, payments, and reports.</p>
+        </div>
+
+        <div className="bg-surface border border-bordercol rounded-lg p-4 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <input
+              type="text"
+              placeholder="Filter action (e.g. LISTING.)"
+              value={auditFilters.action}
+              onChange={(e) => updateFilter('action', e.target.value)}
+              className="px-3 py-2 bg-bg border border-bordercol rounded text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="text"
+              placeholder="Entity type (e.g. VEHICLE)"
+              value={auditFilters.entityType}
+              onChange={(e) => updateFilter('entityType', e.target.value)}
+              className="px-3 py-2 bg-bg border border-bordercol rounded text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="text"
+              placeholder="Actor ID"
+              value={auditFilters.actorId}
+              onChange={(e) => updateFilter('actorId', e.target.value)}
+              className="px-3 py-2 bg-bg border border-bordercol rounded text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="date"
+              value={auditFilters.from}
+              onChange={(e) => updateFilter('from', e.target.value)}
+              className="px-3 py-2 bg-bg border border-bordercol rounded text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="date"
+              value={auditFilters.to}
+              onChange={(e) => updateFilter('to', e.target.value)}
+              className="px-3 py-2 bg-bg border border-bordercol rounded text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-xs text-textmuted">
+              {auditPagination.total > 0
+                ? `${auditPagination.total} records`
+                : 'No records'}
+            </p>
+            <button
+              onClick={fetchAuditLogs}
+              className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded hover:bg-primary hover:text-white transition-colors text-xs font-bold"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-20 text-textmuted">
+            <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+          </div>
+        ) : auditLogs.length === 0 ? (
+          <div className="bg-surface border border-bordercol rounded-lg p-12 text-center text-textsecondary">
+            <FileText size={48} className="mx-auto text-bordercol mb-4" />
+            <p>No audit logs match your filters.</p>
+          </div>
+        ) : (
+          <div className="bg-surface border border-bordercol rounded-lg shadow-sm overflow-hidden overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-bg border-b border-bordercol text-textsecondary uppercase tracking-wider font-semibold text-xs">
+                <tr>
+                  <th className="px-6 py-4">Time</th>
+                  <th className="px-6 py-4">Actor</th>
+                  <th className="px-6 py-4">Action</th>
+                  <th className="px-6 py-4">Entity</th>
+                  <th className="px-6 py-4">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-bordercol">
+                {auditLogs.map(log => (
+                  <tr key={log.id} className="hover:bg-bg/50 transition-colors">
+                    <td className="px-6 py-4 text-textsecondary whitespace-nowrap">
+                      <div className="font-medium text-textprimary">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-textprimary">{log.actorName || `User #${log.actorId}`}</div>
+                      <div className="text-[10px] text-textmuted uppercase tracking-wide">{log.actorRole || '—'}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`font-bold text-xs ${actionColor(log.action)}`}>{log.action}</span>
+                    </td>
+                    <td className="px-6 py-4 text-textsecondary">
+                      {log.entityType}#{log.entityId ?? '—'}
+                    </td>
+                    <td className="px-6 py-4 text-textmuted text-xs max-w-[260px] truncate" title={typeof log.meta === 'string' ? log.meta : JSON.stringify(log.meta)}>
+                      {formatMeta(log.meta)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {auditPagination.totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setAuditPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+              disabled={auditPagination.page <= 1}
+              className="px-4 py-2 bg-surface border border-bordercol rounded text-sm font-medium hover:bg-bg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-textmuted">
+              Page {auditPagination.page} of {auditPagination.totalPages}
+            </span>
+            <button
+              onClick={() => setAuditPagination(prev => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+              disabled={auditPagination.page >= auditPagination.totalPages}
+              className="px-4 py-2 bg-surface border border-bordercol rounded text-sm font-medium hover:bg-bg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // ──────────────────────────────────────────────────────
@@ -364,6 +585,14 @@ const AdminDashboard = () => {
                         <Star size={14} fill={car.featured ? "currentColor" : "none"} /> 
                         {car.featured ? 'Unfeature' : 'Feature'}
                       </button>
+                      {car.status === 'AVAILABLE' && (
+                        <button
+                          onClick={() => handleListingAction(car.id, 'DEACTIVATED')}
+                          className="px-3 py-1.5 bg-err/10 text-err border border-err/20 rounded hover:bg-err hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                        >
+                          <AlertTriangle size={14} /> Take Down
+                        </button>
+                      )}
                       <Link 
                         to={`/car/${car.id}`} 
                         className="p-1.5 text-textsecondary bg-bg border border-bordercol rounded hover:text-primary transition-colors"
@@ -376,6 +605,137 @@ const AdminDashboard = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderTakenDown = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Taken Down Listings ({deactivatedCars.length})</h2>
+        <p className="text-sm text-textsecondary">Listings removed by admin. You can restore them if the issue is resolved.</p>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20 text-textmuted">
+          <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+        </div>
+      ) : deactivatedCars.length === 0 ? (
+        <div className="bg-surface border border-bordercol rounded-lg p-12 text-center text-textsecondary">
+          <Check size={48} className="mx-auto text-success/50 mb-4" />
+          <p>No taken down listings.</p>
+        </div>
+      ) : (
+        <div className="bg-surface border border-bordercol rounded-lg shadow-sm overflow-hidden overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-bg border-b border border-bordercol text-textsecondary uppercase tracking-wider font-semibold text-xs">
+              <tr>
+                <th className="px-6 py-4">Vehicle</th>
+                <th className="px-6 py-4">Price</th>
+                <th className="px-6 py-4">Seller</th>
+                <th className="px-6 py-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-bordercol">
+              {deactivatedCars.map(car => (
+                <tr key={car.id} className="hover:bg-bg/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-10 bg-bg border border-bordercol rounded overflow-hidden flex-shrink-0">
+                        {car.images && car.images.length > 0 && !brokenImages.has(`taken-${car.id}`) ? (
+                          <img src={getImageThumbUrl(car.images[0])} alt={car.make} loading="lazy" decoding="async" onError={() => handleImageError(`taken-${car.id}`)} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"><Car size={16} className="text-textmuted" /></div>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-textprimary">{car.year} {car.make} {car.model}</h4>
+                        <p className="text-xs text-textsecondary mt-0.5">{car.location}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 font-medium text-textprimary">GH₵{Number(car.price).toLocaleString()}</td>
+                  <td className="px-6 py-4 text-textsecondary">{car.seller?.user?.name}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleListingAction(car.id, 'AVAILABLE')}
+                        className="px-3 py-1.5 bg-success/10 text-success border border-success/20 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                      >
+                        <Check size={14} /> Restore
+                      </button>
+                      <Link 
+                        to={`/car/${car.id}`} 
+                        className="p-1.5 text-textsecondary bg-bg border border-bordercol rounded hover:text-primary transition-colors"
+                      >
+                        <Eye size={14} />
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderPhotoReview = () => (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Profile Photo Review ({pendingAvatars.length})</h2>
+        <p className="text-sm text-textsecondary">Approve or reject user-uploaded profile photos. Users are notified of the outcome.</p>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20 text-textmuted">
+          <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+        </div>
+      ) : pendingAvatars.length === 0 ? (
+        <div className="bg-surface border border-bordercol rounded-lg p-12 text-center text-textsecondary">
+          <Camera size={48} className="mx-auto text-bordercol mb-4" />
+          <p>No profile photos awaiting review.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {pendingAvatars.map(u => (
+            <div key={u.id} className="bg-surface border border-bordercol rounded-lg shadow-sm p-5 flex flex-col items-center text-center">
+              <div className="w-24 h-24 rounded-full overflow-hidden bg-bg border border-bordercol flex items-center justify-center mb-3">
+                <img
+                  src={`/api/users/${u.id}/avatar?v=${encodeURIComponent(u.updatedAt || '')}`}
+                  alt={`${u.name}'s profile photo`}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <h4 className="font-medium text-textprimary">{u.name}</h4>
+              <p className="text-xs text-textmuted truncate max-w-full">{u.email}</p>
+              <span className="mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-bg border border-bordercol text-textsecondary">
+                {u.role.toLowerCase()}
+              </span>
+              <p className="text-[11px] text-textmuted mt-2">
+                Uploaded {new Date(u.updatedAt).toLocaleString()}
+              </p>
+              <div className="flex gap-2 mt-4 w-full">
+                <button
+                  onClick={() => handleAvatarAction(u.id, 'APPROVED')}
+                  disabled={processingAvatar === u.id}
+                  className="flex-1 px-3 py-1.5 bg-success/10 text-success border border-success/20 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  <Check size={14} /> Approve
+                </button>
+                <button
+                  onClick={() => handleAvatarAction(u.id, 'REJECTED')}
+                  disabled={processingAvatar === u.id}
+                  className="flex-1 px-3 py-1.5 bg-err/10 text-err border border-err/20 rounded hover:bg-err hover:text-white transition-colors text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  <X size={14} /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -523,8 +883,13 @@ const AdminDashboard = () => {
               {users.map(u => (
                 <tr key={u.id} className="hover:bg-bg/50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="font-medium text-textprimary">{u.name}</div>
-                    <div className="text-xs text-textmuted">{u.email}</div>
+                    <div className="flex items-center gap-3">
+                      <Avatar userId={u.id} name={u.name} size={36} />
+                      <div>
+                        <div className="font-medium text-textprimary">{u.name}</div>
+                        <div className="text-xs text-textmuted">{u.email}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${
@@ -692,6 +1057,9 @@ const AdminDashboard = () => {
     { id: 'overview', icon: <LayoutDashboard size={18} />, label: 'Overview' },
     { id: 'pending', icon: <Car size={18} />, label: `Pending ${pendingCars.length > 0 ? `(${pendingCars.length})` : ''}` },
     { id: 'allListings', icon: <List size={18} />, label: 'All Listings' },
+    { id: 'takenDown', icon: <AlertTriangle size={18} />, label: `Taken Down ${deactivatedCars.length > 0 ? `(${deactivatedCars.length})` : ''}` },
+    { id: 'audit', icon: <FileText size={18} />, label: 'Audit Log' },
+    { id: 'photos', icon: <Camera size={18} />, label: `Photos ${pendingAvatars.length > 0 ? `(${pendingAvatars.length})` : ''}` },
     { id: 'payments', icon: <CreditCard size={18} />, label: `Payments ${payments.filter(p => p.status === 'PENDING').length > 0 ? `(${payments.filter(p => p.status === 'PENDING').length})` : ''}` },
     { id: 'reports', icon: <AlertTriangle size={18} />, label: `Reports ${reports.filter(r => r.status === 'PENDING').length > 0 ? `(${reports.filter(r => r.status === 'PENDING').length})` : ''}` },
     { id: 'users', icon: <Users size={18} />, label: 'Manage Users' },
@@ -750,6 +1118,9 @@ const AdminDashboard = () => {
             {tab === 'overview'    && renderOverview()}
             {tab === 'pending'     && renderPending()}
             {tab === 'allListings' && renderAllListings()}
+            {tab === 'takenDown'   && renderTakenDown()}
+            {tab === 'audit'       && renderAuditLogs()}
+            {tab === 'photos'      && renderPhotoReview()}
             {tab === 'payments'    && renderPayments()}
             {tab === 'reports'     && renderReports()}
             {tab === 'users'       && renderUsers()}

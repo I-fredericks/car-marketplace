@@ -55,6 +55,15 @@ export const AuthProvider = ({ children }) => {
     return profile.data;
   };
 
+  const updateProfile = async (details) => {
+    const { data } = await api.put('/auth/profile', details);
+    setUser(data.user);
+    if (data.sellerProfile) {
+      setUser(prev => ({ ...prev, sellerProfile: data.sellerProfile }));
+    }
+    return data.user;
+  };
+
   const register = async (userData) => {
     const { data } = await api.post('/auth/register', userData);
     // Automatically log in after registration could be done here, 
@@ -74,7 +83,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, logout, loading }}>
+    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, updateProfile, logout, loading }}>
       {/* Render children immediately: gating on `loading` blanks the whole
           app for every visitor until /auth/me resolves. Protected pages
           consume `loading` themselves to avoid flashing login prompts. */}

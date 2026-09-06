@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useEvents } from '../context/EventContext';
 import { Car, Heart, MessageCircle, Menu, X, User } from 'lucide-react';
 import useBillingStatus from '../hooks/useBillingStatus';
+import Avatar from './Avatar';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
@@ -62,7 +63,10 @@ const Navbar = () => {
                   )}
                 </Link>
                 
-                <div className="flex items-center gap-4 border-l border-bordercol pl-4">
+                 <div className="flex items-center gap-4 border-l border-bordercol pl-4">
+                  <Link to="/profile" className="hover:opacity-80 transition-opacity" title="Profile" aria-label="Profile">
+                    <Avatar userId={user.id} name={user.name} size={28} version={user.updatedAt} />
+                  </Link>
                   <div className="text-sm">
                     <span className="text-textmuted block text-xs">Welcome</span>
                     <span className="font-medium text-textprimary">{user.name}</span>
@@ -137,9 +141,7 @@ const Navbar = () => {
             {user ? (
               <div className="space-y-4 pt-4 border-t border-bordercol">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <User size={20} />
-                  </div>
+                  <Avatar userId={user.id} name={user.name} size={40} version={user.updatedAt} />
                   <div>
                     <div className="font-medium text-textprimary">{user.name}</div>
                     <div className="text-sm text-textmuted capitalize">
@@ -153,10 +155,13 @@ const Navbar = () => {
                   </div>
                 </div>
                 
-                <Link to="/favorites" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
-                  <Heart size={20} /> Saved Cars
-                </Link>
-                <Link to="/messages" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
+                 <Link to="/favorites" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
+                   <Heart size={20} /> Saved Cars
+                 </Link>
+                 <Link to="/profile" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
+                   <User size={20} /> Profile
+                 </Link>
+                 <Link to="/messages" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
                   <span className="relative">
                     <MessageCircle size={20} />
                     {unread > 0 && (

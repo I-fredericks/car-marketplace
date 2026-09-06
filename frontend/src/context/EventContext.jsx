@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
-import api, { BACKEND_URL } from '../utils/api';
+import api from '../utils/api';
 import { MessageCircle, Bell, X } from 'lucide-react';
 
 /**
@@ -78,7 +78,7 @@ export const EventProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    const es = new EventSource(`${BACKEND_URL}/api/events?token=${encodeURIComponent(token)}`);
+    const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
     esRef.current = es;
 
     es.addEventListener('connected', () => setConnected(true));

@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useEvents } from '../context/EventContext';
 import api from '../utils/api';
-import { MessageCircle, Send, ArrowLeft, Lock, User } from 'lucide-react';
+import { MessageCircle, Send, ArrowLeft, Lock, Trash2, MailOpen, MailX } from 'lucide-react';
+import Avatar from '../components/Avatar';
 
 const Messages = () => {
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -14,7 +15,16 @@ const Messages = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deletingConv, setDeletingConv] = useState(null);
+  const [deletingMsg, setDeletingMsg] = useState(null);
+  const [filter, setFilter] = useState('all');
   const chatScrollRef = useRef(null);
+
+  const filteredConversations = conversations.filter((conv) => {
+    if (filter === 'unread') return conv.unreadCount > 0;
+    if (filter === 'spam') return conv.spamCount > 0;
+    return true;
+  });
 
   const isConversationView = Boolean(userId) && Boolean(vehicleId);
 
@@ -42,6 +52,12 @@ const Messages = () => {
     );
     return () => setActiveConversation(null);
   }, [isConversationView, userId, vehicleId, setActiveConversation]);
+
+  useEffect(() => {
+    if (!isConversationView && user) {
+      fetchConversations();
+    }
+  }, [isConversationView, user]);
 
   useEffect(() => {
     if (!isConversationView) return;
@@ -100,6 +116,34 @@ const Messages = () => {
     }
   };
 
+  const handleDeleteConversation = async (conv) => {
+    if (!window.confirm('Delete this entire conversation? This cannot be undone.')) return;
+    setDeletingConv(conv.vehicle?.id);
+    try {
+      await api.delete(`/messages/${conv.otherUser.id}/${conv.vehicle?.id}`);
+      setConversations(prev => prev.filter(c => c.otherUser.id !== conv.otherUser.id || c.vehicle?.id !== conv.vehicle?.id));
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+      alert('Failed to delete conversation.');
+    } finally {
+      setDeletingConv(null);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!window.confirm('Delete this message? This cannot be undone.')) return;
+    setDeletingMsg(messageId);
+    try {
+      await api.delete(`/messages/message/${messageId}`);
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      alert('Failed to delete message.');
+    } finally {
+      setDeletingMsg(null);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-bg mt-16">
@@ -140,7 +184,29 @@ const Messages = () => {
             <>
               {/* Conversations List Header */}
               <div className="p-4 sm:p-6 border-b border-bordercol">
-                <h1 className="font-display font-bold text-2xl text-textprimary">Messages</h1>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h1 className="font-display font-bold text-2xl text-textprimary">Messages</h1>
+                  <div className="flex items-center gap-2">
+                    {[
+                      { key: 'all', label: 'All', Icon: MessageCircle },
+                      { key: 'unread', label: 'Unread', Icon: MailOpen },
+                      { key: 'spam', label: 'Spam', Icon: MailX },
+                    ].map(({ key, label, Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => setFilter(key)}
+                        className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                          filter === key
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-surface text-textsecondary border-bordercol hover:bg-bg'
+                        }`}
+                      >
+                        <Icon size={16} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Conversations List Body */}
@@ -150,42 +216,63 @@ const Messages = () => {
                     <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
                     <p>Loading messages...</p>
                   </div>
-                ) : conversations.length === 0 ? (
+                ) : filteredConversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center p-16 text-center">
                     <div className="w-16 h-16 bg-bg rounded-full flex items-center justify-center mb-4">
                       <MessageCircle size={32} className="text-bordercol" />
                     </div>
-                    <h3 className="font-display font-semibold text-xl text-textprimary mb-2">No messages yet</h3>
-                    <p className="text-textsecondary">Start a conversation from any car listing page.</p>
+                    <h3 className="font-display font-semibold text-xl text-textprimary mb-2">
+                      {filter === 'unread' ? 'No unread messages' : filter === 'spam' ? 'No spam conversations' : 'No messages yet'}
+                    </h3>
+                    <p className="text-textsecondary">
+                      {filter === 'unread' ? 'All caught up!' : filter === 'spam' ? 'Good, no spam here.' : 'Start a conversation from any car listing page.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="divide-y divide-bordercol">
-                    {conversations.map((conv, i) => (
-                      <Link
+                    {filteredConversations.map((conv, i) => (
+                      <div
                         key={i}
-                        to={`/messages/${conv.otherUser.id}/${conv.vehicle?.id}`}
                         className="flex items-center gap-4 p-4 sm:p-6 hover:bg-bg transition-colors"
                       >
-                        <div className="w-12 h-12 bg-primary/10 rounded-full border border-primary/20 flex flex-shrink-0 items-center justify-center text-primary font-bold text-lg">
-                          {conv.otherUser.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-baseline mb-1">
-                            <h4 className="font-medium text-textprimary truncate">{conv.otherUser.name}</h4>
-                            <span className="text-xs text-textmuted flex-shrink-0 ml-2">
-                              {new Date(conv.lastMessageAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            </span>
-                          </div>
-                          {conv.vehicle && (
-                            <p className="text-xs font-medium text-primary mb-1 truncate">
-                              {conv.vehicle.year} {conv.vehicle.make} {conv.vehicle.model}
+                        <Link
+                          to={`/messages/${conv.otherUser.id}/${conv.vehicle?.id}`}
+                          className="flex items-center gap-4 flex-1 min-w-0"
+                        >
+                          <Avatar userId={conv.otherUser.id} name={conv.otherUser.name} size={48} />
+                           <div className="flex-1 min-w-0">
+                             <div className="flex justify-between items-center mb-1">
+                               <div className="flex items-center gap-2">
+                                 <h4 className="font-medium text-textprimary truncate">{conv.otherUser.name}</h4>
+                                 {conv.unreadCount > 0 && (
+                                   <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-primary text-white text-[10px] font-bold rounded-full">
+                                     {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                                   </span>
+                                 )}
+                               </div>
+                               <span className="text-xs text-textmuted flex-shrink-0 ml-2">
+                                 {new Date(conv.lastMessageAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                               </span>
+                             </div>
+                            {conv.vehicle && (
+                              <p className="text-xs font-medium text-primary mb-1 truncate">
+                                {conv.vehicle.year} {conv.vehicle.make} {conv.vehicle.model}
+                              </p>
+                            )}
+                            <p className="text-sm text-textsecondary truncate">
+                              {conv.lastMessage}
                             </p>
-                          )}
-                          <p className="text-sm text-textsecondary truncate">
-                            {conv.lastMessage}
-                          </p>
-                        </div>
-                      </Link>
+                          </div>
+                        </Link>
+                        <button
+                          onClick={(e) => { e.preventDefault(); handleDeleteConversation(conv); }}
+                          disabled={deletingConv === conv.vehicle?.id}
+                          className="p-2 text-textmuted hover:text-err hover:bg-err/10 rounded-md transition-colors disabled:opacity-50"
+                          title="Delete conversation"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -199,9 +286,7 @@ const Messages = () => {
                   <ArrowLeft size={20} />
                 </Link>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-full border border-primary/20 flex items-center justify-center text-primary font-bold">
-                    <User size={18} />
-                  </div>
+                  <Avatar userId={Number(userId)} name={messages.find((m) => m.senderId === Number(userId))?.sender?.name || conversations.find((c) => c.otherUser?.id === Number(userId))?.otherUser?.name} size={40} />
                   <div>
                     <h2 className="font-medium text-textprimary line-clamp-1">
                       {messages.find((m) => m.senderId === Number(userId))?.sender?.name
@@ -234,9 +319,21 @@ const Messages = () => {
                         }`}>
                           <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         </div>
-                        <span className="text-[11px] text-textmuted mt-1 px-1">
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                        <div className="flex items-center gap-2 mt-1 px-1">
+                          <span className="text-[11px] text-textmuted">
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {isMine && (
+                            <button
+                              onClick={() => handleDeleteMessage(msg.id)}
+                              disabled={deletingMsg === msg.id}
+                              className="text-[11px] text-textmuted hover:text-err disabled:opacity-50 transition-colors"
+                              title="Delete message"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })

@@ -7,7 +7,7 @@ import { Phone, MessageCircle } from 'lucide-react';
  * "Chat" opens the in-app messaging conversation with the seller
  * (falls back to /login when the visitor isn't signed in).
  */
-const StickyContactBar = ({ phone, whatsapp, sellerUserId, vehicleId, isLoggedIn }) => {
+const StickyContactBar = ({ phone, sellerUserId, vehicleId, isLoggedIn }) => {
   const navigate = useNavigate();
 
   const openChat = () => {
@@ -22,12 +22,6 @@ const StickyContactBar = ({ phone, whatsapp, sellerUserId, vehicleId, isLoggedIn
         onClick={() => phone && window.open(`tel:${phone}`)}
       >
         <Phone size={18} /> Call
-      </button>
-      <button
-        className="flex-1 min-h-[44px] bg-[#25D366] text-white rounded-md flex items-center justify-center gap-2 font-display text-sm"
-        onClick={() => whatsapp && window.open(`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`, '_blank')}
-      >
-        <MessageCircle size={18} /> WhatsApp
       </button>
       <button
         className="flex-1 min-h-[44px] border border-primary text-primary rounded-md flex items-center justify-center gap-2 font-display text-sm font-medium"

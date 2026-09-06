@@ -21,6 +21,7 @@ const Compare = lazy(() => import('./pages/Compare'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const BillingCallback = lazy(() => import('./pages/BillingCallback'));
 const BecomeSeller = lazy(() => import('./pages/BecomeSeller'));
+const Profile = lazy(() => import('./pages/Profile'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Privacy = lazy(() => import('./pages/Privacy'));
@@ -57,8 +58,9 @@ function App() {
               <Route path="/car/:id"  element={<CarDetails />} />
               <Route path="/sell"     element={<SellCar />} />
               <Route path="/sell/edit/:id" element={<SellCar />} />
-              <Route path="/become-seller" element={<BecomeSeller />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
+               <Route path="/become-seller" element={<BecomeSeller />} />
+               <Route path="/profile" element={<Profile />} />
+               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/seller/dashboard" element={<SellerDashboard />} />
               <Route path="/favorites" element={<Favorites />} />

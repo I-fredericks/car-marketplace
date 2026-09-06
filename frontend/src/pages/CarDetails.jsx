@@ -5,10 +5,11 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
 import useModalA11y from '../hooks/useModalA11y';
-import { Heart, Flag, MapPin, MessageCircle, Phone, CheckCircle, ShieldCheck, Car, Star } from 'lucide-react';
+import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star } from 'lucide-react';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
 import Badge from '../components/Badge';
+import Avatar from '../components/Avatar';
 
 const CarDetails = () => {
   const { id } = useParams();
@@ -101,14 +102,9 @@ const CarDetails = () => {
   const seller = car.seller;
   const sellerName = seller?.user?.name || 'Seller';
   const sellerPhone = seller?.user?.phone || '';
-  const sellerWhatsApp = seller?.whatsapp || sellerPhone;
   // "Verified" means CarMarket reviewed the seller's documents — never just
   // their account role
   const isVerified = Boolean(seller?.verified);
-
-  const whatsappMsg = encodeURIComponent(
-    `Hello, I'm interested in your ${car.year} ${car.make} ${car.model} listed on CarMarket Ghana for GH₵${Number(car.price).toLocaleString()}. Is it still available?`
-  );
 
   const formatLabel = (str) => str?.replace(/_/g, ' ') || '—';
 
@@ -244,9 +240,12 @@ const CarDetails = () => {
                 <h3 className="font-display font-semibold text-lg text-textprimary mb-4 border-b border-bordercol pb-2">Seller Information</h3>
                 
                 <div className="flex items-center gap-4 mb-5">
-                  <div className="w-14 h-14 bg-bg rounded-full flex items-center justify-center text-primary text-xl font-bold border border-bordercol">
-                    {sellerName.charAt(0).toUpperCase()}
-                  </div>
+                  <Avatar
+                    userId={seller?.user?.id}
+                    name={sellerName}
+                    size={56}
+                    fallbackClassName="bg-bg border border-bordercol text-primary"
+                  />
                   <div>
                     <h4 className="font-medium text-textprimary text-lg">{sellerName}</h4>
                     <p className="text-sm text-textsecondary capitalize">{formatLabel(seller?.sellerType)} Seller</p>
@@ -268,16 +267,6 @@ const CarDetails = () => {
 
                 {/* Desktop Action Buttons */}
                 <div className="hidden md:flex flex-col gap-3 mb-6">
-                  {sellerWhatsApp && (
-                    <a 
-                      href={`https://wa.me/${sellerWhatsApp.replace(/\D/g, '')}?text=${whatsappMsg}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full py-3 bg-[#25D366] text-white font-bold rounded-md hover:bg-[#1DA851] transition-colors flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle size={20} /> WhatsApp Seller
-                    </a>
-                  )}
                   {sellerPhone && (
                     <a 
                       href={`tel:${sellerPhone}`} 
@@ -344,7 +333,6 @@ const CarDetails = () => {
       {/* Mobile Sticky Contact Bar */}
       <StickyContactBar
         phone={sellerPhone}
-        whatsapp={sellerWhatsApp}
         sellerUserId={car.seller?.userId}
         vehicleId={car.id}
         isLoggedIn={Boolean(user)}
