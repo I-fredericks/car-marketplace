@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const prisma = require('../config/db');
 const { saveUpload } = require('../services/storage');
+const { notifyAdmins } = require('./notificationController');
 
 // Profile photos: single image, raster only (profile photos are never PDFs).
 // Memory storage: the storage service persists it to S3 or disk.
@@ -50,6 +51,16 @@ const uploadAvatar = async (req, res) => {
       where: { id: req.user.id },
       data: { avatar: dataUri, avatarStatus: 'PENDING', avatarRejectionReason: null },
     });
+
+    // Photos sit in the moderation queue until approved — alert admins now
+    // so the tab looks alive instead of stale (fire-and-forget).
+    notifyAdmins({
+      type: 'ADMIN_PENDING_AVATAR',
+      title: 'Profile photo awaiting review',
+      body: req.user.name,
+      senderId: req.user.id,
+      data: { path: '/admin?tab=photos', userId: req.user.id },
+    }).catch((e) => console.error('Admin avatar notify failed:', e.message));
 
     res.json({
       message: 'Profile photo uploaded — it will appear once an admin approves it.',

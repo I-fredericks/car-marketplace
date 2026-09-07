@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageThumbUrl } from '../utils/api';
 import {
@@ -14,7 +14,18 @@ const AdminDashboard = () => {
   const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState('overview');
+  // Deep links: notifications route admins to the exact moderation tab via
+  // /admin?tab=<name> (e.g. /admin?tab=pending, ?tab=photos, ?tab=users...).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTabState] = useState(() => {
+    const VALID = new Set(['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'reports', 'users']);
+    const initial = searchParams.get('tab');
+    return initial && VALID.has(initial) ? initial : 'overview';
+  });
+  const setTab = (next) => {
+    setTabState(next);
+    setSearchParams({ tab: next }, { replace: true });
+  };
   const [stats, setStats] = useState(null);
   const [pendingCars, setPendingCars] = useState([]);
   const [allCars, setAllCars] = useState([]);

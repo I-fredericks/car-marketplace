@@ -17,6 +17,29 @@ async function createNotification({ userId, type, title, body = null, data = nul
   return notification;
 }
 
+/**
+ * Tell every active admin something needs moderation. `data.path` points at
+ * the exact admin-dashboard tab for the action (e.g. /admin?tab=photos), so
+ * clicking the notification or its toast lands the admin exactly where they
+ * must act. Fire-and-forget from postings: never awaited by request threads.
+ */
+async function notifyAdmins({ type, title, body = null, data = null, senderId = null, vehicleId = null }) {
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true },
+  });
+  if (admins.length === 0) return [];
+  const created = await Promise.all(
+    admins.map((admin) =>
+      prisma.notification.create({
+        data: { userId: admin.id, type, title, body, data, senderId, vehicleId },
+      })
+    )
+  );
+  created.forEach((n) => pushToUser(n.userId, 'notification:new', n));
+  return created;
+}
+
 // @desc    List recent notifications + unread count
 // @route   GET /api/notifications
 // @access  Private
@@ -100,6 +123,7 @@ const markAllRead = async (req, res) => {
 
 module.exports = {
   createNotification,
+  notifyAdmins,
   getNotifications,
   markNotificationRead,
   markAllRead,
