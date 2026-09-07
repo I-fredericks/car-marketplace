@@ -1,91 +1,115 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, CheckCircle, ShieldCheck } from 'lucide-react';
+import { MapPin, ShieldCheck, SlidersHorizontal, Fuel, Gauge } from 'lucide-react';
 import Badge from './Badge';
+import Avatar from './Avatar';
 
-const VehicleCard = ({ 
-  id, 
-  title, 
-  price, 
-  location, 
-  condition, 
-  specs = [], 
-  sellerName, 
-  verified, 
+const SPEC_ICONS = [SlidersHorizontal, Fuel, Gauge];
+
+/**
+ * Listing card used across Home / Search / Favorites.
+ * Mobile-first compact layout (2-col phone grids), full styling from sm up:
+ * frosted condition chip, gradient image overlay, spec icon chips, clearer
+ * price hierarchy, seller identity with avatar chip.
+ */
+const VehicleCard = ({
+  id,
+  title,
+  price,
+  location,
+  condition,
+  specs = [],
+  sellerName,
+  verified,
   badge,
   sellerPlanBadge,
   imageUrl
 }) => {
   return (
-    <div className="bg-surface border border-bordercol rounded-lg overflow-hidden flex flex-col transition-transform hover:-translate-y-1 hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.1)] group">
-      <Link to={`/car/${id}`} className="block relative aspect-[4/3] overflow-hidden bg-bg">
-        {/* Placeholder if no image */}
+    <div className="group bg-surface border border-bordercol rounded-xl overflow-hidden flex flex-col shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_32px_-16px_rgba(27,42,74,0.35)] hover:border-primary/30 focus-within:ring-2 ring-primary/30">
+      <Link
+        to={`/car/${id}`}
+        className="block relative aspect-[4/3] overflow-hidden bg-bg outline-none"
+        aria-label={`View details for ${title}`}
+      >
         {imageUrl ? (
-          <img 
-            src={imageUrl} 
-            alt={title} 
+          <img
+            src={imageUrl}
+            alt={title}
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+            className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-textmuted">
-            No Image
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-textmuted">
+            <SlidersHorizontal size={22} className="opacity-60" />
+            <span className="text-[10px] sm:text-xs font-medium">No Image</span>
           </div>
         )}
-        
-        {/* Badges Overlay */}
-        <div className="absolute top-3 left-3 flex flex-col gap-2">
-          {badge && (
+
+        {/* Readability gradient over the image bottom */}
+        <div className="absolute inset-x-0 bottom-0 h-12 sm:h-16 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
+
+        {/* Featured / status badge — top left */}
+        {badge && (
+          <div className="absolute top-2 left-2 sm:top-3 sm:left-3 flex flex-col gap-1.5 sm:gap-2">
             <Badge type={badge.toLowerCase() === 'featured' ? 'accent' : 'success'}>
               {badge}
             </Badge>
-          )}
-          {condition && (
-            <span className="hidden md:inline-block px-2 py-1 bg-surface/90 backdrop-blur-sm text-textprimary text-xs font-semibold rounded-md border border-bordercol/50">
-              {condition}
-            </span>
-          )}
-        </div>
-      </Link>
-      
-      <div className="p-4 flex flex-col flex-1">
-        <Link to={`/car/${id}`} className="block mb-1">
-          <h3 className="font-display font-semibold text-lg text-primary truncate" title={title}>
-            {title}
-          </h3>
-        </Link>
-        <div className="font-display font-bold text-xl text-textprimary mb-3">
-          {typeof price === 'number' ? `GH₵ ${price.toLocaleString()}` : price}
-        </div>
-        
-        {/* Basic Specs */}
-        {specs.length > 0 && (
-          <div className="flex items-center gap-3 text-xs text-textsecondary mb-4 pb-4 border-b border-bordercol">
-            {specs.slice(0, 3).map((spec, i) => (
-              <React.Fragment key={i}>
-                <span>{spec}</span>
-                {i < Math.min(specs.length, 3) - 1 && <span className="w-1 h-1 rounded-full bg-bordercol"></span>}
-              </React.Fragment>
-            ))}
           </div>
         )}
-        
-        {/* Footer: Location & Seller */}
-        <div className="mt-auto flex items-center justify-between text-sm">
-          <div className="flex items-center gap-1.5 text-textmuted">
-            <MapPin size={14} />
-            <span className="truncate max-w-[100px]">{location}</span>
+
+        {/* Condition chip floats above the gradient */}
+        {condition && (
+          <span className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-white/90 text-[#1B2A4A] text-[9px] sm:text-[11px] font-bold rounded-md shadow-sm backdrop-blur-sm">
+            {condition}
+          </span>
+        )}
+      </Link>
+
+      <div className="p-2.5 sm:p-4 md:p-5 flex flex-col gap-1.5 sm:gap-3 flex-1">
+        <div>
+          <Link to={`/car/${id}`} className="block">
+            <h3 className="font-display font-semibold text-sm sm:text-lg leading-snug text-textprimary truncate group-hover:text-primary transition-colors" title={title}>
+              {title}
+            </h3>
+          </Link>
+          <div className="font-display font-bold text-lg sm:text-2xl text-primary tracking-tight mt-0.5 sm:mt-1">
+            {typeof price === 'number' ? `GH₵ ${price.toLocaleString()}` : price}
           </div>
-          <div className="flex items-center gap-1.5 text-textsecondary font-medium min-w-0">
-            <span className="truncate max-w-[80px]">{sellerName}</span>
-            {verified && <ShieldCheck size={14} className="text-success flex-shrink-0" title="Verified Seller" />}
+        </div>
+
+        {/* Spec chips (kept minimal on phones) */}
+        {specs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+            {specs.slice(0, 3).map((spec, i) => {
+              const Icon = SPEC_ICONS[i];
+              return (
+                <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-bg rounded-full text-[9px] sm:text-[11px] font-medium text-textsecondary border border-bordercol/60">
+                  {Icon && <Icon size={11} className="text-textmuted" />}
+                  {spec}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer: location + seller, anchored to the card bottom */}
+        <div className="mt-auto pt-2 sm:pt-3 border-t border-bordercol flex items-center justify-between gap-2 text-[11px] sm:text-xs">
+          <span className="inline-flex items-center gap-1 text-textmuted min-w-0">
+            <MapPin size={12} className="flex-shrink-0" />
+            <span className="truncate">{location}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 sm:gap-1.5 text-textsecondary font-medium min-w-0">
+            <Avatar name={sellerName} size={18} className="flex-shrink-0 hidden min-[420px]:block" />
+            <span className="truncate max-w-[64px] sm:max-w-[90px]">{sellerName}</span>
+            {verified && <ShieldCheck size={13} className="text-success flex-shrink-0" title="Verified Seller" />}
             {sellerPlanBadge && (
-              <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded bg-accent/15 text-accentdark" title="Paid plan seller">
+              <span className="hidden sm:inline-flex flex-shrink-0 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide rounded bg-accent/15 text-accentdark" title="Paid plan seller">
                 {sellerPlanBadge}
               </span>
             )}
-          </div>
+          </span>
         </div>
       </div>
     </div>
