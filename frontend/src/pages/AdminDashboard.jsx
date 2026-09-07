@@ -856,11 +856,15 @@ const AdminDashboard = () => {
     );
   };
 
+  const visibleUsers = users.filter(u => !/^deleted-\d+@deleted\./.test(u.email)); // scrubbed accounts stay in the DB for audit but don't belong in the management UI
   const renderUsers = () => (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Users ({users.length})</h2>
-        <p className="text-sm text-textsecondary">Manage accounts, verify sellers, remove bad actors.</p>
+        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Users ({visibleUsers.length})</h2>
+        <p className="text-sm text-textsecondary">
+          Manage accounts, verify sellers, remove bad actors.
+          {users.length - visibleUsers.length > 0 && ` ${users.length - visibleUsers.length} deleted account(s) hidden.`}
+        </p>
       </div>
 
       {loading ? (
@@ -880,7 +884,7 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-bordercol">
-              {users.map(u => (
+              {visibleUsers.map(u => (
                 <tr key={u.id} className="hover:bg-bg/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
