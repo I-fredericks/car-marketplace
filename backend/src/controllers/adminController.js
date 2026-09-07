@@ -1,6 +1,4 @@
 const prisma = require('../config/db');
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
 const { applyVerifiedPayment } = require('./billingController');
 const cache = require('../services/cache');
 const audit = require('../services/audit');
@@ -330,46 +328,96 @@ const verifySeller = async (req, res) => {
 // @route   DELETE /api/admin/users/:id
 // @access  Private (Admin only)
 //
-// A true hard delete is impossible without destroying records the platform
-// must keep: payments/subscriptions (accounting, Paystack references),
-// reports (disputes) and chat history are all FK-RESTRICTed to the user.
-// "Deleting" therefore scrubs identity and kills access instead:
-// credentials are scrambled, email/name/phone replaced, listings closed.
+// @desc    Hard-delete a user and everything attached to them
+// @route   DELETE /api/admin/users/:id
+// @access  Private (Admin only)
+//
+// FKs on this schema are RESTRICT, so a hard delete must be ordered: child
+// rows first, then vehicles, then the seller profile, then the user. When the
+// target is a seller, ALL of their listings go too — including every chat,
+// favourite, report, payment and document attached to those listings, plus
+// every conversation they ever held with other users.
 const deleteUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
     const target = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, role: true, isActive: true },
+      select: {
+        id: true, email: true, role: true, isActive: true, name: true,
+        sellerProfile: { select: { id: true } },
+      },
     });
     if (!target) return res.status(404).json({ message: 'User not found' });
-    if (target.id === req.user.id) {
-      return res.status(400).json({ message: 'You cannot delete your own account.' });
-    }
+    // Admin targets are protected first: deleting ANY admin (yourself
+    // included) is 403; only then does the general self-delete rule apply.
     if (target.role === 'ADMIN') {
       return res.status(403).json({ message: 'Admin accounts cannot be deleted.' });
     }
+    if (target.id === req.user.id) {
+      return res.status(400).json({ message: 'You cannot delete your own account.' });
+    }
 
-    const scrambled = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+    // Everything they own / touched by FK, ordered leaves-to-root.
+    const sellerProfileId = target.sellerProfile?.id || null;
+    const vehicles = sellerProfileId
+      ? await prisma.vehicle.findMany({ where: { sellerId: sellerProfileId }, select: { id: true } })
+      : [];
+    const vehicleIds = vehicles.map(v => v.id);
+    const inVehicles = vehicleIds.length > 0;
 
-    const [, vehicles] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: userId },
-        data: {
-          isActive: false,
-          email: `deleted-${userId}@deleted.carmarket.local`,
-          name: 'Deleted user',
-          phone: null,
-          password: scrambled,
-        },
-      }),
+    const ops = [
       prisma.authToken.deleteMany({ where: { userId } }),
-      prisma.vehicle.updateMany({
-        where: { seller: { userId }, status: { in: ['PENDING', 'AVAILABLE'] } },
-        data: { status: 'REMOVED', featured: false },
-      }),
-    ]);
+      prisma.notification.deleteMany({ where: { userId } }),
+      prisma.subscription.deleteMany({ where: { userId } }),
+      prisma.review.deleteMany({ where: { OR: [
+        { authorId: userId },
+        ...(sellerProfileId ? [{ sellerId: sellerProfileId }] : []),
+      ] } }),
+      prisma.message.deleteMany({ where: { OR: [
+        { senderId: userId },
+        { receiverId: userId },
+        ...(inVehicles ? [{ vehicleId: { in: vehicleIds } }] : []),
+      ] } }),
+      prisma.favorite.deleteMany({ where: { OR: [
+        { userId },
+        ...(inVehicles ? [{ vehicleId: { in: vehicleIds } }] : []),
+      ] } }),
+      prisma.payment.deleteMany({ where: { OR: [
+        { userId },
+        ...(inVehicles ? [{ vehicleId: { in: vehicleIds } }] : []),
+      ] } }),
+      prisma.report.deleteMany({ where: { OR: [
+        { reporterId: userId },
+        ...(inVehicles ? [{ vehicleId: { in: vehicleIds } }] : []),
+      ] } }),
+    ];
+    if (inVehicles) {
+      ops.push(
+        prisma.vehicleImage.deleteMany({ where: { vehicleId: { in: vehicleIds } } }),
+        prisma.vehicleFeature.deleteMany({ where: { vehicleId: { in: vehicleIds } } }),
+        prisma.vehicleDocument.deleteMany({ where: { vehicleId: { in: vehicleIds } } }),
+        prisma.vehicle.deleteMany({ where: { id: { in: vehicleIds } } }),
+      );
+    }
+
+    let sellerProfileDeleted = 0;
+    if (sellerProfileId) {
+      ops.push(prisma.sellerProfile.delete({ where: { id: sellerProfileId } }));
+      sellerProfileDeleted = 1;
+    }
+    ops.push(prisma.user.delete({ where: { id: userId } }));
+
+    const results = await prisma.$transaction(ops);
+
+    // Audit the deletion — but AFTER the user's audit rows are purged, so the
+    // new row references only the acting admin, never the deleted user.
+    const COUNT_MAP = {
+      authToken: 0, notification: 1, subscription: 2, review: 3, message: 4,
+      favorite: 5, payment: 6, report: 7,
+    };
+    const counts = { listings: vehicleIds.length, sellerProfiles: sellerProfileDeleted };
+    for (const [key, idx] of Object.entries(COUNT_MAP)) counts[key] = results[idx].count || 0;
 
     cache.bumpVehicleVersion();
     audit.logAction({
@@ -377,10 +425,12 @@ const deleteUser = async (req, res) => {
       action: 'USER.DELETE',
       entityType: 'USER',
       entityId: userId,
-      meta: { email: target.email, listingsAffected: vehicles.count },
+      meta: { email: target.email, role: target.role, ...counts },
     });
 
-    res.json({ message: 'Account deleted. Personal details removed; listings and payment records are kept.' });
+    res.json({
+      message: `User permanently deleted (removed ${counts.listings} listing(s), ${counts.message} message(s)).`,
+    });
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ message: 'Server error deleting user' });

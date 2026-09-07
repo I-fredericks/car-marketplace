@@ -37,13 +37,17 @@ const SellerDashboard = () => {
     fetchListings();
   }, [user]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this listing permanently?')) return;
+  const handleDelete = async (id, status) => {
+    const alreadyClosed = status === 'REMOVED' || status === 'DEACTIVATED';
+    if (!window.confirm(alreadyClosed
+      ? 'This listing is already closed — permanently wipe it (photos, chats and reports go with it)?'
+      : 'Delete this listing? It will disappear from the marketplace; deleting again later wipes it permanently.')) return;
     try {
-      await api.delete(`/vehicles/${id}`);
+      const { data } = await api.delete(`/vehicles/${id}`);
       setListings(prev => prev.filter(item => item.id !== id));
-    } catch {
-      alert('Failed to delete listing.');
+      alert(data.message || 'Listing deleted.');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete listing.');
     }
   };
 
@@ -296,7 +300,7 @@ const SellerDashboard = () => {
                             </button>
                           )}
                           <button 
-                            onClick={() => handleDelete(car.id)} 
+                            onClick={() => handleDelete(car.id, car.status)} 
                             className="p-2 text-err bg-err/10 border border-err/20 rounded-md hover:bg-err hover:text-white transition-colors"
                             title="Delete"
                           >
