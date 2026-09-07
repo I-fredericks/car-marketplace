@@ -348,7 +348,9 @@ const Messages = () => {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
-                    className="flex-1 h-11 px-4 border border-bordercol rounded-full bg-bg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
+                    // 16px on mobile prevents iOS Safari's auto-zoom on focus;
+                    // compact 14px returns on sm+ screens.
+                    className="flex-1 h-11 px-4 border border-bordercol rounded-full bg-bg text-base sm:text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
                   />
                   <button 
                     type="submit" 
