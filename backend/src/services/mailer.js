@@ -5,12 +5,21 @@ const nodemailer = require('nodemailer');
 // flow can still be tested locally.
 const smtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER);
 
+const smtpPort = (() => {
+  const parsed = parseInt(process.env.SMTP_PORT, 10);
+  // An empty/invalid SMTP_PORT previously fell back to 587, whose STARTTLS
+  // handshake gets black-holed from datacenter IPs (Render) — producing
+  // "Connection timeout" on every send. 465 (implicit TLS) is the reliable
+  // default for Gmail/Brevo relays, so it wins when the port is unset.
+  return Number.isFinite(parsed) ? parsed : 465;
+})();
+
 let transporter = null;
 if (smtpConfigured) {
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: parseInt(process.env.SMTP_PORT || '587', 10) === 465,
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
