@@ -192,11 +192,13 @@ const AdminDashboard = () => {
   const handleDeleteUser = async (userId) => {
     if (!window.confirm('Are you sure? This will permanently delete the user.')) return;
     try {
-      await api.delete(`/admin/users/${userId}`);
+      const { data } = await api.delete(`/admin/users/${userId}`);
       setUsers(prev => prev.filter(u => u.id !== userId));
-      toast('User deleted.');
-    } catch {
-      toast('Delete failed.');
+      toast(data.message || 'User deleted.');
+    } catch (err) {
+      // Server guards self-deletion and admin deletion with explicit 400/403
+      // messages — surface them instead of a vague "failed".
+      toast(err.response?.data?.message || 'Delete failed.');
     }
   };
 
