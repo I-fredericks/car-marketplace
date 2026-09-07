@@ -125,7 +125,8 @@ const Navbar = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center">
+          <div className="md:hidden flex items-center gap-1">
+            {user && <NotificationsDropdown />}
             <button onClick={toggleMenu} aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={isMobileMenuOpen} className="text-textprimary p-2 focus:outline-none">
               {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
             </button>

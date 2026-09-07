@@ -5,7 +5,7 @@ import api, { getImageThumbUrl } from '../utils/api';
 import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
   Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera,
-  UserX, UserCheck
+  UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight
 } from 'lucide-react';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
@@ -24,6 +24,7 @@ const AdminDashboard = () => {
   const [deactivatedCars, setDeactivatedCars] = useState([]);
   const [pendingAvatars, setPendingAvatars] = useState([]);
   const [processingAvatar, setProcessingAvatar] = useState(null);
+  const [activity, setActivity] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditPagination, setAuditPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [auditFilters, setAuditFilters] = useState({
@@ -75,8 +76,12 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       if (tab === 'overview') {
-        const { data } = await api.get('/admin/stats');
-        setStats(data);
+        const [{ data: statsData }, { data: auditsData }] = await Promise.all([
+          api.get('/admin/stats'),
+          api.get('/admin/audit-logs?limit=8'),
+        ]);
+        setStats(statsData);
+        setActivity(auditsData.logs || []);
       } else if (tab === 'pending') {
         const { data } = await api.get('/admin/vehicles/pending');
         setPendingCars(data);
@@ -401,79 +406,173 @@ const AdminDashboard = () => {
   // SUB-RENDERS
   // ──────────────────────────────────────────────────────
 
-  const renderOverview = () => (
-    <div className="space-y-8 animate-fade-in">
-      <div>
-        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Marketplace Overview</h2>
-        <p className="text-sm text-textsecondary">Live stats across all users, listings, and activity.</p>
+  const renderOverview = () => {
+    const kpis = stats ? [
+      { label: 'Total Users', value: stats.users.total, Icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
+      { label: 'Sellers', value: stats.users.sellers, Icon: ShieldCheck, color: 'text-success', bg: 'bg-success/10' },
+      { label: 'Buyers', value: stats.users.buyers, Icon: Car, color: 'text-accent', bg: 'bg-accent/10' },
+      { label: 'Live Listings', value: stats.listings.available, Icon: List, color: 'text-primary', bg: 'bg-primary/10' },
+    ] : [];
+
+    const statusSegments = stats ? [
+      { key: 'available', label: 'Live', value: stats.listings.available, color: 'bg-success' },
+      { key: 'pending', label: 'Pending', value: stats.listings.pending, color: 'bg-[#EAB308]' },
+      { key: 'sold', label: 'Sold', value: stats.listings.sold, color: 'bg-primary' },
+      { key: 'rejected', label: 'Rejected', value: stats.listings.rejected, color: 'bg-err' },
+      { key: 'deactivated', label: 'Taken down', value: stats.listings.deactivated, color: 'bg-orange-500' },
+      { key: 'removed', label: 'Removed', value: stats.listings.removed, color: 'bg-textmuted' },
+    ] : [];
+    const statusTotal = statusSegments.reduce((sum, s) => sum + (s.value || 0), 0) || 1;
+
+    const quickActions = stats ? [
+      { label: 'Review pending listings', tab: 'pending', count: stats.listings.pending, accent: stats.listings.pending > 0 },
+      { label: 'Pending payments', tab: 'payments', count: payments.filter(p => p.status === 'PENDING').length, accent: payments.filter(p => p.status === 'PENDING').length > 0 },
+      { label: 'Open reports', tab: 'reports', count: (stats.reports?.pending ?? reports.length), accent: (stats.reports?.pending ?? 0) > 0 },
+      { label: 'Manage users', tab: 'users', count: stats.users.total, accent: false },
+      { label: 'Audit log', tab: 'audit', count: null, accent: false },
+    ] : [];
+
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Marketplace Overview</h2>
+            <p className="text-sm text-textsecondary">Live stats across all users, listings, and activity.</p>
+          </div>
+          <button
+            onClick={fetchData}
+            className="px-3 py-1.5 bg-surface border border-bordercol rounded-md text-xs font-medium text-textsecondary hover:bg-bg transition-colors flex items-center gap-1.5"
+          >
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
+
+        {loading || !stats ? (
+          <div className="flex justify-center py-20 text-textmuted">
+            <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {/* KPI tiles */}
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {kpis.map(({ label, value, Icon, color, bg }) => (
+                <div key={label} className="bg-surface border border-bordercol rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group">
+                  <div className={`w-10 h-10 ${bg} ${color} rounded-lg flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
+                    <Icon size={20} />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-display font-bold text-textprimary tracking-tight">{value}</div>
+                  <div className="text-xs sm:text-sm text-textsecondary font-medium mt-0.5">{label}</div>
+                </div>
+              ))}
+            </section>
+
+            <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Listing status distribution */}
+              <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
+                <h3 className="font-display font-semibold text-textprimary mb-4">Listing distribution</h3>
+                <div className="h-3 rounded-full overflow-hidden flex bg-bg mb-4">
+                  {statusSegments.map(seg => seg.value > 0 && (
+                    <div key={seg.key} className={`${seg.color} transition-all`} style={{ width: `${(seg.value / statusTotal) * 100}%` }} title={`${seg.label}: ${seg.value}`} />
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {statusSegments.map(seg => (
+                    <div key={seg.key} className="flex items-center gap-2 text-xs">
+                      <span className={`w-2.5 h-2.5 rounded-sm ${seg.color}`} />
+                      <span className="text-textsecondary">{seg.label}</span>
+                      <span className="font-bold text-textprimary ml-auto">{seg.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Engagement */}
+              <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
+                <h3 className="font-display font-semibold text-textprimary mb-4">Engagement</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                    <Heart size={18} className="text-err mb-2" />
+                    <div className="text-xl font-display font-bold text-textprimary">{stats.favorites}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium">Saved by buyers</div>
+                  </div>
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                    <MessageCircle size={18} className="text-primary mb-2" />
+                    <div className="text-xl font-display font-bold text-textprimary">{stats.messages}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium">Messages</div>
+                  </div>
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                    <Star size={18} className="text-[#EAB308] mb-2" />
+                    <div className="text-xl font-display font-bold text-textprimary">{stats.listings.featured ?? 0}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium">Featured</div>
+                  </div>
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                    <ShieldAlert size={18} className="text-err mb-2" />
+                    <div className="text-xl font-display font-bold text-textprimary">{stats.reports?.pending ?? 0}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium">Reports pending</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Quick actions */}
+              <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
+                <h3 className="font-display font-semibold text-textprimary mb-4">Quick actions</h3>
+                <div className="space-y-2">
+                  {quickActions.map(({ label, tab, count, accent }) => (
+                    <button
+                      key={tab + label}
+                      onClick={() => setTab(tab)}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-bordercol hover:border-primary/40 hover:bg-bg transition-colors text-left group"
+                    >
+                      <span className="text-sm font-medium text-textprimary">{label}</span>
+                      <span className="flex items-center gap-2">
+                        {count != null && (
+                          <span className={`min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold ${accent ? 'bg-[#EAB308]/15 text-[#EAB308]' : 'bg-bg border border-bordercol text-textmuted'}`}>
+                            {count}
+                          </span>
+                        )}
+                        <ArrowRight size={14} className="text-textmuted group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* Recent activity */}
+              <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
+                <h3 className="font-display font-semibold text-textprimary mb-4">Recent activity</h3>
+                {activity.length === 0 ? (
+                  <p className="text-sm text-textmuted py-6 text-center">No activity yet.</p>
+                ) : (
+                  <div className="divide-y divide-bordercol/60 max-h-[300px] overflow-y-auto -mx-1">
+                    {activity.map(log => (
+                      <div key={log.id} className="px-1 py-2.5 flex items-center gap-3">
+                        <Avatar name={log.actorName || 'System'} userId={log.actorId} size={28} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-textprimary truncate">
+                            <span className="font-medium">{log.actorName || 'System'}</span>
+                            <span className="text-textmuted"> · {log.action.replace('.', ' ').toLowerCase()}</span>
+                          </p>
+                          <p className="text-[11px] text-textmuted truncate">{log.entityType}#{log.entityId ?? '—'}</p>
+                        </div>
+                        <span className="text-[10px] text-textmuted whitespace-nowrap">
+                          {new Date(log.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => setTab('audit')} className="mt-3 text-xs font-medium text-primary hover:text-primarylight transition-colors">
+                  View full audit log →
+                </button>
+              </section>
+            </div>
+          </div>
+        )}
       </div>
-
-      {loading || !stats ? (
-        <div className="flex justify-center py-20 text-textmuted">
-          <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          <div>
-            <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-4">Users</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-surface border border-bordercol rounded-lg p-5 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary"><Users size={24} /></div>
-                <div>
-                  <div className="text-2xl font-display font-bold text-textprimary">{stats.users.total}</div>
-                  <div className="text-sm text-textsecondary font-medium">Total Users</div>
-                </div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-5 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center text-success"><ShieldCheck size={24} /></div>
-                <div>
-                  <div className="text-2xl font-display font-bold text-textprimary">{stats.users.sellers}</div>
-                  <div className="text-sm text-textsecondary font-medium">Sellers</div>
-                </div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-5 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-accent/10 rounded-full flex items-center justify-center text-accent"><Car size={24} /></div>
-                <div>
-                  <div className="text-2xl font-display font-bold text-textprimary">{stats.users.buyers}</div>
-                  <div className="text-sm text-textsecondary font-medium">Buyers</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-4">Listings</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="bg-surface border border-bordercol rounded-lg p-4 text-center shadow-sm">
-                <div className="text-xl font-display font-bold text-accent mb-1">{stats.listings.pending}</div>
-                <div className="text-[11px] font-medium text-textsecondary uppercase">Pending</div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-4 text-center shadow-sm">
-                <div className="text-xl font-display font-bold text-success mb-1">{stats.listings.available}</div>
-                <div className="text-[11px] font-medium text-textsecondary uppercase">Live</div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-4 text-center shadow-sm">
-                <div className="text-xl font-display font-bold text-primary mb-1">{stats.listings.sold}</div>
-                <div className="text-[11px] font-medium text-textsecondary uppercase">Sold</div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-4 text-center shadow-sm">
-                <div className="text-xl font-display font-bold text-err mb-1">{stats.listings.rejected}</div>
-                <div className="text-[11px] font-medium text-textsecondary uppercase">Rejected</div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-4 text-center shadow-sm">
-                <div className="text-xl font-display font-bold text-[#EAB308] mb-1">{stats.listings.featured}</div>
-                <div className="text-[11px] font-medium text-textsecondary uppercase">Featured</div>
-              </div>
-              <div className="bg-surface border border-bordercol rounded-lg p-4 text-center shadow-sm">
-                <div className="text-xl font-display font-bold text-textprimary mb-1">{stats.listings.total}</div>
-                <div className="text-[11px] font-medium text-textsecondary uppercase">Total</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   const renderPending = () => (
     <div className="space-y-6 animate-fade-in">
@@ -946,23 +1045,25 @@ const AdminDashboard = () => {
                       {u.role !== 'ADMIN' && (
                         <button
                           onClick={() => handleToggleUserStatus(u)}
-                          className={`p-1.5 rounded border transition-colors ${
+                          className={`px-2.5 py-1.5 rounded-md border transition-colors text-xs font-bold flex items-center gap-1 ${
                             u.isActive
                               ? 'bg-[#EAB308]/10 text-[#EAB308] border-[#EAB308]/20 hover:bg-[#EAB308] hover:text-white'
                               : 'bg-success/10 text-success border-success/20 hover:bg-success hover:text-white'
                           }`}
                           title={u.isActive ? 'Deactivate account' : 'Reactivate account'}
                         >
-                          {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
+                          {u.isActive ? <UserX size={13} /> : <UserCheck size={13} />}
+                          <span className="hidden md:inline">{u.isActive ? 'Deactivate' : 'Reactivate'}</span>
                         </button>
                       )}
                       {u.role !== 'ADMIN' && (
-                        <button 
-                          onClick={() => handleDeleteUser(u.id)} 
-                          className="p-1.5 bg-surface text-err border border-bordercol rounded hover:bg-err hover:text-white hover:border-err transition-colors"
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="px-2.5 py-1.5 bg-err/10 text-err border border-err/20 rounded-md hover:bg-err hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
                           title="Delete User"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={13} />
+                          <span className="hidden md:inline">Delete</span>
                         </button>
                       )}
                     </div>
