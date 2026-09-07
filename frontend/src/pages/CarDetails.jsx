@@ -20,6 +20,8 @@ const CarDetails = () => {
   const [activeImg, setActiveImg] = useState(0);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
+  const [failedImgs, setFailedImgs] = useState(new Set());
+  const [thumbFailedImgs, setThumbFailedImgs] = useState(new Set());
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const { data: car, isLoading: loading } = useQuery({
@@ -146,12 +148,20 @@ const CarDetails = () => {
             {/* Gallery */}
             <div className="bg-surface border border-bordercol rounded-lg p-2 mb-8 shadow-sm">
               <div className="aspect-[4/3] rounded-md overflow-hidden bg-bg mb-2">
-                {car.images && car.images.length > 0 ? (
-                  <img 
-                    src={getImageUrl(car.images[activeImg])} 
-                    alt={`${car.make} ${car.model}`} 
-                    fetchPriority="high"
+                {car.images && car.images.length > 0 && !thumbFailedImgs.has(activeImg) ? (
+                  <img
+                    src={failedImgs.has(activeImg) ? getImageThumbUrl(car.images[activeImg]) : getImageUrl(car.images[activeImg])}
+                    alt={`${car.make} ${car.model}`}
                     decoding="async"
+                    onError={() => {
+                      // First failure of the original → retry with the thumbnail URL;
+                      // if the thumbnail also fails, show the placeholder instead.
+                      if (failedImgs.has(activeImg)) {
+                        setThumbFailedImgs(prev => new Set(prev).add(activeImg));
+                      } else {
+                        setFailedImgs(prev => new Set(prev).add(activeImg));
+                      }
+                    }}
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -172,7 +182,14 @@ const CarDetails = () => {
                       aria-current={activeImg === i}
                       className={`flex-shrink-0 w-24 h-18 rounded-md overflow-hidden border-2 ${activeImg === i ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'} transition-all`}
                     >
-                      <img src={getImageThumbUrl(img)} alt={`Thumbnail ${i}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                       <img
+                         src={getImageThumbUrl(img)}
+                         alt={`Thumbnail ${i}`}
+                         loading="lazy"
+                         decoding="async"
+                         onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = getImageUrl(img); }}
+                         className="w-full h-full object-cover"
+                       />
                     </button>
                   ))}
                 </div>
