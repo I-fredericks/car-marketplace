@@ -26,6 +26,7 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const Terms = lazy(() => import('./pages/Terms'));
+const StaffLogin = lazy(() => import('./pages/StaffLogin'));
 
 // Components
 import Navbar from './components/Navbar';
@@ -53,18 +54,28 @@ const NO_FOOTER_ROUTES = [
   '/billing/callback',
 ];
 
+// The staff portal renders fully chrome-free — no public navbar, footer or
+// bottom nav. It's the one intentionally unlisted surface of the app.
+const CHROME_FREE_ROUTES = ['/admin/login'];
+
 const shouldHideFooter = (pathname) =>
   NO_FOOTER_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
+const isChromeFree = (pathname) =>
+  CHROME_FREE_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+
 function AppShell() {
   const location = useLocation();
-  const hideFooter = shouldHideFooter(location.pathname);
+  const hideFooter = shouldHideFooter(location.pathname) || isChromeFree(location.pathname);
+  const hideChrome = isChromeFree(location.pathname);
 
   return (
     <div className="app-container page-fade-in">
-      <Navbar />
+      {!hideChrome && <Navbar />}
       <main className="main-content">
         <ErrorBoundary>
         <Suspense fallback={
@@ -76,6 +87,7 @@ function AppShell() {
           <Route path="/"         element={<Home />} />
           <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/admin/login" element={<StaffLogin />} />
           <Route path="/search"   element={<SearchResults />} />
           <Route path="/car/:id"  element={<CarDetails />} />
           <Route path="/sell"     element={<SellCar />} />
@@ -100,7 +112,7 @@ function AppShell() {
         </ErrorBoundary>
       </main>
       {!hideFooter && <Footer />}
-      <BottomNav />
+      {!hideChrome && <BottomNav />}
     </div>
   );
 }

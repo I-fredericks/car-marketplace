@@ -35,6 +35,22 @@ export const AuthProvider = ({ children }) => {
     setUser(profile.data);
   };
 
+  // Staff portal, step 1: credentials -> emailed 6-digit code (no session yet)
+  const adminLogin = async (email, password) => {
+    const { data } = await api.post('/auth/admin-login', { email, password });
+    return data; // { requiresAdminCode: true, ... }
+  };
+
+  // Staff portal, step 2: code -> real session
+  const verifyAdminCode = async (email, code) => {
+    const { data } = await api.post('/auth/admin-verify', { email, code });
+    localStorage.setItem('token', data.token);
+    setUser(data.user);
+    const profile = await api.get('/auth/me');
+    setUser(profile.data);
+    return profile.data;
+  };
+
   const loginWithGoogle = async (credential, role, sellerType) => {
     const { data } = await api.post('/auth/google', { credential, role, sellerType });
     localStorage.setItem('token', data.token);
@@ -83,7 +99,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, updateProfile, logout, loading }}>
+    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, updateProfile, logout, loading, adminLogin, verifyAdminCode }}>
       {/* Render children immediately: gating on `loading` blanks the whole
           app for every visitor until /auth/me resolves. Protected pages
           consume `loading` themselves to avoid flashing login prompts. */}

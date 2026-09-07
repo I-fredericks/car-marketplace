@@ -75,7 +75,14 @@ describe('Listing lifecycle & moderation', () => {
     sellerAToken = (await login(sellerA.email, sellerA.password)).body.token;
     sellerBToken = (await login(sellerB.email, sellerB.password)).body.token;
     buyerToken = (await login(buyer.email, buyer.password)).body.token;
-    adminToken = (await login(admin.email, admin.password)).body.token;
+    // Admins can't use public login anymore — go through the staff portal
+    // (stage 1 issues a devAdminCode; stage 2 trades it for the session).
+    const staffLogin = await request(app)
+      .post('/api/auth/admin-login')
+      .send({ email: admin.email, password: admin.password });
+    adminToken = (await request(app)
+      .post('/api/auth/admin-verify')
+      .send({ email: admin.email, code: staffLogin.body.devAdminCode })).body.token;
     expect(sellerAToken).toBeDefined();
     expect(sellerBToken).toBeDefined();
     expect(buyerToken).toBeDefined();

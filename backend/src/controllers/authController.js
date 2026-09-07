@@ -2,7 +2,8 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
-const { sendPasswordResetEmail, sendVerificationEmail, smtpConfigured, originFromReq, appUrl } = require('../services/mailer');
+const { sendMail, sendPasswordResetEmail, sendVerificationEmail, smtpConfigured, originFromReq, appUrl } = require('../services/mailer');
+const audit = require('../services/audit');
 
 const RESET_TOKEN_MINUTES = 60;
 const VERIFICATION_TOKEN_MINUTES = 24 * 60; // confirmation links live for a day
@@ -144,6 +145,14 @@ const login = async (req, res) => {
 
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    // Admins have a separate staff portal with a second factor — the public
+    // login must never hand them a session.
+    if (user.role === 'ADMIN') {
+      return res.status(403).json({
+        message: 'Admin accounts must sign in through the staff portal.',
+      });
     }
 
     if (!user.isActive) {
@@ -659,6 +668,117 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Staff portal step 1: verify admin credentials, email a 6-digit code
+// @route   POST /api/auth/admin-login
+// @access  Public (rate-limited; admins only succeed here)
+const ADMIN_OTP_MINUTES = 10;
+
+const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    const isMatch = user ? await bcrypt.compare(password, user.password) : false;
+
+    // Uniform failure for wrong creds AND non-admin accounts — the staff
+    // portal must not reveal which emails exist or which are admins.
+    if (!user || !isMatch || user.role !== 'ADMIN' || !user.isActive || !user.emailVerified) {
+      return res.status(401).json({ message: 'Invalid staff credentials.' });
+    }
+
+    await prisma.authToken.deleteMany({
+      where: { userId: user.id, type: 'ADMIN_OTP' },
+    });
+    const code = String(crypto.randomInt(100000, 1000000));
+    // Store the hash of THE CODE ITSELF (not a separate random token like
+    // createAuthToken generates — that hash would never match the emailed
+    // 6-digit code the admin types back in).
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    await prisma.authToken.create({
+      data: {
+        userId: user.id,
+        type: 'ADMIN_OTP',
+        tokenHash: codeHash,
+        expiresAt: new Date(Date.now() + ADMIN_OTP_MINUTES * 60 * 1000),
+      },
+    });
+
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
+        <h2 style="color:#1B2A4A;margin-bottom:16px;">CarMarket Ghana — Staff Portal</h2>
+        <p style="color:#4B5563;line-height:1.6;">Your sign-in security code (valid for ${ADMIN_OTP_MINUTES} minutes):</p>
+        <div style="font-size:34px;font-weight:bold;letter-spacing:10px;color:#1B2A4A;margin:24px 0;">${code}</div>
+        <p style="color:#9CA3AF;font-size:12px;">Never share this code. If you didn't try to sign in, someone knows your password — change it immediately.</p>
+      </div>`;
+
+    // Email is the second factor; send it before responding so the code is
+    // already on its way when the portal asks for it.
+    await sendMail({
+      to: user.email,
+      subject: `Your staff sign-in code: ${code}`,
+      text: `Your CarMarket Ghana staff sign-in code is ${code} (valid ${ADMIN_OTP_MINUTES} minutes).`,
+      html,
+    });
+
+    res.json({
+      requiresAdminCode: true,
+      message: `A 6-digit security code was sent to ${user.email}. It expires in ${ADMIN_OTP_MINUTES} minutes.`,
+      ...(process.env.NODE_ENV !== 'production' ? { devAdminCode: code } : {}),
+    });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Staff portal step 2: verify the emailed code and issue the session
+// @route   POST /api/auth/admin-verify
+// @access  Public (rate-limited; single-use code)
+const adminVerifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.role !== 'ADMIN' || !user.isActive) {
+      return res.status(401).json({ message: 'Invalid or expired security code.' });
+    }
+
+    const record = await findValidAuthToken(code, 'ADMIN_OTP');
+    if (!record || record.userId !== user.id) {
+      return res.status(401).json({ message: 'Invalid or expired security code.' });
+    }
+
+    // Single use: burn every outstanding code for this admin.
+    await prisma.authToken.deleteMany({
+      where: { userId: user.id, type: 'ADMIN_OTP' },
+    });
+
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    audit.logAction({
+      actorId: user.id,
+      actorRole: user.role,
+      actorName: user.name,
+      action: 'USER.ADMIN_LOGIN',
+      entityType: 'USER',
+      entityId: user.id,
+      meta: { via: 'staff-portal' },
+    });
+
+    res.json({
+      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    });
+  } catch (error) {
+    console.error('Admin verify error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -671,6 +791,8 @@ module.exports = {
   verifyEmail,
   resendVerification,
   changePassword,
+  adminLogin,
+  adminVerifyCode,
   logout,
   updateProfile
 };

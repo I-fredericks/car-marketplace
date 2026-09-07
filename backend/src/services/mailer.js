@@ -172,6 +172,7 @@ const sendVerificationEmail = async (user, rawToken, origin) => {
 };
 
 module.exports = {
+  sendMail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   smtpConfigured,

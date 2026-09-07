@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, googleLogin, getMe, upgradeToSeller, forgotPassword, resetPassword, resetPasswordPage, verifyEmail, resendVerification, changePassword, logout, updateProfile } = require('../controllers/authController');
+const { register, login, googleLogin, getMe, upgradeToSeller, forgotPassword, resetPassword, resetPasswordPage, verifyEmail, resendVerification, changePassword, adminLogin, adminVerifyCode, logout, updateProfile } = require('../controllers/authController');
 const { protect } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
-const { registerSchema, loginSchema, upgradeToSellerSchema, emailOnlySchema, resetPasswordSchema, changePasswordSchema, updateProfileSchema } = require('../middlewares/validation');
+const { registerSchema, loginSchema, upgradeToSellerSchema, emailOnlySchema, resetPasswordSchema, changePasswordSchema, adminLoginSchema, adminVerifySchema, updateProfileSchema } = require('../middlewares/validation');
 
 router.post('/register', validate(registerSchema), register);
 router.post('/login', validate(loginSchema), login);
@@ -21,6 +21,10 @@ router.post('/logout', logout);
 router.get('/me', protect, getMe);
 router.put('/upgrade', protect, validate(upgradeToSellerSchema), upgradeToSeller);
 router.put('/profile', protect, validate(updateProfileSchema), updateProfile);
+
+// Staff portal — separate two-step login for ADMIN accounts (own URL)
+router.post('/admin-login', validate(adminLoginSchema), adminLogin);
+router.post('/admin-verify', validate(adminVerifySchema), adminVerifyCode);
 router.put('/change-password', protect, validate(changePasswordSchema), changePassword);
 
 module.exports = router;

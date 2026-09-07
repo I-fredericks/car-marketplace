@@ -38,6 +38,16 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required')
 });
 
+const adminLoginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required')
+});
+
+const adminVerifySchema = z.object({
+  email: z.string().email('Invalid email address'),
+  code: z.string().regex(/^\d{6}$/, 'The security code must be 6 digits')
+});
+
 const upgradeToSellerSchema = z.object({
   whatsapp: z.string().optional(),
   location: z.string().optional(),
@@ -127,6 +137,8 @@ module.exports = {
   validate,
   registerSchema,
   loginSchema,
+  adminLoginSchema,
+  adminVerifySchema,
   upgradeToSellerSchema,
   emailOnlySchema,
   resetPasswordSchema,
