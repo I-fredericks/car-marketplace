@@ -38,11 +38,17 @@ const uploadAvatar = async (req, res) => {
       return res.status(400).json({ message: 'No photo uploaded. Use JPG, PNG, WEBP or HEIC.' });
     }
 
-    const { url } = await saveUpload(req.file.buffer, req.file.originalname, req.file.mimetype);
+    // Avatars are stored INLINE (base64) instead of going through file
+    // storage: profile photos are small (<=8MB) and the Render filesystem is
+    // ephemeral — every redeploy wiped previously-uploaded avatars with a 301
+    // to a vanished file. Inline storage survives redeploys with no S3
+    // dependency. Vehicle photos stay on the cloud storage path.
+    const mime = String(req.file.mimetype || 'image/jpeg');
+    const dataUri = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
 
     await prisma.user.update({
       where: { id: req.user.id },
-      data: { avatar: url, avatarStatus: 'PENDING', avatarRejectionReason: null },
+      data: { avatar: dataUri, avatarStatus: 'PENDING', avatarRejectionReason: null },
     });
 
     res.json({

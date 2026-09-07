@@ -9,10 +9,17 @@ const getConversations = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // Latest message per (otherUser, vehicleId) — one row per conversation.
+    // A per-direction UNION yields TWO rows (my latest-sent + their latest)
+    // for the same pairing, which was duplicating whole conversations in the
+    // inbox list and rebuilding thread content around both anchors.
     const latest = await prisma.$queryRaw`
-      SELECT MAX(id) AS "maxId" FROM "message" WHERE "senderId" = ${userId} GROUP BY "receiverId", "vehicleId"
-      UNION
-      SELECT MAX(id) AS "maxId" FROM "message" WHERE "receiverId" = ${userId} GROUP BY "senderId", "vehicleId"
+      SELECT MAX(id) AS "maxId" FROM (
+        SELECT id, "receiverId" AS "otherUserId", "vehicleId" FROM "message" WHERE "senderId" = ${userId}
+        UNION ALL
+        SELECT id, "senderId" AS "otherUserId", "vehicleId" FROM "message" WHERE "receiverId" = ${userId}
+      ) pairings
+      GROUP BY "otherUserId", "vehicleId"
     `;
     const ids = latest.map((row) => Number(row.maxId)).filter(Number.isInteger);
     if (ids.length === 0) {

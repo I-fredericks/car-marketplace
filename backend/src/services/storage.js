@@ -40,15 +40,16 @@ const publicBaseUrl = () => {
   return `https://${process.env.S3_BUCKET}.s3.${process.env.S3_REGION}.amazonaws.com`;
 };
 
-// 480px WebP thumbnail buffer; returns null for formats sharp can't decode
-// (e.g. PDF) so callers skip thumbnailing documents.
-const THUMB_WIDTH = 480;
+// 800px WebP thumbnail (retina-friendly for card + gallery use; was 480/72
+// and looked soft on modern hi-DPI screens). Returns null for formats sharp
+// can't decode (e.g. PDF) so callers skip thumbnailing documents.
+const THUMB_WIDTH = 800;
 const makeThumbBuffer = async (buffer) => {
   try {
     return await sharp(buffer)
       .rotate() // respect EXIF orientation
       .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
-      .webp({ quality: 72 })
+      .webp({ quality: 82 })
       .toBuffer();
   } catch {
     return null;
