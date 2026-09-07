@@ -4,7 +4,8 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageThumbUrl } from '../utils/api';
 import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
-  Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera
+  Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera,
+  UserX, UserCheck
 } from 'lucide-react';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
@@ -186,6 +187,16 @@ const AdminDashboard = () => {
       fetchData();
     } catch {
       toast('Verification failed.');
+    }
+  };
+
+  const handleToggleUserStatus = async (u) => {
+    try {
+      const { data } = await api.put(`/admin/users/${u.id}/status`, { isActive: !u.isActive });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, isActive: !u.isActive } : x));
+      toast(data.message || (!u.isActive ? 'Account reactivated.' : 'Account deactivated.'));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Status change failed.');
     }
   };
 
@@ -918,13 +929,31 @@ const AdminDashboard = () => {
                   </td>
                   <td className="px-6 py-4 text-textsecondary">{new Date(u.createdAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
+                      {!u.isActive && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-bg border border-bordercol text-textmuted">
+                          Deactivated
+                        </span>
+                      )}
                       {u.role === 'SELLER' && !u.verified && (
                         <button 
                           onClick={() => handleVerifySeller(u.id)} 
                           className="px-3 py-1.5 bg-success/10 text-success border border-success/20 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold"
                         >
                           Verify
+                        </button>
+                      )}
+                      {u.role !== 'ADMIN' && (
+                        <button
+                          onClick={() => handleToggleUserStatus(u)}
+                          className={`p-1.5 rounded border transition-colors ${
+                            u.isActive
+                              ? 'bg-[#EAB308]/10 text-[#EAB308] border-[#EAB308]/20 hover:bg-[#EAB308] hover:text-white'
+                              : 'bg-success/10 text-success border-success/20 hover:bg-success hover:text-white'
+                          }`}
+                          title={u.isActive ? 'Deactivate account' : 'Reactivate account'}
+                        >
+                          {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
                         </button>
                       )}
                       {u.role !== 'ADMIN' && (

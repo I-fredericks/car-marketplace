@@ -5,10 +5,11 @@ import { useEvents } from '../context/EventContext';
 import { Car, Heart, MessageCircle, Menu, X, User } from 'lucide-react';
 import useBillingStatus from '../hooks/useBillingStatus';
 import Avatar from './Avatar';
+import NotificationsDropdown from './NotificationsDropdown';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
-  const { unread } = useEvents();
+  const { unreadMessages } = useEvents();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { data: billing } = useBillingStatus();
@@ -54,14 +55,15 @@ const Navbar = () => {
                 <Link to="/favorites" className="text-textsecondary hover:text-primary transition-colors" title="Saved" aria-label="Saved cars">
                   <Heart size={20} />
                 </Link>
-                <Link to="/messages" className="relative text-textsecondary hover:text-primary transition-colors" title="Messages" aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}>
-                  <MessageCircle size={20} />
-                  {unread > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
-                      {unread > 99 ? '99+' : unread}
-                    </span>
-                  )}
-                </Link>
+                 <NotificationsDropdown />
+                 <Link to="/messages" className="relative text-textsecondary hover:text-primary transition-colors" title="Messages" aria-label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}>
+                   <MessageCircle size={20} />
+                   {unreadMessages > 0 && (
+                     <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
+                       {unreadMessages > 99 ? '99+' : unreadMessages}
+                     </span>
+                   )}
+                 </Link>
                 
                  <div className="flex items-center gap-4 border-l border-bordercol pl-4">
                   <Link to="/profile" className="hover:opacity-80 transition-opacity" title="Profile" aria-label="Profile">
@@ -162,18 +164,18 @@ const Navbar = () => {
                    <User size={20} /> Profile
                  </Link>
                  <Link to="/messages" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
-                  <span className="relative">
-                    <MessageCircle size={20} />
-                    {unread > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
-                        {unread > 99 ? '99+' : unread}
-                      </span>
-                    )}
-                  </span>
-                  Messages
-                </Link>
-                
-                {(user.role === 'SELLER' || user.role === 'ADMIN') && (
+                   <span className="relative">
+                     <MessageCircle size={20} />
+                     {unreadMessages > 0 && (
+                       <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-err text-white text-[10px] font-bold rounded-full">
+                         {unreadMessages > 99 ? '99+' : unreadMessages}
+                       </span>
+                     )}
+                   </span>
+                   Messages
+                 </Link>
+
+                 {(user.role === 'SELLER' || user.role === 'ADMIN') && (
                   <Link to="/seller/dashboard" className="block text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">My Listings</Link>
                 )}
                 {user.role === 'ADMIN' && (

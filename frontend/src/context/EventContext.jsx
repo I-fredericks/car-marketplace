@@ -20,6 +20,9 @@ export const EventProvider = ({ children }) => {
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
   const [unread, setUnread] = useState(0);
+  // Split for navbar surfaces: the Messages icon badge uses `messages`, the
+  // bell uses `system` (everything else: listings, moderation, billing, ...).
+  const [unreadSplit, setUnreadSplit] = useState({ messages: 0, system: 0 });
   const [toasts, setToasts] = useState([]);
   const activeConversationRef = useRef(null);
   const subscribersRef = useRef(new Set());
@@ -29,7 +32,12 @@ export const EventProvider = ({ children }) => {
     if (!user) return;
     try {
       const { data } = await api.get('/notifications');
-      setUnread(data.unreadCount || 0);
+      const total = data.unreadCount || 0;
+      const messages = (data.notifications || []).filter(
+        (n) => !n.readAt && n.type === 'NEW_MESSAGE'
+      ).length;
+      setUnread(total);
+      setUnreadSplit({ messages, system: Math.max(0, total - messages) });
     } catch (_) { /* badge is non-critical */ }
   }, [user]);
 
@@ -71,6 +79,7 @@ export const EventProvider = ({ children }) => {
       esRef.current = null;
       setConnected(false);
       setUnread(0);
+      setUnreadSplit({ messages: 0, system: 0 });
       setToasts([]);
       return;
     }
@@ -126,6 +135,8 @@ export const EventProvider = ({ children }) => {
   const value = {
     connected,
     unread,
+    unreadMessages: unreadSplit.messages,
+    unreadSystem: unreadSplit.system,
     refreshUnread,
     setActiveConversation,
     subscribeToMessages,
