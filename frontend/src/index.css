@@ -7,3 +7,14 @@ body {
   background: #F7F5F1; 
   color: #1A1A1A; 
 }
+
+/* iOS Safari auto-zooms the viewport whenever a focused field computes under
+   16px. Every text input, textarea and select on the site therefore renders
+   at 16px on phones; desktop sizes stay untouched (Tailwind classes win there). */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
