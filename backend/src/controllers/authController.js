@@ -295,8 +295,18 @@ const googleLogin = async (req, res) => {
     }
     const info = await verifyRes.json();
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId || info.aud !== clientId) {
+    // The token's audience must be this app's: the Web OAuth client ID is the
+    // norm (google_sign_in serverClientId), but depending on the platform the
+    // ID token can be minted for the platform client instead. Accept any ID
+    // listed in GOOGLE_CLIENT_ID or comma-separated GOOGLE_CLIENT_IDS.
+    const acceptedAuds = [process.env.GOOGLE_CLIENT_ID, ...(process.env.GOOGLE_CLIENT_IDS || '').split(',')]
+      .map((id) => (id || '').trim())
+      .filter(Boolean);
+    if (acceptedAuds.length === 0 || !acceptedAuds.includes(info.aud)) {
+      // Echo the rejected audience in logs (NOT to the caller): the common
+      // production bug is a client ID set on the wrong env var, and a generic
+      // 401 makes that impossible to find.
+      console.warn(`Google sign-in rejected: aud="${info.aud}" not in accepted list (${acceptedAuds.length} configured)`);
       return res.status(401).json({ message: 'Google token was not issued for this app' });
     }
     if (info.email_verified !== 'true' && info.email_verified !== true) {

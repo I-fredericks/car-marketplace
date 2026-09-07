@@ -1,6 +1,11 @@
-// Image storage: S3-compatible object storage when configured, local disk
-// otherwise. Generates a WebP thumbnail alongside every raster original so
-// list views never download full-size photos.
+// Image storage, in priority order:
+//   1. S3-compatible object storage when S3_* env vars are set
+//   2. Base64 data URIs stored in the image row itself ("db" mode) — used on
+//      hosts with an ephemeral filesystem (Render redeploys wipe /uploads).
+//      imageController already decodes data URIs, so nothing else changes
+//   3. Local disk for development
+// Force a mode with STORAGE_DRIVER=db|disk|s3. Render sets RENDER=true, which
+// flips an otherwise disk-configured deploy to db mode automatically.
 //
 // S3 env vars (all required together to enable cloud mode):
 //   S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
@@ -15,6 +20,15 @@ const sharp = require('sharp');
 const isCloudEnabled = () =>
   Boolean(process.env.S3_BUCKET && process.env.S3_REGION &&
           process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY);
+
+const driver = () => {
+  const forced = (process.env.STORAGE_DRIVER || '').toLowerCase();
+  if (forced === 'db' || forced === 'disk' || forced === 's3') return forced;
+  if (isCloudEnabled()) return 's3';
+  // Ephemeral hosts: disk uploads vanish on the next boot, so store in the DB.
+  if (process.env.RENDER === 'true') return 'db';
+  return 'disk';
+};
 
 let s3Client = null;
 const getS3 = () => {
@@ -71,15 +85,32 @@ const diskThumbName = (filename) => {
 };
 
 /**
- * Persist an uploaded file (and a thumbnail when raster) to the configured
- * backend. Returns { url, thumbUrl } — thumbUrl is null for PDFs.
+ * Persist an uploaded file to the configured backend (db | s3 | disk).
+ * Returns { url, thumbUrl } — thumbUrl is null for PDFs and for db mode
+ * (thumbs are resized on the fly when the image is served).
  */
 const saveUpload = async (buffer, originalName, mimetype) => {
   const ext = (path.extname(originalName) || '').toLowerCase() || `.${String(mimetype).split('/')[1] || 'bin'}`;
   const isRaster = /image\/(jpe?g|png|webp|heic|heif|tiff?|avif)/i.test(mimetype || '') ||
                    /\.(jpe?g|png|webp|heic|heif|tiff?|avif)$/i.test(ext);
 
-  if (isCloudEnabled()) {
+  // DB mode: the bytes live in the image row as a data URI — survives hosts
+  // with an ephemeral filesystem (Render). Rassters are normalized to WebP
+  // first so a 12MB phone photo shrinks to a few hundred KB of base64. The
+  // image routes decode these on the fly (thumbs resized on demand), so no
+  // other code path changes.
+  if (driver() === 'db') {
+    if (isRaster) {
+      const normalized = await sharp(buffer).rotate().webp({ quality: 80 }).toBuffer();
+      return { url: `data:image/webp;base64,${normalized.toString('base64')}`, thumbUrl: null };
+    }
+    return {
+      url: `data:${mimetype || 'application/octet-stream'};base64,${buffer.toString('base64')}`,
+      thumbUrl: null,
+    };
+  }
+
+  if (driver() === 's3') {
     const { PutObjectCommand } = require('@aws-sdk/client-s3');
     const base = randomName(isRaster ? '.webp' : ext);
     const key = `uploads/${base}`;
