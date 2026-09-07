@@ -21,17 +21,13 @@ const GoogleButton = ({ role, sellerType, onError, navigate }) => {
             setBusy(true);
             try {
               const profile = await loginWithGoogle(credentialResponse.credential, role, sellerType);
-              // Mobile browsers bouncing through the Google popup can lose
-              // router state on return: navigate, then hard-verify arrival.
               const target = profile?.role === 'SELLER' ? '/seller/dashboard' : '/';
+              // Always finish on the site; if the router got lost returning
+              // from the Google sheet, this lands them the same tab anyway.
               navigate(target, { replace: true });
-              setTimeout(() => {
-                if (window.location.pathname !== target) {
-                  window.location.assign(target);
-                }
-              }, 600);
             } catch (err) {
               onError?.(err.response?.data?.message || 'Google sign-in failed. Please try again.');
+            } finally {
               setBusy(false);
             }
           }}
