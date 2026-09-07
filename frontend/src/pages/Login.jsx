@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api from '../utils/api';
 import { Car, MailCheck } from 'lucide-react';
@@ -8,6 +8,8 @@ import GoogleButton from '../components/GoogleButton';
 const Login = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
+  const registeredEmail = location.state?.registeredEmail || '';
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
@@ -60,6 +62,18 @@ const Login = () => {
           <h2 className="font-display font-bold text-3xl text-textprimary mb-2">Welcome Back</h2>
           <p className="text-textsecondary text-center">Sign in to your CarMarket Ghana account</p>
         </div>
+
+        {registeredEmail && !unverifiedEmail && !resendMsg && (
+          <div className="mb-6 p-4 bg-success/10 border border-success/25 rounded-md text-sm">
+            <p className="flex items-center gap-2 font-medium text-success mb-1">
+              <MailCheck size={14} /> Account created — check your inbox
+            </p>
+            <p className="text-textsecondary">
+              We've sent a confirmation link to <span className="font-medium text-textprimary">{registeredEmail}</span>.
+              Open it, click <span className="font-medium">Confirm Email</span>, then come back and sign in.
+            </p>
+          </div>
+        )}
 
         {unverifiedEmail && (
           <div className="mb-6 p-4 bg-[#EAB308]/10 border border-[#EAB308]/25 rounded-md text-sm">

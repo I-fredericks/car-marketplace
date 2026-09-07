@@ -26,7 +26,36 @@ if (smtpConfigured) {
 
 const from = () => process.env.EMAIL_FROM || 'CarMarket Ghana <no-reply@carmarket.gh>';
 
+// Preferred transport: Resend HTTP API (deliverable from any datacenter IP —
+// Gmail SMTP has proven flaky from hosted networks: 587 handshakes hang and
+// port 465 throttles sporadically). Set RESEND_API_KEY on Render + a verified
+// sender in EMAIL_FROM and mail goes out over HTTPS instead of SMTP.
+const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+const sendViaResend = async ({ to, subject, html, text }) => {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: from(), to, subject, html, text }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Resend email failed: HTTP ${res.status} ${body.slice(0, 200)}`);
+  }
+  return res.json();
+};
+
 const sendMail = async ({ to, subject, html, text }) => {
+  if (resendConfigured) {
+    try {
+      return await sendViaResend({ to, subject, html, text });
+    } catch (error) {
+      // Fall through to SMTP rather than losing the email outright
+      console.error('Resend path failed, falling back to SMTP:', error.message);
+    }
+  }
   if (!smtpConfigured) {
     console.log(`[mailer:dev] To: ${to} | Subject: ${subject}\n${text}`);
     return { dev: true };

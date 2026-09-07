@@ -35,7 +35,11 @@ const Register = () => {
     setLoading(true);
     try {
       await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, role: form.role, sellerType: form.role === 'SELLER' ? form.sellerType : undefined });
-      navigate('/login');
+      // Registration hands off a verification email in the background; take
+      // the user to login and TELL them to confirm before signing in.
+      navigate('/login', {
+        state: { registeredEmail: form.email },
+      });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
