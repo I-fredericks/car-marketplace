@@ -35,11 +35,15 @@ if (smtpConfigured) {
 
 const from = () => process.env.EMAIL_FROM || 'CarMarket Ghana <no-reply@carmarket.gh>';
 
-// Preferred transport: Resend HTTP API (deliverable from any datacenter IP —
-// Gmail SMTP has proven flaky from hosted networks: 587 handshakes hang and
-// port 465 throttles sporadically). Set RESEND_API_KEY on Render + a verified
-// sender in EMAIL_FROM and mail goes out over HTTPS instead of SMTP.
+// Preferred transports, in order:
+// 1. Resend HTTP API      (RESEND_API_KEY)
+// 2. Brevo HTTP API       (BREVO_API_KEY — the xkeysib- key from "API Keys")
+// 3. SMTP via nodemailer  (SMTP_* — LAST resort: datacenter IPs often have
+//    outbound SMTP ports 587/465 blocked, which produced endless
+//    "Connection timeout" failures on Render. HTTPS (443) is never blocked.)
 const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+const brevoApiConfigured = Boolean(process.env.BREVO_API_KEY);
+
 const sendViaResend = async ({ to, subject, html, text }) => {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -56,13 +60,42 @@ const sendViaResend = async ({ to, subject, html, text }) => {
   return res.json();
 };
 
+const sendViaBrevoApi = async ({ to, subject, html, text }) => {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { email: (from().match(/<(.+)>/) || [])[1] || from(), name: 'CarMarket Ghana' },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Brevo API email failed: HTTP ${res.status} ${body.slice(0, 200)}`);
+  }
+  return res.json();
+};
+
 const sendMail = async ({ to, subject, html, text }) => {
   if (resendConfigured) {
     try {
       return await sendViaResend({ to, subject, html, text });
     } catch (error) {
-      // Fall through to SMTP rather than losing the email outright
-      console.error('Resend path failed, falling back to SMTP:', error.message);
+      console.error('Resend path failed:', error.message);
+    }
+  }
+  if (brevoApiConfigured) {
+    try {
+      return await sendViaBrevoApi({ to, subject, html, text });
+    } catch (error) {
+      console.error('Brevo API path failed:', error.message);
     }
   }
   if (!smtpConfigured) {
