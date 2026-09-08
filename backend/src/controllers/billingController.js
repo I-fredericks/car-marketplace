@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const prisma = require('../config/db');
-const { PLANS, FREE_TIER, MOMO, generateReference } = require('../config/plans');
+const { PLANS, FREE_TIER, MOMO, generateReference, PLATFORM_COMMISSION_BPS } = require('../config/plans');
 const { initializeTransaction, verifyTransaction } = require('../services/paystack');
 const { notifyAdmins } = require('./notificationController');
 
@@ -26,6 +26,7 @@ const getPlans = (req, res) => {
     freeTier: FREE_TIER,
     momo: MOMO,
     paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY || null,
+    platformCommissionBps: PLATFORM_COMMISSION_BPS,
   });
 };
 

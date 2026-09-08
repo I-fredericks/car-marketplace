@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt } from 'lucide-react';
 
 const STATUS_COPY = {
   AWAITING_PAYMENT: { label: 'Awaiting payment', tone: 'text-warn' },
@@ -265,10 +265,36 @@ const PurchaseDetail = () => {
             {purchase.paidAt && <p>Paid: <span className="text-textprimary">{new Date(purchase.paidAt).toLocaleString()}</span></p>}
           </div>
 
+          {/* Fee breakdown (seller view) */}
+          {isSeller && purchase.method === 'PAYSTACK' && (
+            <div className="border border-bordercol rounded-lg p-4 mb-6 text-sm">
+              <div className="flex justify-between py-1">
+                <span className="text-textsecondary">Sale price</span>
+                <span className="font-medium text-textprimary">GH₵{(purchase.amount / 100).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-textsecondary">CarMarket service fee ({(purchase.commissionBps || 0) / 100}%)</span>
+                <span className="text-textsecondary">− GH₵{(Math.round(purchase.amount * (purchase.commissionBps || 0) / 10000) / 100).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1 border-t border-bordercol mt-1 pt-2">
+                <span className="font-medium text-textprimary">You receive</span>
+                <span className="font-bold text-success">GH₵{((purchase.amount - Math.round(purchase.amount * (purchase.commissionBps || 0) / 10000)) / 100).toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
           {error && <p className="mb-4 text-sm text-err font-medium" role="alert">{error}</p>}
 
           {/* Actions by role + state */}
           <div className="flex gap-3 flex-wrap">
+            {['PAID_HELD', 'DELIVERED', 'COMPLETED'].includes(purchase.status) && (
+              <Link
+                to={`/purchases/${id}/receipt`}
+                className="flex-1 min-w-36 py-3 rounded-md font-bold flex items-center justify-center gap-2 border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
+              >
+                <Receipt size={18} /> Receipt
+              </Link>
+            )}
             {isBuyer && purchase.method === 'PAYSTACK' && purchase.status === 'PAID_HELD' && (
               <ActionButton label="I received the car" endpoint="confirm-received" primary icon={CheckCircle2} />
             )}

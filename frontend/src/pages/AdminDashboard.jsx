@@ -258,8 +258,15 @@ const AdminDashboard = () => {
   };
 
   const handleReleasePayout = async (id) => {
-    const payoutRef = window.prompt('Payout reference (transfer ID / receipt no.):', '');
+    const p = purchases.find((x) => x.id === id);
+    const amount = p?.payoutAmount != null ? `GH₵${(p.payoutAmount / 100).toLocaleString()}` : 'the payout';
+    const account = [p?.seller?.payoutMethod, p?.seller?.payoutAccount, p?.seller?.payoutName].filter(Boolean).join(' · ') || 'seller payout account';
+    const payoutRef = window.prompt(`Confirm transfer of ${amount} to ${account}.\n\nEnter the transfer reference / receipt number:`, '');
     if (payoutRef === null) return; // cancelled
+    if (payoutRef.trim() === '') {
+      toast('A payout reference is required.');
+      return;
+    }
     try {
       const { data } = await api.put(`/admin/purchases/${id}/release-payout`, { payoutRef: payoutRef || undefined });
       toast(data.message || 'Payout marked sent ✅');
@@ -1240,20 +1247,38 @@ const AdminDashboard = () => {
     const awaitingPayout = purchases.filter(p => p.payoutStatus === 'PENDING');
     const rest = purchases.filter(p => p.payoutStatus !== 'PENDING');
 
+    const payoutTo = (p) => {
+      const parts = [];
+      if (p.seller?.payoutMethod) parts.push(p.seller.payoutMethod.replace(/_/g, ' '));
+      if (p.seller?.payoutAccount) parts.push(p.seller.payoutAccount);
+      if (p.seller?.payoutName) parts.push(`·${p.seller.payoutName}`);
+      return parts.length ? parts.join(' ') : 'No payout account set';
+    };
+
     const row = (p, withAction = false) => (
-      <tr key={p.id} className="hover:bg-bg/50 transition-colors">
+      <tr key={p.id} className="hover:bg-bg/50 transition-colors align-top">
         <td className="px-6 py-4 font-medium text-textprimary">{p.reference}</td>
-        <td className="px-6 py-4 text-textsecondary">{p.buyer?.name}</td>
+        <td className="px-6 py-4 text-textsecondary">
+          {p.buyer?.name}
+          <div className="text-xs text-textmuted">{p.buyer?.email}</div>
+        </td>
         <td className="px-6 py-4 text-textsecondary">{p.seller?.user?.name}</td>
         <td className="px-6 py-4 text-textsecondary">{p.vehicle ? `${p.vehicle.year} ${p.vehicle.make} ${p.vehicle.model}` : '—'}</td>
-        <td className="px-6 py-4 font-medium text-textprimary">GH₵{Number(p.amount / 100).toLocaleString()}</td>
-        <td className="px-6 py-4 text-textsecondary">{p.method}</td>
+        <td className="px-6 py-4 font-medium text-textprimary">
+          GH₵{Number(p.amount / 100).toLocaleString()}
+          <div className="text-xs font-normal text-textmuted mt-0.5">
+            {p.commission != null && <>fee GH₵{Number(p.commission / 100).toLocaleString()}</>}
+          </div>
+        </td>
+        <td className="px-6 py-4 font-medium text-success whitespace-nowrap">
+          {p.payoutAmount != null ? `GH₵${Number(p.payoutAmount / 100).toLocaleString()}` : '—'}
+        </td>
+        <td className="px-6 py-4 text-textsecondary text-xs">{payoutTo(p)}</td>
         <td className="px-6 py-4">{STATUS[p.status] || p.status}</td>
         <td className="px-6 py-4">
           {PAYOUT[p.payoutStatus] || p.payoutStatus}
           {p.payoutRef && <div className="text-xs text-textmuted mt-1">ref {p.payoutRef}</div>}
         </td>
-        <td className="px-6 py-4 text-textsecondary">{new Date(p.createdAt).toLocaleDateString()}</td>
         {withAction && (
           <td className="px-6 py-4">
             {p.payoutStatus === 'PENDING' && (
@@ -1276,11 +1301,11 @@ const AdminDashboard = () => {
           <th className="px-6 py-4">Buyer</th>
           <th className="px-6 py-4">Seller</th>
           <th className="px-6 py-4">Vehicle</th>
-          <th className="px-6 py-4">Amount</th>
-          <th className="px-6 py-4">Method</th>
+          <th className="px-6 py-4">Sale (fee)</th>
+          <th className="px-6 py-4">Pay out</th>
+          <th className="px-6 py-4">Pay to</th>
           <th className="px-6 py-4">Status</th>
           <th className="px-6 py-4">Payout</th>
-          <th className="px-6 py-4">Date</th>
           {withAction && <th className="px-6 py-4">Action</th>}
         </tr>
       </thead>

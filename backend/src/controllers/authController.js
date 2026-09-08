@@ -622,7 +622,7 @@ const logout = (req, res) => {
 // @access  Private
 const updateProfile = async (req, res) => {
   try {
-    const { name, phone, whatsapp, location, sellerType } = req.body;
+    const { name, phone, whatsapp, location, sellerType, payoutMethod, payoutAccount, payoutName } = req.body;
     const userId = req.user.id;
 
     const userUpdate = {};
@@ -636,6 +636,11 @@ const updateProfile = async (req, res) => {
       if (typeof whatsapp === 'string') sellerUpdate.whatsapp = whatsapp.trim() || null;
       if (typeof location === 'string') sellerUpdate.location = location.trim() || null;
       if (['PRIVATE', 'DEALER', 'COMPANY'].includes(sellerType)) sellerUpdate.sellerType = sellerType;
+      // Payout account the platform sends escrow releases to (MoMo or bank)
+      const PAYOUT_METHODS = ['MOMO_MTN', 'MOMO_TELECEL', 'MOMO_AIRTELTIGO', 'BANK'];
+      if (payoutMethod !== undefined) sellerUpdate.payoutMethod = PAYOUT_METHODS.includes(payoutMethod) ? payoutMethod : null;
+      if (typeof payoutAccount === 'string') sellerUpdate.payoutAccount = payoutAccount.trim() || null;
+      if (typeof payoutName === 'string') sellerUpdate.payoutName = payoutName.trim() || null;
 
       if (Object.keys(sellerUpdate).length > 0) {
         sellerProfile = await prisma.sellerProfile.update({

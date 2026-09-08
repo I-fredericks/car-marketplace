@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api from '../utils/api';
-import { User, ShieldCheck, Edit2, Save, X, Store, Building2, ArrowRight, Camera, Clock, CheckCircle, XCircle, KeyRound } from 'lucide-react';
+import { User, ShieldCheck, Edit2, Save, X, Store, Building2, ArrowRight, Camera, Clock, CheckCircle, XCircle, KeyRound, Wallet } from 'lucide-react';
 
 const SELLER_TYPES = [
   { value: 'PRIVATE', label: 'Private Seller', Icon: User },
@@ -30,6 +30,9 @@ const Profile = () => {
     whatsapp: '',
     location: '',
     sellerType: 'PRIVATE',
+    payoutMethod: '',
+    payoutAccount: '',
+    payoutName: '',
   });
 
   useEffect(() => {
@@ -40,6 +43,9 @@ const Profile = () => {
         whatsapp: user.sellerProfile?.whatsapp || '',
         location: user.sellerProfile?.location || '',
         sellerType: user.sellerProfile?.sellerType || 'PRIVATE',
+        payoutMethod: user.sellerProfile?.payoutMethod || '',
+        payoutAccount: user.sellerProfile?.payoutAccount || '',
+        payoutName: user.sellerProfile?.payoutName || '',
       });
     }
   }, [user]);
@@ -62,6 +68,9 @@ const Profile = () => {
         payload.whatsapp = form.whatsapp;
         payload.location = form.location;
         payload.sellerType = form.sellerType;
+        payload.payoutMethod = form.payoutMethod || undefined;
+        payload.payoutAccount = form.payoutAccount;
+        payload.payoutName = form.payoutName;
       }
       const { data } = await api.put('/auth/profile', payload);
       setUser(data.user);
@@ -383,6 +392,74 @@ const Profile = () => {
                   <div className="mt-4 flex items-center gap-2 text-success text-sm font-medium">
                     <ShieldCheck size={16} /> Verified Seller
                   </div>
+                )}
+              </section>
+            )}
+
+            {/* Payout method — where escrowed sale money is sent */}
+            {isSeller && (
+              <section className="bg-surface border border-bordercol rounded-lg p-6">
+                <h2 className="font-display font-semibold text-lg text-textprimary mb-1 flex items-center gap-2">
+                  <Wallet size={18} className="text-primary" /> Payout Account
+                </h2>
+                <p className="text-sm text-textsecondary mb-5">
+                  When a buyer pays through the site, CarMarket holds the money and sends your sale proceeds here after delivery is confirmed (minus the platform fee).
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block text-sm font-medium text-textsecondary">Method</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: 'MOMO_MTN', label: 'MTN MoMo' },
+                        { value: 'MOMO_TELECEL', label: 'Telecel Cash' },
+                        { value: 'MOMO_AIRTELTIGO', label: 'AirtelTigo Money' },
+                        { value: 'BANK', label: 'Bank account' },
+                      ].map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={!editing}
+                          onClick={() => setForm({ ...form, payoutMethod: value })}
+                          className={`px-4 py-2 rounded-md border-2 text-sm font-semibold transition-colors ${
+                            form.payoutMethod === value
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-bordercol bg-bg text-textsecondary hover:bg-bg/50'
+                          } ${!editing ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-textsecondary">
+                      {form.payoutMethod === 'BANK' ? 'Account number' : 'Wallet number'}
+                    </label>
+                    <input
+                      type="text"
+                      name="payoutAccount"
+                      value={form.payoutAccount}
+                      onChange={handleChange}
+                      disabled={!editing}
+                      placeholder={form.payoutMethod === 'BANK' ? 'e.g. 0201234567890' : 'e.g. 024XXXXXXX'}
+                      className="w-full h-11 px-3 border border-bordercol rounded-md bg-bg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-textsecondary">Registered name</label>
+                    <input
+                      type="text"
+                      name="payoutName"
+                      value={form.payoutName}
+                      onChange={handleChange}
+                      disabled={!editing}
+                      placeholder="Name on the wallet / account"
+                      className="w-full h-11 px-3 border border-bordercol rounded-md bg-bg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    />
+                  </div>
+                </div>
+                {form.payoutAccount && (
+                  <p className="mt-3 text-xs text-success flex items-center gap-1"><ShieldCheck size={14} /> Payout account saved — you'll get paid here automatically on sales.</p>
                 )}
               </section>
             )}

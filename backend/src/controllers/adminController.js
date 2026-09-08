@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { applyVerifiedPayment } = require('./billingController');
+const { commissionFor } = require('../config/plans');
 const cache = require('../services/cache');
 const audit = require('../services/audit');
 
@@ -737,7 +738,8 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
-// @desc    All purchase orders — escrow/payout queue first, newest last
+// @desc    All purchase orders — escrow/payout queue first, newest last.
+//          Each row carries commission/payout breakdown for the payout view.
 // @route   GET /api/admin/purchases
 // @access  Private (Admin only)
 const getPurchases = async (req, res) => {
@@ -746,12 +748,21 @@ const getPurchases = async (req, res) => {
       include: {
         buyer: { select: { id: true, name: true, email: true, phone: true } },
         vehicle: { select: { id: true, make: true, model: true, year: true } },
-        seller: { include: { user: { select: { id: true, name: true, email: true } } } },
+        seller: {
+          select: {
+            payoutMethod: true, payoutAccount: true, payoutName: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
       },
       // payoutStatus PENDING first (admins need to action them), then newest
       orderBy: [{ payoutStatus: 'asc' }, { createdAt: 'desc' }],
     });
-    res.json(purchases);
+    res.json(purchases.map((p) => ({
+      ...p,
+      commission: commissionFor(p),
+      payoutAmount: p.amount - commissionFor(p),
+    })));
   } catch (error) {
     console.error('Error fetching purchases:', error);
     res.status(500).json({ message: 'Server error' });

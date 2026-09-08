@@ -23,6 +23,7 @@ const BillingCallback = lazy(() => import('./pages/BillingCallback'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const PurchaseDetail = lazy(() => import('./pages/PurchaseDetail'));
 const Purchases = lazy(() => import('./pages/Purchases'));
+const PurchaseReceipt = lazy(() => import('./pages/PurchaseReceipt'));
 const BecomeSeller = lazy(() => import('./pages/BecomeSeller'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -112,6 +113,7 @@ function AppShell() {
           <Route path="/checkout/:vehicleId" element={<Checkout />} />
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/purchases/:id" element={<PurchaseDetail />} />
+          <Route path="/purchases/:id/receipt" element={<PurchaseReceipt />} />
           <Route path="*"        element={<NotFound />} />
         </Routes>
         </Suspense>

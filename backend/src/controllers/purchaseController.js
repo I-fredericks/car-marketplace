@@ -1,7 +1,8 @@
 const prisma = require('../config/db');
-const { generateReference } = require('../config/plans');
+const { generateReference, PLATFORM_COMMISSION_BPS, commissionFor } = require('../config/plans');
 const { initializeTransaction, verifyTransaction } = require('../services/paystack');
 const { notifyAdmins } = require('./notificationController');
+const { sendMail, appUrl } = require('../services/mailer');
 
 // Purchase workflow (escrow):
 //   PAYSTACK: AWAITING_PAYMENT --(webhook/verify)--> PAID_HELD --buyer confirms receipt--> COMPLETED (payout PENDING)
@@ -62,6 +63,45 @@ async function applyVerifiedPurchase(purchase, { channel } = {}) {
     return tx.purchase.findUnique({ where: { id: purchase.id } });
   });
 }
+
+/** In-app notify helper (fire-and-forget): one user's bell + WS push. */
+const notifyUser = ({ userId, type, title, body, data }) =>
+  prisma.notification.create({
+    data: { userId, type, title, body, data },
+  }).catch((e) => console.error(`Notify ${type} failed:`, e.message));
+
+const GHS = (pesewas) => `GH₵${(pesewas / 100).toLocaleString()}`;
+
+/** Buyer receipt email after escrow confirms — links to the site's printable receipt. */
+const sendReceiptEmail = (purchase, vehicle, buyer) => {
+  const receiptUrl = `${appUrl()}/purchases/${purchase.id}/receipt`;
+  const lines = [
+    ['Vehicle', `${vehicle.year} ${vehicle.make} ${vehicle.model}`],
+    ['Order reference', purchase.reference],
+    ['Amount paid', GHS(purchase.amount)],
+    ['Paid via', purchase.channel ? purchase.channel.replace(/_/g, ' ') : 'Paystack'],
+    ['Status', 'Paid — held in escrow until you confirm receipt'],
+  ];
+  const rows = lines.map(([k, v]) =>
+    `<tr><td style="padding:8px 16px 8px 0;color:#64748B;vertical-align:top;">${k}</td><td style="padding:8px 0;font-weight:600;color:#1A1A1A;">${v}</td></tr>`
+  ).join('');
+  return sendMail({
+    to: buyer.email,
+    subject: `Payment confirmed — ${purchase.reference} (CarMarket Ghana)`,
+    text: `Hi ${buyer.name}, your payment of ${GHS(purchase.amount)} for the ${vehicle.year} ${vehicle.make} ${vehicle.model} was received and is held safely in escrow. Only confirm receipt once you have the car in hand. Receipt: ${receiptUrl}`,
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
+        <h2 style="color:#1B2A4A;margin-bottom:8px;">CarMarket Ghana</h2>
+        <h3 style="color:#2F9E62;margin-top:0;">Payment confirmed</h3>
+        <p style="color:#4B5563;line-height:1.6;">Hi ${buyer.name}, we received your payment. It's held safely in escrow and only goes to the seller after you confirm you have the car.</p>
+        <table style="border-collapse:collapse;margin:16px 0;">${rows}</table>
+        <p style="margin:24px 0;">
+          <a href="${receiptUrl}" style="background:#1B2A4A;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;">View &amp; Download Receipt</a>
+        </p>
+        <p style="color:#9CA3AF;font-size:12px;">Only confirm receipt after you have physically collected and inspected the car.</p>
+      </div>`,
+  }).catch((e) => console.error('Receipt email failed:', e.message));
+};
 
 /** Shared helper: resolve the current seller profile for the signed-in user. */
 async function resolveSellerProfile(userId) {
@@ -146,11 +186,21 @@ const initiatePurchase = async (req, res) => {
           address: address || null,
           phone: phone || null,
           notes: notes || null,
+          commissionBps: PLATFORM_COMMISSION_BPS, // snapshot at sale time
           ...methodDefaults,
         },
         include: { vehicle: VEHICLE_INCLUDE },
       });
     }, { timeout: 15000 }); // pooler round-trips can eat seconds; default 5s races them
+
+    // Tell the seller someone is buying their car (fire-and-forget)
+    notifyUser({
+      userId: vehicle.seller.user.id,
+      type: 'PURCHASE_NEW_ORDER',
+      title: method === 'CASH' ? 'Your car is reserved' : 'A buyer is paying for your car',
+      body: `${vehicle.year} ${vehicle.make} ${vehicle.model} · ${GHS(amount)}${method === 'CASH' ? ' · Cash at handover' : ''}`,
+      data: { path: `/purchases/${purchase.id}`, purchaseId: purchase.id },
+    });
 
     if (method === 'CASH') {
       // Cash orders don't need Paystack; surface the hold state immediately.
@@ -242,11 +292,28 @@ const verifyPurchase = async (req, res) => {
       return res.json({ status: 'conflict', purchase, message: 'Purchase is no longer awaiting payment.' });
     }
 
-    // Buyer lands here; seller should know a buyer paid. Fire-and-forget.
+    // Side effects: seller notified (in-app), buyer gets email receipt,
+    // admins alerted to watch the escrow (all fire-and-forget)
+    const [sellerRow, buyerRow, vehicleRow] = await Promise.all([
+      prisma.sellerProfile.findUnique({ where: { id: updated.sellerId }, include: { user: { select: { id: true, name: true } } } }),
+      prisma.user.findUnique({ where: { id: updated.buyerId }, select: { id: true, name: true, email: true } }),
+      prisma.vehicle.findUnique({ where: { id: updated.vehicleId }, select: { year: true, make: true, model: true } }),
+    ]);
+    if (sellerRow) {
+      notifyUser({
+        userId: sellerRow.user.id,
+        type: 'PURCHASE_PAID',
+        title: 'Payment received for your car',
+        body: `${vehicleRow ? `${vehicleRow.year} ${vehicleRow.make} ${vehicleRow.model}` : 'Your listing'} · ${GHS(updated.amount)} is in escrow. Hand the car over when the buyer confirms.`,
+        data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
+      });
+    }
+    if (buyerRow && vehicleRow) sendReceiptEmail(updated, vehicleRow, buyerRow);
+
     notifyAdmins({
       type: 'ADMIN_PURCHASE_PAID',
       title: 'Buyer paid: money in escrow',
-      body: `Purch ${updated.reference} ₵${(updated.amount / 100).toLocaleString()} · vehicle #${updated.vehicleId}`,
+      body: `Purch ${updated.reference} ${GHS(updated.amount)} · vehicle #${updated.vehicleId}`,
       senderId: req.user.id,
       data: { path: '/admin?tab=purchases', purchaseId: updated.id },
     }).catch((e) => console.error('Admin purchase-paid notify failed:', e.message));
@@ -284,18 +351,16 @@ const confirmReceived = async (req, res) => {
       return res.json({ status: 'already-completed', purchase });
     }
 
-    // Notify the seller their payout is queued (fire-and-forget).
+    // Notify the seller their payout is queued (fire-and-forget)
     const seller = await prisma.sellerProfile.findUnique({ where: { id: purchase.sellerId } });
     if (seller) {
-      prisma.notification.create({
-        data: {
-          userId: seller.userId,
-          type: 'PURCHASE_COMPLETED',
-          title: 'Sale confirmed — payout pending',
-          body: `Order ${updated.reference} (₵${(updated.amount / 100).toLocaleString()}) confirmed received. Your payout is queued.`,
-          data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
-        },
-      }).catch((e) => console.error('Seller purchase-complete notify failed:', e.message));
+      notifyUser({
+        userId: seller.userId,
+        type: 'PURCHASE_COMPLETED',
+        title: 'Sale confirmed — payout queued',
+        body: `Order ${updated.reference} (${GHS(updated.amount)}) confirmed received. You'll receive ${GHS(updated.amount - commissionFor(updated))} after the ${updated.commissionBps / 100}% platform fee.`,
+        data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
+      });
     }
 
     res.json({ status: 'success', purchase: updated });

@@ -19,6 +19,13 @@ jest.mock('../src/services/paystack', () => ({
 }));
 const { verifyTransaction } = require('../src/services/paystack');
 
+// Receipt emails are asserted (not actually sent): capture sendMail calls.
+jest.mock('../src/services/mailer', () => ({
+  ...jest.requireActual('../src/services/mailer'),
+  sendMail: jest.fn().mockResolvedValue(true),
+}));
+const { sendMail } = require('../src/services/mailer');
+
 // Free-tier sellers are limited to ONE active listing, so each purchase flow
 // needs its own seller (same split as lifecycle.test.js).
 const run = Date.now();
@@ -129,7 +136,14 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(res.body.purchase.status).toEqual('HANDOVER_PENDING');
     expect(res.body.purchase.amount).toEqual(12000000); // 120k GHS in pesewas
     expect(res.body.purchase.method).toEqual('CASH');
+    expect(res.body.purchase.commissionBps).toEqual(500); // 5% platform fee snapshot
     ids.cashPurchase = res.body.purchase.id;
+
+    // Seller gets a new-order notification with a link to the order
+    const notes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${tokens.sellerCash}`);
+    expect(notes.body.notifications.some((n) => n.type === 'PURCHASE_NEW_ORDER')).toBe(true);
 
     const prisma = new PrismaClient();
     try {
@@ -266,6 +280,18 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(again.statusCode).toEqual(200);
     expect(again.body.purchase.status).toEqual('PAID_HELD');
 
+    // Buyer got exactly one receipt email (not one per verify call)
+    const buyerEmails = sendMail.mock.calls.filter(([args]) => args.to === buyer.email);
+    expect(buyerEmails.length).toEqual(1);
+    expect(buyerEmails[0][0].subject).toContain(purchase.reference);
+    expect(buyerEmails[0][0].html).toContain(`/purchases/${purchase.id}/receipt`);
+
+    // Seller got an in-app "money in escrow" ping too
+    const escrowNote = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${tokens.sellerPay}`);
+    expect(escrowNote.body.notifications.some((n) => n.type === 'PURCHASE_PAID')).toBe(true);
+
     // Buyer confirms receipt -> COMPLETED + payout queued for admin payout
     const received = await request(app)
       .post(`/api/purchases/${purchase.id}/confirm-received`)
@@ -357,6 +383,10 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(escrowSale).toBeDefined();
     expect(escrowSale.payoutStatus).toEqual('PENDING');
     expect(escrowSale.seller?.user?.name).toEqual('Pay Seller');
+    // Commission + payout breakdown ships with each row
+    expect(escrowSale.commissionBps).toEqual(500);
+    expect(escrowSale.commission).toEqual(Math.round((escrowSale.amount * 500) / 10000));
+    expect(escrowSale.payoutAmount).toEqual(escrowSale.amount - escrowSale.commission);
 
     // Cash orders carry no payout (PENDING-only releases)
     const cashOrder = list.body.find((p) => p.id === ids.cashPurchase);

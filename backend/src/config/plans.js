@@ -83,4 +83,15 @@ function generateReference() {
   return `CM-${require('crypto').randomBytes(5).toString('hex').toUpperCase()}`;
 }
 
-module.exports = { PLANS, FREE_TIER, MOMO, generateReference, getListingLimit, getPlanRank };
+// Platform commission on vehicle sales, in basis points (500 = 5%).
+// Every payment goes through the site's escrow (AliExpress model): the
+// platform holds buyer money until receipt is confirmed, then pays out
+// (amount - commission) to the seller. Override with PLATFORM_COMMISSION_BPS.
+const PLATFORM_COMMISSION_BPS = parseInt(process.env.PLATFORM_COMMISSION_BPS || '500', 10);
+
+// Commission (pesewas) on a purchase, integer-math only — no floats near money.
+function commissionFor(purchase) {
+  return Math.round((purchase.amount * purchase.commissionBps) / 10000);
+}
+
+module.exports = { PLANS, FREE_TIER, MOMO, generateReference, getListingLimit, getPlanRank, PLATFORM_COMMISSION_BPS, commissionFor };

@@ -130,7 +130,11 @@ const updateProfileSchema = z.object({
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
   location: z.string().optional(),
-  sellerType: z.enum(['PRIVATE', 'DEALER', 'COMPANY']).optional()
+  sellerType: z.enum(['PRIVATE', 'DEALER', 'COMPANY']).optional(),
+  // Seller payout rails (how the platform pays escrow releases)
+  payoutMethod: z.enum(['MOMO_MTN', 'MOMO_TELECEL', 'MOMO_AIRTELTIGO', 'BANK']).optional(),
+  payoutAccount: z.string().max(120).optional(),
+  payoutName: z.string().max(120).optional()
 });
 
 module.exports = {

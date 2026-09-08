@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import useBillingStatus from '../hooks/useBillingStatus';
 import api, { getImageThumbUrl } from '../utils/api';
-import { Car, Plus, ShieldAlert, Eye, Edit2, CheckCircle, Trash2, CreditCard } from 'lucide-react';
+import { Car, Plus, ShieldAlert, Eye, Edit2, CheckCircle, Trash2, CreditCard, Package } from 'lucide-react';
 import Badge from '../components/Badge';
 
 const STATUS_LABEL = {
@@ -136,12 +136,20 @@ const SellerDashboard = () => {
             <h1 className="font-display font-bold text-3xl text-textprimary mb-2">My Listings</h1>
             <p className="text-textsecondary">Manage your car listings</p>
           </div>
-          <Link 
-            to="/sell" 
-            className="h-11 px-6 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center gap-2"
-          >
-            <Plus size={18} /> New Listing
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              to="/purchases"
+              className="h-11 px-6 bg-surface border border-bordercol text-textprimary font-bold rounded-md hover:bg-bordercol/30 transition-colors flex items-center justify-center gap-2"
+            >
+              <Package size={18} /> Sales &amp; Orders
+            </Link>
+            <Link
+              to="/sell"
+              className="h-11 px-6 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus size={18} /> New Listing
+            </Link>
+          </div>
         </div>
 
         {error && (

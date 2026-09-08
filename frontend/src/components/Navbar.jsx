@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useEvents } from '../context/EventContext';
-import { Car, Heart, MessageCircle, Menu, X, User } from 'lucide-react';
+import { Car, Heart, MessageCircle, Menu, X, User, Package } from 'lucide-react';
 import useBillingStatus from '../hooks/useBillingStatus';
 import Avatar from './Avatar';
 import NotificationsDropdown from './NotificationsDropdown';
@@ -89,6 +89,9 @@ const Navbar = () => {
                   )}
                   
                   <div className="flex gap-2">
+                    <Link to="/purchases" className="px-3 py-1.5 text-sm font-medium border border-bordercol rounded-md text-textprimary hover:bg-bg transition-colors">
+                      My Purchases
+                    </Link>
                     {(user.role === 'SELLER' || user.role === 'ADMIN') && (
                       <Link to="/seller/dashboard" className="px-3 py-1.5 text-sm font-medium border border-bordercol rounded-md text-textprimary hover:bg-bg transition-colors">
                         My Listings
@@ -174,6 +177,10 @@ const Navbar = () => {
                      )}
                    </span>
                    Messages
+                 </Link>
+
+                 <Link to="/purchases" className="flex items-center gap-3 text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
+                   <Package size={20} /> My Purchases
                  </Link>
 
                  {(user.role === 'SELLER' || user.role === 'ADMIN') && (

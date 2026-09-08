@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { ShieldCheck, MapPin, Truck, CreditCard, Banknote, Loader2 } from 'lucide-react';
+import { ShieldCheck, MapPin, Truck, CreditCard, Loader2 } from 'lucide-react';
 
 /**
  * Checkout for a vehicle purchase (escrow).
@@ -17,7 +17,8 @@ const Checkout = () => {
   const navigate = useNavigate();
 
   const [deliveryMode, setDeliveryMode] = useState('PICKUP');
-  const [method, setMethod] = useState('PAYSTACK');
+  // All payments flow through the site escrow (AliExpress-style): Paystack
+  // only, money held by the platform until the buyer confirms receipt.
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
@@ -61,7 +62,7 @@ const Checkout = () => {
     try {
       const { data } = await api.post('/purchases', {
         vehicleId: car.id,
-        method,
+        method: 'PAYSTACK',
         deliveryMode,
         phone: phone || undefined,
         address: deliveryMode === 'DELIVERY' ? address : undefined,
@@ -69,12 +70,7 @@ const Checkout = () => {
       });
       const purchase = data.purchase;
 
-      if (method === 'CASH') {
-        navigate(`/purchases/${purchase.id}?new=1`);
-        return;
-      }
-
-      // Online: send the buyer to Paystack, callback lands on the purchase page
+      // Send the buyer to Paystack; callback lands back on the order page
       const { data: init } = await api.post(`/purchases/${purchase.id}/initialize`, {
         callbackUrl: `${window.location.origin}/purchases/${purchase.id}?paid=1`,
       });
@@ -140,32 +136,16 @@ const Checkout = () => {
             />
           </div>
 
-          {/* Payment method */}
-          <h3 className="font-semibold text-textprimary mb-3">Payment method</h3>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {[
-              {
-                key: 'PAYSTACK', icon: CreditCard, label: 'Pay online (escrow)',
-                hint: 'Card or MoMo. We hold the money until you confirm you have the car.',
-              },
-              {
-                key: 'CASH', icon: Banknote, label: 'Cash at handover',
-                hint: 'We reserve the car for you; you pay the seller directly when you get it.',
-              },
-            ].map(({ key, icon: Icon, label, hint }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setMethod(key)}
-                className={`text-left p-4 rounded-lg border-2 transition-colors ${
-                  method === key ? 'border-primary bg-primary/5' : 'border-bordercol hover:border-textmuted'
-                }`}
-              >
-                <Icon size={20} className={method === key ? 'text-primary' : 'text-textmuted'} />
-                <div className="font-medium text-textprimary mt-2">{label}</div>
-                <div className="text-xs text-textsecondary mt-1">{hint}</div>
-              </button>
-            ))}
+          {/* Payment — escrow only, like AliExpress: money sits with the platform until delivery */}
+          <h3 className="font-semibold text-textprimary mb-3">Payment</h3>
+          <div className="rounded-lg border-2 border-primary bg-primary/5 p-4 mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard size={20} className="text-primary" />
+              <span className="font-medium text-textprimary">Pay online — card or Mobile Money</span>
+            </div>
+            <p className="text-xs text-textsecondary leading-relaxed">
+              Your payment is held securely by CarMarket Ghana and only released to the seller after you confirm you have the car.
+            </p>
           </div>
 
           {/* Notes */}
@@ -190,14 +170,12 @@ const Checkout = () => {
             className="w-full py-3.5 bg-accent text-textprimary font-bold rounded-md hover:bg-accentdark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {placing && <Loader2 size={18} className="animate-spin" />}
-            {method === 'PAYSTACK' ? `Pay GH₵${Number(car.price).toLocaleString()} securely` : 'Reserve this car'}
+            Pay GH₵{Number(car.price).toLocaleString()} securely
           </button>
 
           <p className="mt-4 text-xs text-textsecondary flex items-start gap-2">
             <ShieldCheck size={14} className="text-success flex-shrink-0 mt-0.5" />
-            {method === 'PAYSTACK'
-              ? 'Escrow protected: CarMarket holds your payment and only releases it to the seller after you confirm you have received the car.'
-              : 'Cash orders are a reservation — you can cancel anytime before handover and the car goes back on sale instantly.'}
+            Escrow protected — like AliExpress: your money stays with CarMarket until you confirm receipt. If anything goes wrong before that, you get a refund.
           </p>
         </div>
 
