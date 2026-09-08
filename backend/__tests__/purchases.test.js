@@ -1,5 +1,4 @@
 const request = require('supertest');
-const { PrismaClient } = require('@prisma/client');
 const app = require('../src/index');
 
 // Paystack is mocked: checkout URLs + verify results are deterministic and no
@@ -77,11 +76,11 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(await registerAndVerify({ ...stranger, role: 'BUYER' })).toEqual(201);
     expect(await registerAndVerify({ ...admin, role: 'BUYER' })).toEqual(201);
 
-    const prisma = new PrismaClient();
+    const prisma = require('./_db');
     try {
       await prisma.user.update({ where: { email: admin.email }, data: { role: 'ADMIN' } });
     } finally {
-      await prisma.$disconnect();
+      
     }
 
     tokens.buyer = (await login(buyer.email, buyer.password)).body.token;
@@ -136,7 +135,7 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(res.body.purchase.status).toEqual('HANDOVER_PENDING');
     expect(res.body.purchase.amount).toEqual(12000000); // 120k GHS in pesewas
     expect(res.body.purchase.method).toEqual('CASH');
-    expect(res.body.purchase.commissionBps).toEqual(500); // 5% platform fee snapshot
+    expect(res.body.purchase.commissionBps).toEqual(100); // 1% platform fee snapshot
     ids.cashPurchase = res.body.purchase.id;
 
     // Seller gets a new-order notification with a link to the order.
@@ -152,12 +151,12 @@ describe('Vehicle purchase (escrow checkout)', () => {
     }
     expect(hasNewOrderNote).toBe(true);
 
-    const prisma = new PrismaClient();
+    const prisma = require('./_db');
     try {
       const v = await prisma.vehicle.findUnique({ where: { id: ids.vehicleCash } });
       expect(v.status).toEqual('RESERVED');
     } finally {
-      await prisma.$disconnect();
+      
     }
   });
 
@@ -229,14 +228,14 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(collected.statusCode).toEqual(200);
     expect(collected.body.purchase.status).toEqual('COMPLETED');
 
-    const prisma = new PrismaClient();
+    const prisma = require('./_db');
     try {
       const v = await prisma.vehicle.findUnique({ where: { id: ids.vehicleCash } });
       expect(v.status).toEqual('SOLD');
       const p = await prisma.purchase.findUnique({ where: { id: ids.cashPurchase } });
       expect(p.completedAt).not.toBeNull();
     } finally {
-      await prisma.$disconnect();
+      
     }
   });
 
@@ -307,12 +306,12 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(received.body.purchase.status).toEqual('COMPLETED');
     expect(received.body.purchase.payoutStatus).toEqual('PENDING');
 
-    const prisma = new PrismaClient();
+    const prisma = require('./_db');
     try {
       const v = await prisma.vehicle.findUnique({ where: { id: ids.vehiclePay } });
       expect(v.status).toEqual('SOLD');
     } finally {
-      await prisma.$disconnect();
+      
     }
   });
 
@@ -335,12 +334,12 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(underpaid.statusCode).toEqual(400);
     expect(underpaid.body.status).toEqual('amount_mismatch');
 
-    const prisma = new PrismaClient();
+    const prisma = require('./_db');
     try {
       const p = await prisma.purchase.findUnique({ where: { id: purchase.id } });
       expect(p.status).toEqual('AWAITING_PAYMENT'); // still waiting
     } finally {
-      await prisma.$disconnect();
+      
     }
   });
 
@@ -391,8 +390,8 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(escrowSale.payoutStatus).toEqual('PENDING');
     expect(escrowSale.seller?.user?.name).toEqual('Pay Seller');
     // Commission + payout breakdown ships with each row
-    expect(escrowSale.commissionBps).toEqual(500);
-    expect(escrowSale.commission).toEqual(Math.round((escrowSale.amount * 500) / 10000));
+    expect(escrowSale.commissionBps).toEqual(100);
+    expect(escrowSale.commission).toEqual(Math.round((escrowSale.amount * 100) / 10000));
     expect(escrowSale.payoutAmount).toEqual(escrowSale.amount - escrowSale.commission);
 
     // Cash orders carry no payout (PENDING-only releases)

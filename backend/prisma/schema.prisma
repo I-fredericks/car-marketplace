@@ -39,6 +39,7 @@ model User {
   reports       Report[]       @relation("ReportReporter")
   payments      Payment[]
   purchases     Purchase[]     @relation("PurchaseBuyer")
+  priceOffers   PriceOffer[]   @relation("PriceOfferBuyer")
   subscription  Subscription?
   authTokens    AuthToken[]
   notifications Notification[]
@@ -109,9 +110,10 @@ model SellerProfile {
   payoutAccount  String?
   payoutName     String?
 
-  vehicles Vehicle[]
-  reviews  Review[]  @relation("SellerReviews")
-  sales    Purchase[] @relation("PurchaseSeller")
+  vehicles     Vehicle[]
+  reviews      Review[]      @relation("SellerReviews")
+  sales        Purchase[]    @relation("PurchaseSeller")
+  priceOffers  PriceOffer[]  @relation("PriceOfferSeller")
 
   @@map("sellerprofile")
 }
@@ -161,6 +163,7 @@ model Vehicle {
   reports      Report[]
   payments     Payment[]
   purchases    Purchase[]      @relation("PurchaseVehicle")
+  priceOffers  PriceOffer[]    @relation("OfferVehicle")
 
   @@index([sellerId])
   // Hot-path composite indexes for search/home queries
@@ -392,6 +395,7 @@ model Purchase {
   commissionBps Int     @default(0) // platform take-rate snapshot (0 = none yet)
   payoutStatus String   @default("NONE") // NONE | PENDING | SENT
   payoutRef    String?
+  agreedOfferId Int?    // if bought via a negotiated price, which PriceOffer sealed it
 
   paidAt      DateTime?
   completedAt DateTime?
@@ -413,4 +417,43 @@ enum PurchaseStatus {
   COMPLETED        // payout released (online) / cash collected (cash) — closed
   CANCELLED
   REFUNDED
+}
+
+// ──────────────────────────────────────────────────────────────
+// PRICE NEGOTIATION (in-chat offers)
+// Buyer makes an offer on a listing; the seller accepts, declines, or
+// counters. Counters can go back and forth — each turn is a new row,
+// superseding the last. When accepted, that amount becomes THE price
+// for that one buyer (and only that buyer) at checkout.
+// ──────────────────────────────────────────────────────────────
+model PriceOffer {
+  id         Int      @id @default(autoincrement())
+  vehicleId  Int
+  vehicle    Vehicle  @relation("OfferVehicle", fields: [vehicleId], references: [id])
+  buyerId    Int // the buyer who initiated the negotiation (not who sent THIS row)
+  buyer      User     @relation("PriceOfferBuyer", fields: [buyerId], references: [id])
+  sellerId   Int
+  seller     SellerProfile @relation("PriceOfferSeller", fields: [sellerId], references: [id])
+
+  amount     Int      // pesewas
+  proposedBy String   // BUYER | SELLER — which side made this specific offer
+  status     PriceOfferStatus @default(PENDING)
+  parentId   Int?     // the offer this one counters (chain root = null)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([vehicleId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@map("priceoffer")
+}
+
+enum PriceOfferStatus {
+  PENDING   // sitting with the other party — they must act
+  COUNTERED // superseded by a counter-offer
+  ACCEPTED  // both sides agreed; amount is binding for this buyer
+  DECLINED
+  WITHDRAWN // taken back by the proposer
+  USED      // an accepted offer the buyer has converted into a purchase
 }

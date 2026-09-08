@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useEvents } from '../context/EventContext';
 import api from '../utils/api';
+import OfferPanel from '../components/OfferPanel';
 import { MessageCircle, Send, ArrowLeft, Lock, Trash2, MailOpen, MailX } from 'lucide-react';
 import Avatar from '../components/Avatar';
 
@@ -299,6 +300,9 @@ const Messages = () => {
 
               {/* Chat Messages Area */}
               <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 bg-bg flex flex-col gap-4 custom-scrollbar">
+                {/* Price negotiation surface for this vehicle */}
+                <OfferPanel vehicleId={vehicleId} otherUserId={userId} />
+
                 {loading ? (
                   <div className="flex justify-center py-10 text-textmuted">
                     <div className="animate-spin w-6 h-6 border-2 border-bordercol border-t-primary rounded-full"></div>

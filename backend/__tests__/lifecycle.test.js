@@ -1,5 +1,4 @@
 const request = require('supertest');
-const { PrismaClient } = require('@prisma/client');
 const app = require('../src/index');
 
 // Exercises the listing/moderation lifecycle end to end against the real
@@ -65,11 +64,11 @@ describe('Listing lifecycle & moderation', () => {
     expect(await registerAndVerify({ ...admin, role: 'BUYER' })).toEqual(201);
 
     // No self-service admin registration: promote via the DB directly.
-    const prisma = new PrismaClient();
+    const prisma = require('./_db');
     try {
       await prisma.user.update({ where: { email: admin.email }, data: { role: 'ADMIN' } });
     } finally {
-      await prisma.$disconnect();
+      
     }
 
     sellerAToken = (await login(sellerA.email, sellerA.password)).body.token;
@@ -217,13 +216,12 @@ describe('Listing lifecycle & moderation', () => {
       (await request(app).get('/api/auth/me').set('Authorization', `Bearer ${sellerBToken}`)).statusCode
     ).toEqual(401);
 
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
+        const prisma = require('./_db');
     try {
       const takenDown = await prisma.vehicle.findUnique({ where: { id: vehicle3.id } });
       expect(takenDown.status).toEqual('DEACTIVATED');
     } finally {
-      await prisma.$disconnect();
+      
     }
 
     // Reactivation deliberately does not auto-restore listings.
@@ -234,13 +232,12 @@ describe('Listing lifecycle & moderation', () => {
     expect(reactivate.statusCode).toEqual(200);
     expect((await login(sellerB.email, sellerB.password)).statusCode).toEqual(200);
 
-    const { PrismaClient: PC } = require('@prisma/client');
-    const prisma2 = new PC();
+        const prisma2 = require('./_db');
     try {
       const stillOff = await prisma2.vehicle.findUnique({ where: { id: vehicle3.id } });
       expect(stillOff.status).toEqual('DEACTIVATED');
     } finally {
-      await prisma2.$disconnect();
+      
     }
   });
 

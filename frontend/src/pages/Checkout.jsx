@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { ShieldCheck, MapPin, Truck, CreditCard, Loader2 } from 'lucide-react';
+import { ShieldCheck, MapPin, Truck, CreditCard, Loader2, Banknote, AlertTriangle } from 'lucide-react';
 
 /**
  * Checkout for a vehicle purchase (escrow).
@@ -17,8 +17,11 @@ const Checkout = () => {
   const navigate = useNavigate();
 
   const [deliveryMode, setDeliveryMode] = useState('PICKUP');
-  // All payments flow through the site escrow (AliExpress-style): Paystack
-  // only, money held by the platform until the buyer confirms receipt.
+  // PAYSTACK first: money is escrowed by the platform (AliExpress-style).
+  // CASH stays available but OUTSIDE the site — buyer acknowledges there's
+  // no refund or protection if the deal goes wrong (backend guards, not us).
+  const [payMode, setPayMode] = useState('PAYSTACK');
+  const [cashAck, setCashAck] = useState(false);
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
@@ -34,6 +37,21 @@ const Checkout = () => {
     retry: false,
     enabled: Boolean(user),
   });
+
+  // A negotiated price (accepted offer) overrides the asking price
+  // for this buyer only — checkout shows it and orders at it.
+  const { data: agreed } = useQuery({
+    queryKey: ['payable-price', vehicleId],
+    queryFn: async () => {
+      const { data } = await api.get(`/offers/price/${vehicleId}`);
+      return data;
+    },
+    retry: false,
+    enabled: Boolean(user),
+  });
+  const payableGhs = agreed?.agreedPesewas != null
+    ? agreed.agreedPesewas / 100
+    : car ? Number(car.price) : null;
 
   // Wait for the auth bootstrap (/auth/me) before redirecting — a plain
   // refresh starts with user=null, and bouncing to /login here flashes it.
@@ -64,13 +82,18 @@ const Checkout = () => {
     try {
       const { data } = await api.post('/purchases', {
         vehicleId: car.id,
-        method: 'PAYSTACK',
+        method: payMode === 'CASH' ? 'CASH' : 'PAYSTACK',
         deliveryMode,
         phone: phone || undefined,
         address: deliveryMode === 'DELIVERY' ? address : undefined,
         notes: notes || undefined,
       });
       const purchase = data.purchase;
+
+      if (payMode === 'CASH') {
+        navigate(`/purchases/${purchase.id}?new=1`);
+        return;
+      }
 
       // Send the buyer to Paystack; callback lands back on the order page
       const { data: init } = await api.post(`/purchases/${purchase.id}/initialize`, {
@@ -138,17 +161,63 @@ const Checkout = () => {
             />
           </div>
 
-          {/* Payment — escrow only, like AliExpress: money sits with the platform until delivery */}
+          {/* Payment — escrow first, cash (outside platform) with a hard disclaimer */}
           <h3 className="font-semibold text-textprimary mb-3">Payment</h3>
-          <div className="rounded-lg border-2 border-primary bg-primary/5 p-4 mb-6">
-            <div className="flex items-center gap-2 mb-1">
-              <CreditCard size={20} className="text-primary" />
-              <span className="font-medium text-textprimary">Pay online — card or Mobile Money</span>
-            </div>
-            <p className="text-xs text-textsecondary leading-relaxed">
-              Your payment is held securely by CarMarket Ghana and only released to the seller after you confirm you have the car.
-            </p>
+          <div className="grid grid-cols-1 gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => setPayMode('PAYSTACK')}
+              className={`text-left p-4 rounded-lg border-2 transition-colors ${
+                payMode === 'PAYSTACK' ? 'border-primary bg-primary/5' : 'border-bordercol hover:border-textmuted'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <CreditCard size={20} className={payMode === 'PAYSTACK' ? 'text-primary' : 'text-textmuted'} />
+                <span className="font-medium text-textprimary">Pay online — card or Mobile Money</span>
+                <span className="ml-auto px-2 py-0.5 bg-success/10 text-success rounded-full text-[10px] font-bold">Recommended</span>
+              </div>
+              <p className="text-xs text-textsecondary leading-relaxed">
+                Your payment is held by CarMarket Ghana in escrow and only released to the seller after you confirm you have the car.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayMode('CASH')}
+              className={`text-left p-4 rounded-lg border-2 transition-colors ${
+                payMode === 'CASH' ? 'border-warn bg-warn/5' : 'border-bordercol hover:border-textmuted'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Banknote size={20} className={payMode === 'CASH' ? 'text-warn' : 'text-textmuted'} />
+                <span className="font-medium text-textprimary">Pay cash at handover</span>
+              </div>
+              <p className="text-xs text-textsecondary leading-relaxed">
+                We reserve the car for you; you pay the seller in person.
+              </p>
+            </button>
           </div>
+
+          {payMode === 'CASH' && (
+            <div className="mb-6 border-2 border-warn/40 bg-warn/5 rounded-lg p-4">
+              <h4 className="font-bold text-textprimary text-sm mb-2 flex items-center gap-2">
+                <AlertTriangle size={16} className="text-warn" /> No platform protection for cash deals
+              </h4>
+              <ul className="text-xs text-textsecondary leading-relaxed space-y-1.5 list-disc list-inside">
+                <li>Cash payments happen <span className="font-semibold">outside</span> CarMarket Ghana.</li>
+                <li>If anything goes wrong — fraud, a bad car, a fake seller — <span className="font-semibold">we cannot refund or recover your money.</span> You take full responsibility for the deal.</li>
+                <li>Meet in a public place, inspect the car and its documents thoroughly, and count the cash yourself.</li>
+              </ul>
+              <label className="mt-3 flex items-start gap-2 text-xs font-medium text-textprimary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cashAck}
+                  onChange={(e) => setCashAck(e.target.checked)}
+                  className="mt-0.5 accent-warn"
+                />
+                I understand cash deals carry no platform refund or protection.
+              </label>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="mb-6">
@@ -168,16 +237,20 @@ const Checkout = () => {
 
           <button
             onClick={placeOrder}
-            disabled={placing}
+            disabled={placing || (payMode === 'CASH' && !cashAck)}
             className="w-full py-3.5 bg-accent text-textprimary font-bold rounded-md hover:bg-accentdark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {placing && <Loader2 size={18} className="animate-spin" />}
-            Pay GH₵{Number(car.price).toLocaleString()} securely
+            {payMode === 'PAYSTACK'
+              ? `Pay GH₵${Number(payableGhs ?? car.price).toLocaleString()} securely`
+              : 'Reserve this car (cash)'}
           </button>
 
           <p className="mt-4 text-xs text-textsecondary flex items-start gap-2">
             <ShieldCheck size={14} className="text-success flex-shrink-0 mt-0.5" />
-            Escrow protected — like AliExpress: your money stays with CarMarket until you confirm receipt. If anything goes wrong before that, you get a refund.
+            {payMode === 'PAYSTACK'
+              ? 'Escrow protected — like AliExpress: your money stays with CarMarket until you confirm receipt. If anything goes wrong before that, you get a refund.'
+              : 'Cash reservation: the car is held for you, but the handover deal is between you and the seller — no platform protection.'}
           </p>
         </div>
 
@@ -197,9 +270,19 @@ const Checkout = () => {
           </div>
           <div className="border-t border-bordercol mt-4 pt-4 flex items-center justify-between">
             <span className="text-textsecondary">Total</span>
-            <span className="font-display font-bold text-xl text-textprimary">
-              GH₵{Number(car.price).toLocaleString()}
-            </span>
+            <div className="text-right">
+              {agreed?.agreedPesewas != null && (
+                <span className="block text-xs text-success font-semibold">Your negotiated price</span>
+              )}
+              <span className="font-display font-bold text-xl text-textprimary">
+                GH₵{Number(payableGhs ?? car.price).toLocaleString()}
+              </span>
+              {agreed?.agreedPesewas != null && (
+                <span className="block text-xs text-textmuted line-through">
+                  GH₵{Number(car.price).toLocaleString()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

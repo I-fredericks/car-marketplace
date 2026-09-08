@@ -180,24 +180,43 @@ const initiatePurchase = async (req, res) => {
         throw new Error('This vehicle is no longer available.');
       }
 
+      // Negotiated price wins: an accepted offer freezes THIS buyer's price.
+      // Everyone else on the platform still pays the asking price.
+      const acceptedOffer = await tx.priceOffer.findFirst({
+        where: { vehicleId: vehicle.id, buyerId: req.user.id, status: 'ACCEPTED' },
+        orderBy: { updatedAt: 'desc' },
+      });
+      const payable = acceptedOffer ? acceptedOffer.amount : amount;
+
       const methodDefaults = method === 'CASH' ? { status: 'HANDOVER_PENDING' } : {};
-      return tx.purchase.create({
+      const created = await tx.purchase.create({
         data: {
           reference: generateReference(),
           buyerId: req.user.id,
           vehicleId: vehicle.id,
           sellerId: vehicle.sellerId,
-          amount,
+          amount: payable,
           method,
           deliveryMode,
           address: address || null,
           phone: phone || null,
           notes: notes || null,
           commissionBps: PLATFORM_COMMISSION_BPS, // snapshot at sale time
+          agreedOfferId: acceptedOffer ? acceptedOffer.id : null,
           ...methodDefaults,
         },
         include: { vehicle: VEHICLE_INCLUDE },
       });
+
+      // Seal the agreed price so a second checkout can't reuse it
+      if (acceptedOffer) {
+        await tx.priceOffer.update({
+          where: { id: acceptedOffer.id },
+          data: { status: 'USED' },
+        });
+      }
+
+      return created;
     }, { timeout: 15000 }); // pooler round-trips can eat seconds; default 5s races them
 
     // Tell the seller someone is buying their car (fire-and-forget)
