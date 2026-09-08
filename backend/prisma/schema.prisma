@@ -38,6 +38,7 @@ model User {
   messagesReceived Message[]   @relation("MessageReceiver")
   reports       Report[]       @relation("ReportReporter")
   payments      Payment[]
+  purchases     Purchase[]     @relation("PurchaseBuyer")
   subscription  Subscription?
   authTokens    AuthToken[]
   notifications Notification[]
@@ -102,8 +103,15 @@ model SellerProfile {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
+  // Payout account for escrow releases when this seller's cars are bought
+  // through checkout. Manual payout by an admin in v1; Paystack Transfers next.
+  payoutMethod   String?
+  payoutAccount  String?
+  payoutName     String?
+
   vehicles Vehicle[]
   reviews  Review[]  @relation("SellerReviews")
+  sales    Purchase[] @relation("PurchaseSeller")
 
   @@map("sellerprofile")
 }
@@ -152,6 +160,7 @@ model Vehicle {
   messages     Message[]
   reports      Report[]
   payments     Payment[]
+  purchases    Purchase[]      @relation("PurchaseVehicle")
 
   @@index([sellerId])
   // Hot-path composite indexes for search/home queries
@@ -183,6 +192,7 @@ enum FuelType {
 enum VehicleStatus {
   PENDING
   AVAILABLE
+  RESERVED // locked by an open purchase order; hidden from buyers until it completes or frees
   REJECTED
   SOLD
   DEACTIVATED // taken down by an admin; recoverable via the admin listings screen
@@ -351,4 +361,56 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId])
   @@map("auditlog")
+}
+
+// ──────────────────────────────────────────────────────────────
+// PURCHASE ORDERS (escrow checkout for vehicle sales)
+// Buyer reserves a car -> pays (Paystack holds the money, or cash on
+// handover) -> handover happens -> seller is paid out. Platform holds in
+// escrow until the buyer confirms receipt, then payout is released.
+// ──────────────────────────────────────────────────────────────
+model Purchase {
+  id           Int      @id @default(autoincrement())
+  reference    String   @unique
+  buyerId      Int
+  buyer        User     @relation("PurchaseBuyer", fields: [buyerId], references: [id])
+  vehicleId    Int
+  vehicle      Vehicle  @relation("PurchaseVehicle", fields: [vehicleId], references: [id])
+  sellerId     Int
+  seller       SellerProfile @relation("PurchaseSeller", fields: [sellerId], references: [id])
+
+  amount       Int // pesewas snapshot of the vehicle price at order time
+  method       String // PAYSTACK (online escrow) | CASH (pay on handover)
+  channel      String? // card | mobile_money | bank_transfer
+  status       PurchaseStatus @default(AWAITING_PAYMENT)
+
+  deliveryMode String // PICKUP (buyer collects) | DELIVERY (seller ships)
+  address      String?
+  phone        String?
+  notes        String?
+
+  commissionBps Int     @default(0) // platform take-rate snapshot (0 = none yet)
+  payoutStatus String   @default("NONE") // NONE | PENDING | SENT
+  payoutRef    String?
+
+  paidAt      DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([buyerId])
+  @@index([vehicleId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("purchase")
+}
+
+enum PurchaseStatus {
+  AWAITING_PAYMENT // checkout started; online payment not confirmed yet
+  PAID_HELD        // money is escrowed with the platform
+  HANDOVER_PENDING // cash order: collect car + pay seller at handover
+  DELIVERED        // vehicle handed over; seller payout still pending
+  COMPLETED        // payout released (online) / cash collected (cash) — closed
+  CANCELLED
+  REFUNDED
 }

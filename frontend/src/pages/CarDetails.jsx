@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
 import useModalA11y from '../hooks/useModalA11y';
-import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star } from 'lucide-react';
+import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart } from 'lucide-react';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
 import Badge from '../components/Badge';
@@ -284,6 +284,14 @@ const CarDetails = () => {
 
                 {/* Desktop Action Buttons */}
                 <div className="hidden md:flex flex-col gap-3 mb-6">
+                  {car.status === 'AVAILABLE' && (!user || user.id !== car.seller?.userId) && (
+                    <button
+                      onClick={() => (user ? navigate(`/checkout/${car.id}`) : navigate('/login'))}
+                      className="w-full py-3 bg-accent text-textprimary font-bold rounded-md hover:bg-accentdark transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ShoppingCart size={20} /> Buy Now — Secure Escrow
+                    </button>
+                  )}
                   {sellerPhone && (
                     <a 
                       href={`tel:${sellerPhone}`} 

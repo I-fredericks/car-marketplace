@@ -300,6 +300,20 @@ const paystackWebhook = async (req, res) => {
         } else {
           console.warn(`⚠️ Webhook: amount mismatch for ${payment.reference}`);
         }
+      } else if (!payment) {
+        // Not a subscription payment — maybe a vehicle purchase (escrow).
+        const purchase = await prisma.purchase.findUnique({
+          where: { reference: data.reference },
+        });
+        if (purchase && purchase.status === 'AWAITING_PAYMENT') {
+          if (data.amount >= purchase.amount) {
+            const { applyVerifiedPurchase } = require('./purchaseController');
+            await applyVerifiedPurchase(purchase, { channel: data.channel || null });
+            console.log(`✅ Webhook: purchase ${purchase.reference} escrowed (PAID_HELD)`);
+          } else {
+            console.warn(`⚠️ Webhook: purchase amount mismatch for ${purchase.reference}`);
+          }
+        }
       }
     }
 

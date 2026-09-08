@@ -20,6 +20,9 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Compare = lazy(() => import('./pages/Compare'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const BillingCallback = lazy(() => import('./pages/BillingCallback'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const PurchaseDetail = lazy(() => import('./pages/PurchaseDetail'));
+const Purchases = lazy(() => import('./pages/Purchases'));
 const BecomeSeller = lazy(() => import('./pages/BecomeSeller'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -106,6 +109,9 @@ function AppShell() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/billing/callback" element={<BillingCallback />} />
+          <Route path="/checkout/:vehicleId" element={<Checkout />} />
+          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/purchases/:id" element={<PurchaseDetail />} />
           <Route path="*"        element={<NotFound />} />
         </Routes>
         </Suspense>
