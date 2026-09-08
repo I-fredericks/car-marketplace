@@ -3,6 +3,8 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
 import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt } from 'lucide-react';
+import OrderProgress from '../components/OrderProgress';
+import SlideToConfirm from '../components/SlideToConfirm';
 
 const STATUS_COPY = {
   AWAITING_PAYMENT: { label: 'Awaiting payment', tone: 'text-warn' },
@@ -168,7 +170,10 @@ const PurchaseDetail = () => {
   return (
     <div className="bg-bg min-h-screen pt-24 pb-20 px-4">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-surface border border-bordercol rounded-xl p-7 shadow-sm">
+        <div className="bg-surface border border-bordercol rounded-xl p-5 sm:p-7 shadow-sm">
+
+          {/* AliExpress-style order progress tracker */}
+          <OrderProgress status={purchase.status} />
 
           {/* Verifying overlay note */}
           {verifyState === 'verifying' && (
@@ -287,35 +292,69 @@ const PurchaseDetail = () => {
 
           {error && <p className="mb-4 text-sm text-err font-medium" role="alert">{error}</p>}
 
-          {/* Actions by role + state */}
-          <div className="flex gap-3 flex-wrap">
-            {['PAID_HELD', 'DELIVERED', 'COMPLETED'].includes(purchase.status) && (
-              <Link
-                to={`/purchases/${id}/receipt`}
-                className="flex-1 min-w-36 py-3 rounded-md font-bold flex items-center justify-center gap-2 border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
-              >
-                <Receipt size={18} /> Receipt
-              </Link>
-            )}
+          {/* Actions by role + state. Irreversible money moves use
+              slide-to-confirm so a stray tap can't release escrowed cash. */}
+          <div className="space-y-3">
             {isBuyer && purchase.method === 'PAYSTACK' && purchase.status === 'PAID_HELD' && (
-              <ActionButton label="I received the car" endpoint="confirm-received" primary icon={CheckCircle2} />
+              <div>
+                <SlideToConfirm
+                  label="Slide to confirm — I received the car"
+                  confirmLabel="Receipt confirmed"
+                  busy={acting}
+                  onConfirm={() => act('confirm-received')}
+                />
+                <p className="mt-2 text-xs text-textmuted leading-relaxed">
+                  Only slide after you have physically inspected the car and taken it. This releases your payment to the seller and cannot be undone.
+                </p>
+              </div>
             )}
             {isBuyer && purchase.method === 'CASH' && purchase.status === 'HANDOVER_PENDING' && (
-              <ActionButton label="I collected the car" endpoint="confirm-handover" primary icon={Handshake} />
+              <div>
+                <SlideToConfirm
+                  label="Slide to confirm — I collected the car"
+                  confirmLabel="Handover confirmed"
+                  busy={acting}
+                  onConfirm={() => act('confirm-handover')}
+                />
+                <p className="mt-2 text-xs text-textmuted leading-relaxed">
+                  Only slide after you have inspected and taken the car. The seller will confirm they received your cash.
+                </p>
+              </div>
             )}
             {isSeller && purchase.method === 'CASH' && purchase.status === 'DELIVERED' && (
-              <ActionButton label="Cash received" endpoint="seller-collected" primary icon={CheckCircle2} />
+              <div>
+                <SlideToConfirm
+                  label="Slide to confirm — cash received"
+                  confirmLabel="Sale closed"
+                  busy={acting}
+                  onConfirm={() => act('seller-collected')}
+                />
+                <p className="mt-2 text-xs text-textmuted leading-relaxed">
+                  Only slide after the cash is physically counted and in your hands. This closes the sale permanently.
+                </p>
+              </div>
             )}
-            {(isBuyer || isSeller) && ['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'].includes(purchase.status) && (
-              <ActionButton
-                label={purchase.status === 'AWAITING_PAYMENT' ? 'Cancel reservation' : 'Cancel order'}
-                endpoint="cancel"
-                danger
-              />
-            )}
-            {isBuyer && purchase.method === 'PAYSTACK' && purchase.status === 'AWAITING_PAYMENT' && verifyState !== 'verifying' && (
-              <ActionButton label="Continue to payment" onClick={retryPayment} primary icon={CreditCard} />
-            )}
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              {['PAID_HELD', 'DELIVERED', 'COMPLETED'].includes(purchase.status) && (
+                <Link
+                  to={`/purchases/${id}/receipt`}
+                  className="flex-1 py-3 rounded-md font-bold flex items-center justify-center gap-2 border border-primary text-primary hover:bg-primary hover:text-white transition-colors"
+                >
+                  <Receipt size={18} /> Receipt
+                </Link>
+              )}
+              {(isBuyer || isSeller) && ['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'].includes(purchase.status) && (
+                <ActionButton
+                  label={purchase.status === 'AWAITING_PAYMENT' ? 'Cancel reservation' : 'Cancel order'}
+                  endpoint="cancel"
+                  danger
+                />
+              )}
+              {isBuyer && purchase.method === 'PAYSTACK' && purchase.status === 'AWAITING_PAYMENT' && verifyState !== 'verifying' && (
+                <ActionButton label="Continue to payment" onClick={retryPayment} primary icon={CreditCard} />
+              )}
+            </div>
           </div>
 
           {purchase.status === 'CANCELLED' && (

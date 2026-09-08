@@ -139,11 +139,18 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(res.body.purchase.commissionBps).toEqual(500); // 5% platform fee snapshot
     ids.cashPurchase = res.body.purchase.id;
 
-    // Seller gets a new-order notification with a link to the order
-    const notes = await request(app)
-      .get('/api/notifications')
-      .set('Authorization', `Bearer ${tokens.sellerCash}`);
-    expect(notes.body.notifications.some((n) => n.type === 'PURCHASE_NEW_ORDER')).toBe(true);
+    // Seller gets a new-order notification with a link to the order.
+    // Notifications are emitted fire-and-forget, so poll briefly (pooler
+    // latency varies run to run).
+    let hasNewOrderNote = false;
+    for (let attempt = 0; attempt < 5 && !hasNewOrderNote; attempt += 1) {
+      const notes = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${tokens.sellerCash}`);
+      hasNewOrderNote = notes.body.notifications.some((n) => n.type === 'PURCHASE_NEW_ORDER');
+      if (!hasNewOrderNote) await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(hasNewOrderNote).toBe(true);
 
     const prisma = new PrismaClient();
     try {
