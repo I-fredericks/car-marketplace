@@ -239,64 +239,87 @@ describe('Vehicle purchase (escrow checkout)', () => {
     }
   });
 
-  // ── Paystack escrow flow: AWAITING_PAYMENT -> PAID_HELD -> COMPLETED ──
-  it('paystack purchase escrows on verify and completes on receipt', async () => {
+  // ── Transfer escrow flow: AWAITING_PAYMENT -> claim -> admin confirm -> PAID_HELD -> COMPLETED ──
+  it('bank transfer order: claim, admin confirm, escrow, receipt completes', async () => {
     const initiated = await request(app)
       .post('/api/purchases')
       .set('Authorization', `Bearer ${tokens.buyer}`)
-      .send({ vehicleId: ids.vehiclePay, method: 'PAYSTACK', deliveryMode: 'PICKUP' });
+      .send({ vehicleId: ids.vehiclePay, method: 'BANK_TRANSFER', deliveryMode: 'PICKUP' });
     expect(initiated.statusCode).toEqual(201);
     expect(initiated.body.purchase.status).toEqual('AWAITING_PAYMENT');
     expect(initiated.body.escrow).toEqual(true);
+    // Instructions ship with the order: platform accounts + match reference
+    expect(initiated.body.paymentInstructions.reference).toEqual(initiated.body.purchase.reference);
+    expect(initiated.body.paymentInstructions.bank.accountNumber).toBeDefined();
+    expect(initiated.body.paymentInstructions.momo.number).toBeDefined();
     const purchase = initiated.body.purchase;
     ids.payPurchase = purchase.id;
 
-    // A cash order must not hit the Paystack init endpoint; this one can.
-    const init = await request(app)
-      .post(`/api/purchases/${purchase.id}/initialize`)
-      .set('Authorization', `Bearer ${tokens.buyer}`)
-      .send({});
-    expect(init.statusCode).toEqual(200);
-    expect(init.body.authorizationUrl).toEqual('https://paystack.test/checkout');
-    expect(init.body.reference).toEqual(purchase.reference);
-
-    // Sellers/strangers cannot verify for the buyer
+    // The instructions endpoint echoes the same details (buyer-only)
+    const instr = await request(app)
+      .get(`/api/purchases/${purchase.id}/instructions`)
+      .set('Authorization', `Bearer ${tokens.buyer}`);
+    expect(instr.statusCode).toEqual(200);
+    expect(instr.body.instructions.amountPesewas).toEqual(purchase.amount);
     expect((await request(app)
-      .get(`/api/purchases/${purchase.id}/verify`)
+      .get(`/api/purchases/${purchase.id}/instructions`)
       .set('Authorization', `Bearer ${tokens.stranger}`)).statusCode).toEqual(403);
 
-    // Settle: Paystack reports the exact pesewas amount
-    verifyTransaction.mockResolvedValueOnce({
-      status: 'success',
-      amount: purchase.amount,
-      channel: 'mobile_money',
-    });
+    // Claims require a real-looking reference
+    expect((await request(app)
+      .post(`/api/purchases/${purchase.id}/claim-payment`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ paymentRef: 'ab' })).statusCode).toEqual(400);
+
+    // Buyer reports the transfer sent
+    const claimed = await request(app)
+      .post(`/api/purchases/${purchase.id}/claim-payment`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ paymentRef: 'TRF-998877', payerName: 'Test Buyer' });
+    expect(claimed.statusCode).toEqual(200);
+    expect(claimed.body.purchase.claimedAt).not.toBeNull();
+    expect(claimed.body.purchase.paymentRef).toEqual('TRF-998877');
+
+    // Only admins confirm receipt of funds
+    expect((await request(app)
+      .put(`/api/admin/purchases/${purchase.id}/verify-payment`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)).statusCode).toEqual(403);
+
     const verified = await request(app)
-      .get(`/api/purchases/${purchase.id}/verify`)
-      .set('Authorization', `Bearer ${tokens.buyer}`);
+      .put(`/api/admin/purchases/${purchase.id}/verify-payment`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({});
     expect(verified.statusCode).toEqual(200);
-    expect(verified.body.status).toEqual('success');
     expect(verified.body.purchase.status).toEqual('PAID_HELD');
-    expect(verified.body.purchase.channel).toEqual('mobile_money');
+    expect(verified.body.purchase.channel).toEqual('bank_transfer');
+    expect(verified.body.purchase.paidAt).not.toBeNull();
 
-    // Double-verify is a safe no-op (idempotent)
-    const again = await request(app)
-      .get(`/api/purchases/${purchase.id}/verify`)
-      .set('Authorization', `Bearer ${tokens.buyer}`);
-    expect(again.statusCode).toEqual(200);
-    expect(again.body.purchase.status).toEqual('PAID_HELD');
+    // Double-confirm is a safe no-op (idempotent)
+    expect((await request(app)
+      .put(`/api/admin/purchases/${purchase.id}/verify-payment`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({})).statusCode).toEqual(400);
 
-    // Buyer got exactly one receipt email (not one per verify call)
-    const buyerEmails = sendMail.mock.calls.filter(([args]) => args.to === buyer.email);
+    // Buyer got exactly one receipt email
+    let buyerEmails = [];
+    for (let i = 0; i < 5 && buyerEmails.length === 0; i += 1) {
+      buyerEmails = sendMail.mock.calls.filter(([args]) => args.to === buyer.email);
+      if (buyerEmails.length === 0) await new Promise((r) => setTimeout(r, 400));
+    }
     expect(buyerEmails.length).toEqual(1);
     expect(buyerEmails[0][0].subject).toContain(purchase.reference);
     expect(buyerEmails[0][0].html).toContain(`/purchases/${purchase.id}/receipt`);
 
     // Seller got an in-app "money in escrow" ping too
-    const escrowNote = await request(app)
-      .get('/api/notifications')
-      .set('Authorization', `Bearer ${tokens.sellerPay}`);
-    expect(escrowNote.body.notifications.some((n) => n.type === 'PURCHASE_PAID')).toBe(true);
+    let escrowNotified = false;
+    for (let i = 0; i < 5 && !escrowNotified; i += 1) {
+      const notes = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${tokens.sellerPay}`);
+      escrowNotified = notes.body.notifications.some((n) => n.type === 'PURCHASE_PAID');
+      if (!escrowNotified) await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(escrowNotified).toBe(true);
 
     // Buyer confirms receipt -> COMPLETED + payout queued for admin payout
     const received = await request(app)
@@ -315,32 +338,49 @@ describe('Vehicle purchase (escrow checkout)', () => {
     }
   });
 
-  it('rejects verify when Paystack reports too little money', async () => {
+  it('rejected claim clears it and tells the buyer; PAYSTACK rejected at checkout', async () => {
+    // The card gateway is listing-plans-only now
+    expect((await request(app)
+      .post('/api/purchases')
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ vehicleId: ids.vehicleCancel, method: 'PAYSTACK', deliveryMode: 'PICKUP' })).statusCode).toEqual(400);
+
     const initiated = await request(app)
       .post('/api/purchases')
       .set('Authorization', `Bearer ${tokens.buyer}`)
-      .send({ vehicleId: ids.vehicleCancel, method: 'PAYSTACK', deliveryMode: 'PICKUP' });
+      .send({ vehicleId: ids.vehicleCancel, method: 'MOMO', deliveryMode: 'PICKUP' });
     expect(initiated.statusCode).toEqual(201);
     const purchase = initiated.body.purchase;
 
-    verifyTransaction.mockResolvedValueOnce({
-      status: 'success',
-      amount: purchase.amount - 1, // 1 pesewa short
-      channel: 'card',
-    });
-    const underpaid = await request(app)
-      .get(`/api/purchases/${purchase.id}/verify`)
-      .set('Authorization', `Bearer ${tokens.buyer}`);
-    expect(underpaid.statusCode).toEqual(400);
-    expect(underpaid.body.status).toEqual('amount_mismatch');
+    // Claim, admin can't find the transfer -> reject clears the claim
+    expect((await request(app)
+      .post(`/api/purchases/${purchase.id}/claim-payment`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ paymentRef: 'WRONG-REF-1' })).statusCode).toEqual(200);
+    expect((await request(app)
+      .put(`/api/admin/purchases/${purchase.id}/reject-payment`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ reason: 'no matching credit' })).statusCode).toEqual(200);
 
     const prisma = require('./_db');
     try {
       const p = await prisma.purchase.findUnique({ where: { id: purchase.id } });
       expect(p.status).toEqual('AWAITING_PAYMENT'); // still waiting
+      expect(p.paymentRef).toBeNull();
+      expect(p.claimedAt).toBeNull();
     } finally {
-      
     }
+
+    // Buyer is told why
+    let notified = false;
+    for (let i = 0; i < 5 && !notified; i += 1) {
+      const notes = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${tokens.buyer}`);
+      notified = notes.body.notifications.some((n) => n.type === 'PURCHASE_PAYMENT_REJECTED');
+      if (!notified) await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(notified).toBe(true);
   });
 
   it('cancelling frees the vehicle for other buyers', async () => {

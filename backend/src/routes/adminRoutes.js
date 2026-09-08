@@ -21,6 +21,8 @@ const {
   rejectAvatar,
   getPurchases,
   releasePayout,
+  verifyPurchasePayment,
+  rejectPurchasePayment,
 } = require('../controllers/adminController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
@@ -65,8 +67,10 @@ router.get('/payments', getPayments);
 router.put('/payments/:id/verify', verifyPayment);
 router.put('/payments/:id/reject', rejectPayment);
 
-// Purchases (escrow orders + payout release)
+// Purchases (escrow orders + transfer confirmation + payout release)
 router.get('/purchases', getPurchases);
+router.put('/purchases/:id/verify-payment', verifyPurchasePayment);
+router.put('/purchases/:id/reject-payment', rejectPurchasePayment);
 router.put('/purchases/:id/release-payout', releasePayout);
 
 module.exports = router;

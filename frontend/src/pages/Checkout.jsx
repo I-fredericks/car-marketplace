@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { ShieldCheck, MapPin, Truck, CreditCard, Loader2, Banknote, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, MapPin, Truck, Loader2, Banknote, AlertTriangle, Landmark, Smartphone } from 'lucide-react';
 
 /**
  * Checkout for a vehicle purchase (escrow).
@@ -17,10 +17,10 @@ const Checkout = () => {
   const navigate = useNavigate();
 
   const [deliveryMode, setDeliveryMode] = useState('PICKUP');
-  // PAYSTACK first: money is escrowed by the platform (AliExpress-style).
-  // CASH stays available but OUTSIDE the site — buyer acknowledges there's
-  // no refund or protection if the deal goes wrong (backend guards, not us).
-  const [payMode, setPayMode] = useState('PAYSTACK');
+  // Car payments ride FLAT-FEE rails into CarMarket's own collection
+  // account (bank transfer / MoMo) — card gateways charge ~1.95%, which is
+  // GH₵1,950 on a GH₵100,000 car. Paystack stays for listing plans only.
+  const [payMode, setPayMode] = useState('BANK_TRANSFER');
   const [cashAck, setCashAck] = useState(false);
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -82,7 +82,7 @@ const Checkout = () => {
     try {
       const { data } = await api.post('/purchases', {
         vehicleId: car.id,
-        method: payMode === 'CASH' ? 'CASH' : 'PAYSTACK',
+        method: payMode,
         deliveryMode,
         phone: phone || undefined,
         address: deliveryMode === 'DELIVERY' ? address : undefined,
@@ -90,16 +90,9 @@ const Checkout = () => {
       });
       const purchase = data.purchase;
 
-      if (payMode === 'CASH') {
-        navigate(`/purchases/${purchase.id}?new=1`);
-        return;
-      }
-
-      // Send the buyer to Paystack; callback lands back on the order page
-      const { data: init } = await api.post(`/purchases/${purchase.id}/initialize`, {
-        callbackUrl: `${window.location.origin}/purchases/${purchase.id}?paid=1`,
-      });
-      window.location.href = init.authorizationUrl;
+      // Transfer orders land on the order page: it shows the platform
+      // account details, the amount, and the "I have paid" step.
+      navigate(`/purchases/${purchase.id}?new=1`);
     } catch (err) {
       setError(err.response?.data?.message || 'Could not start the purchase. Try again.');
       setPlacing(false);
@@ -161,23 +154,38 @@ const Checkout = () => {
             />
           </div>
 
-          {/* Payment — escrow first, cash (outside platform) with a hard disclaimer */}
+          {/* Payment — flat-fee rails into CarMarket's escrow account */}
           <h3 className="font-semibold text-textprimary mb-3">Payment</h3>
           <div className="grid grid-cols-1 gap-3 mb-4">
             <button
               type="button"
-              onClick={() => setPayMode('PAYSTACK')}
+              onClick={() => setPayMode('BANK_TRANSFER')}
               className={`text-left p-4 rounded-lg border-2 transition-colors ${
-                payMode === 'PAYSTACK' ? 'border-primary bg-primary/5' : 'border-bordercol hover:border-textmuted'
+                payMode === 'BANK_TRANSFER' ? 'border-primary bg-primary/5' : 'border-bordercol hover:border-textmuted'
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <CreditCard size={20} className={payMode === 'PAYSTACK' ? 'text-primary' : 'text-textmuted'} />
-                <span className="font-medium text-textprimary">Pay online — card or Mobile Money</span>
-                <span className="ml-auto px-2 py-0.5 bg-success/10 text-success rounded-full text-[10px] font-bold">Recommended</span>
+                <Landmark size={20} className={payMode === 'BANK_TRANSFER' ? 'text-primary' : 'text-textmuted'} />
+                <span className="font-medium text-textprimary">Bank transfer to CarMarket</span>
+                <span className="ml-auto px-2 py-0.5 bg-success/10 text-success rounded-full text-[10px] font-bold">Flat fee · Recommended</span>
               </div>
               <p className="text-xs text-textsecondary leading-relaxed">
-                Your payment is held by CarMarket Ghana in escrow and only released to the seller after you confirm you have the car.
+                Transfer to our escrow account over GhIPSS rails — flat cost regardless of amount, held until you confirm you have the car.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayMode('MOMO')}
+              className={`text-left p-4 rounded-lg border-2 transition-colors ${
+                payMode === 'MOMO' ? 'border-primary bg-primary/5' : 'border-bordercol hover:border-textmuted'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Smartphone size={20} className={payMode === 'MOMO' ? 'text-primary' : 'text-textmuted'} />
+                <span className="font-medium text-textprimary">Mobile Money to CarMarket</span>
+              </div>
+              <p className="text-xs text-textsecondary leading-relaxed">
+                Send to our platform MoMo wallet, then submit your transaction reference. Escrowed once we confirm it.
               </p>
             </button>
             <button
@@ -243,14 +251,16 @@ const Checkout = () => {
             {placing && <Loader2 size={18} className="animate-spin" />}
             {payMode === 'PAYSTACK'
               ? `Pay GH₵${Number(payableGhs ?? car.price).toLocaleString()} securely`
-              : 'Reserve this car (cash)'}
+              : payMode === 'CASH'
+                ? 'Reserve this car (cash)'
+                : `Continue — pay GH₵${Number(payableGhs ?? car.price).toLocaleString()} by ${payMode === 'MOMO' ? 'MoMo' : 'transfer'}`}
           </button>
 
           <p className="mt-4 text-xs text-textsecondary flex items-start gap-2">
             <ShieldCheck size={14} className="text-success flex-shrink-0 mt-0.5" />
-            {payMode === 'PAYSTACK'
-              ? 'Escrow protected — like AliExpress: your money stays with CarMarket until you confirm receipt. If anything goes wrong before that, you get a refund.'
-              : 'Cash reservation: the car is held for you, but the handover deal is between you and the seller — no platform protection.'}
+            {payMode === 'CASH'
+              ? 'Cash reservation: the car is held for you, but the handover deal is between you and the seller — no platform protection.'
+              : 'Escrow protected: CarMarket holds your payment and only releases it to the seller after you confirm you have the car. Card gateways would cost ~2% — bank and MoMo transfers keep that in your pocket.'}
           </p>
         </div>
 

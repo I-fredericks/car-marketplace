@@ -383,9 +383,15 @@ model Purchase {
   seller       SellerProfile @relation("PurchaseSeller", fields: [sellerId], references: [id])
 
   amount       Int // pesewas snapshot of the vehicle price at order time
-  method       String // PAYSTACK (online escrow) | CASH (pay on handover)
-  channel      String? // card | mobile_money | bank_transfer
+  method       String // BANK_TRANSFER | MOMO (platform rails, flat fee) | CASH | PAYSTACK (legacy)
+  channel      String? // card | mobile_money | bank_transfer (how money actually moved)
   status       PurchaseStatus @default(AWAITING_PAYMENT)
+
+  // Transfer-rail proof: buyer claims "I paid" with their reference; an
+  // admin matches it against the platform collection account statement.
+  paymentRef   String? // buyer-supplied transfer reference / transaction id
+  payerName    String? // name on the sending account
+  claimedAt    DateTime?
 
   deliveryMode String // PICKUP (buyer collects) | DELIVERY (seller ships)
   address      String?

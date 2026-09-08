@@ -1,13 +1,20 @@
 const prisma = require('../config/db');
-const { generateReference, PLATFORM_COMMISSION_BPS, commissionFor } = require('../config/plans');
+const { generateReference, PLATFORM_COMMISSION_BPS, commissionFor, PLATFORM_ACCOUNTS } = require('../config/plans');
 const { initializeTransaction, verifyTransaction } = require('../services/paystack');
 const { notifyAdmins } = require('./notificationController');
 const { sendMail, appUrl } = require('../services/mailer');
 
-// Purchase workflow (escrow):
-//   PAYSTACK: AWAITING_PAYMENT --(webhook/verify)--> PAID_HELD --buyer confirms receipt--> COMPLETED (payout PENDING)
-//   CASH:     HANDOVER_PENDING --buyer confirms handover--> DELIVERED --seller confirms cash received--> COMPLETED
+// Purchase workflow (escrow over flat-fee rails):
+//   BANK_TRANSFER / MOMO: buyer pays into CarMarket's collection account ->
+//   claims with their reference -> admin confirms against the statement ->
+//   PAID_HELD (escrow) -> buyer confirms receipt -> COMPLETED (payout).
+//   PAYSTACK: legacy orders settled via webhook/verify (card % fees made
+//   this uneconomical for car-sized amounts; kept for history only).
+//   CASH: HANDOVER_PENDING -> buyer confirms handover -> seller confirms cash.
 // Anything pre-completion can be CANCELLED (either party), freeing the vehicle.
+
+// Car payments ride flat-fee rails; Paystack remains for listing plans only
+const PURCHASE_METHODS = ['BANK_TRANSFER', 'MOMO', 'CASH'];
 
 // List/detail purchases need the primary image: without `images` the FE
 // purchase cards render a blank placeholder everywhere.
@@ -68,7 +75,7 @@ async function applyVerifiedPurchase(purchase, { channel } = {}) {
     });
     if (claim.count === 0) return null;
     return tx.purchase.findUnique({ where: { id: purchase.id } });
-  });
+  }, { timeout: 15000 });
 }
 
 /** In-app notify helper (fire-and-forget): one user's bell + WS push. */
@@ -109,6 +116,72 @@ const sendReceiptEmail = (purchase, vehicle, buyer) => {
       </div>`,
   }).catch((e) => console.error('Receipt email failed:', e.message));
 };
+
+/** Everything a buyer needs to pay a transfer order and be matched on the
+ *  platform account statement. The ORDER reference doubles as the required
+ *  transfer narration — statements are matched on it, not on names. */
+const instructionsFor = (purchase) => ({
+  method: purchase.method,
+  amountPesewas: purchase.amount,
+  reference: purchase.reference, // REQUIRED as the transfer narration/reason
+  bank: PLATFORM_ACCOUNTS.bank,
+  momo: PLATFORM_ACCOUNTS.momo,
+  note: 'Send exactly this amount and put the reference as the transfer reason, then tap "I have paid". CarMarket confirms against the account statement before your money counts as escrowed.',
+});
+
+/**
+ * Escrow-funded side effects, shared by the legacy Paystack verify path and
+ * the admin transfer-confirmation path: seller ping, buyer receipt email,
+ * admin visibility. All fire-and-forget.
+ */
+async function onEscrowFunded(updated, { actorId } = {}) {
+  const [sellerRow, buyerRow, vehicleRow] = await Promise.all([
+    prisma.sellerProfile.findUnique({ where: { id: updated.sellerId }, include: { user: { select: { id: true, name: true } } } }),
+    prisma.user.findUnique({ where: { id: updated.buyerId }, select: { id: true, name: true, email: true } }),
+    prisma.vehicle.findUnique({ where: { id: updated.vehicleId }, select: { year: true, make: true, model: true } }),
+  ]);
+  if (sellerRow) {
+    notifyUser({
+      userId: sellerRow.user.id,
+      type: 'PURCHASE_PAID',
+      title: 'Payment received for your car',
+      body: `${vehicleRow ? `${vehicleRow.year} ${vehicleRow.make} ${vehicleRow.model}` : 'Your listing'} · ${GHS(updated.amount)} is in escrow. Hand the car over when the buyer confirms.`,
+      data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
+    });
+  }
+  if (buyerRow && vehicleRow) sendReceiptEmail(updated, vehicleRow, buyerRow);
+  notifyAdmins({
+    type: 'ADMIN_PURCHASE_PAID',
+    title: 'Money in escrow',
+    body: `Purch ${updated.reference} ${GHS(updated.amount)} · vehicle #${updated.vehicleId}`,
+    senderId: actorId || updated.buyerId,
+    data: { path: '/admin?tab=purchases', purchaseId: updated.id },
+  }).catch((e) => console.error('Admin purchase-paid notify failed:', e.message));
+}
+
+/**
+ * Idempotently move an AWAITING_PAYMENT transfer order into PAID_HELD.
+ * Called by the admin confirmation endpoint after matching the platform
+ * account statement. Returns the updated purchase, or null if another
+ * caller already transitioned it.
+ */
+async function markEscrowFunded(purchaseId, { channel, paymentRef, verifiedBy } = {}) {
+  const updated = await prisma.$transaction(async (tx) => {
+    const claim = await tx.purchase.updateMany({
+      where: { id: purchaseId, status: 'AWAITING_PAYMENT' },
+      data: {
+        status: 'PAID_HELD',
+        channel: channel || 'bank_transfer',
+        paidAt: new Date(),
+        paymentRef: paymentRef || undefined,
+      },
+    });
+    if (claim.count === 0) return null;
+    return tx.purchase.findUnique({ where: { id: purchaseId } });
+  }, { timeout: 15000 }); // pooler round-trips can eat seconds under load
+  if (updated) onEscrowFunded(updated, { actorId: verifiedBy });
+  return updated;
+}
 
 /** Shared helper: resolve the current seller profile for the signed-in user. */
 async function resolveSellerProfile(userId) {
@@ -158,8 +231,8 @@ const initiatePurchase = async (req, res) => {
     if (vehicle.seller.user.id === req.user.id) {
       return res.status(400).json({ message: 'You cannot buy your own listing.' });
     }
-    if (!['PAYSTACK', 'CASH'].includes(method)) {
-      return res.status(400).json({ message: 'method must be PAYSTACK or CASH.' });
+    if (!PURCHASE_METHODS.includes(method)) {
+      return res.status(400).json({ message: 'method must be BANK_TRANSFER, MOMO or CASH.' });
     }
     if (!['PICKUP', 'DELIVERY'].includes(deliveryMode)) {
       return res.status(400).json({ message: 'deliveryMode must be PICKUP or DELIVERY.' });
@@ -229,11 +302,13 @@ const initiatePurchase = async (req, res) => {
     });
 
     if (method === 'CASH') {
-      // Cash orders don't need Paystack; surface the hold state immediately.
+      // Cash orders settle at handover; surface the hold state immediately.
       return res.status(201).json({ purchase, escrow: false });
     }
 
-    res.status(201).json({ purchase, escrow: true });
+    // Transfer rails: hand the buyer everything they need to pay the
+    // platform account and be matched on the statement.
+    res.status(201).json({ purchase, escrow: true, paymentInstructions: instructionsFor(purchase) });
   } catch (error) {
     if (error.message === 'This vehicle is no longer available.') {
       return res.status(409).json({ message: error.message });
@@ -318,36 +393,82 @@ const verifyPurchase = async (req, res) => {
       return res.json({ status: 'conflict', purchase, message: 'Purchase is no longer awaiting payment.' });
     }
 
-    // Side effects: seller notified (in-app), buyer gets email receipt,
-    // admins alerted to watch the escrow (all fire-and-forget)
-    const [sellerRow, buyerRow, vehicleRow] = await Promise.all([
-      prisma.sellerProfile.findUnique({ where: { id: updated.sellerId }, include: { user: { select: { id: true, name: true } } } }),
-      prisma.user.findUnique({ where: { id: updated.buyerId }, select: { id: true, name: true, email: true } }),
-      prisma.vehicle.findUnique({ where: { id: updated.vehicleId }, select: { year: true, make: true, model: true } }),
-    ]);
-    if (sellerRow) {
-      notifyUser({
-        userId: sellerRow.user.id,
-        type: 'PURCHASE_PAID',
-        title: 'Payment received for your car',
-        body: `${vehicleRow ? `${vehicleRow.year} ${vehicleRow.make} ${vehicleRow.model}` : 'Your listing'} · ${GHS(updated.amount)} is in escrow. Hand the car over when the buyer confirms.`,
-        data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
-      });
-    }
-    if (buyerRow && vehicleRow) sendReceiptEmail(updated, vehicleRow, buyerRow);
-
-    notifyAdmins({
-      type: 'ADMIN_PURCHASE_PAID',
-      title: 'Buyer paid: money in escrow',
-      body: `Purch ${updated.reference} ${GHS(updated.amount)} · vehicle #${updated.vehicleId}`,
-      senderId: req.user.id,
-      data: { path: '/admin?tab=purchases', purchaseId: updated.id },
-    }).catch((e) => console.error('Admin purchase-paid notify failed:', e.message));
-
+    onEscrowFunded(updated, { actorId: req.user.id });
     res.json({ status: 'success', purchase: updated });
   } catch (error) {
     console.error('Error verifying purchase:', error);
     res.status(500).json({ message: error.message || 'Server error verifying purchase' });
+  }
+};
+
+// @desc    Payment instructions for a transfer order (platform accounts)
+// @route   GET /api/purchases/:id/instructions
+// @access  Private (Buyer, own)
+const getPaymentInstructions = async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found.' });
+    if (purchase.buyerId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your purchase.' });
+    }
+    if (purchase.method !== 'BANK_TRANSFER' && purchase.method !== 'MOMO') {
+      return res.status(400).json({ message: 'This order does not pay via platform transfer.' });
+    }
+    if (purchase.status !== 'AWAITING_PAYMENT') {
+      return res.status(400).json({ message: 'This order is no longer awaiting payment.' });
+    }
+    res.json({ instructions: instructionsFor(purchase) });
+  } catch (error) {
+    console.error('Error building payment instructions:', error);
+    res.status(500).json({ message: 'Server error building instructions' });
+  }
+};
+
+// @desc    Buyer reports having sent the transfer (reference + payer name)
+// @route   POST /api/purchases/:id/claim-payment
+// @access  Private (Buyer, own)
+const claimPayment = async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    const { paymentRef, payerName } = req.body || {};
+    const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found.' });
+    if (purchase.buyerId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your purchase.' });
+    }
+    if (purchase.method !== 'BANK_TRANSFER' && purchase.method !== 'MOMO') {
+      return res.status(400).json({ message: 'This order does not pay via platform transfer.' });
+    }
+    if (purchase.status !== 'AWAITING_PAYMENT') {
+      return res.status(400).json({ message: `Cannot claim payment from status ${purchase.status}.` });
+    }
+    if (!paymentRef || String(paymentRef).trim().length < 4) {
+      return res.status(400).json({ message: 'Enter the transfer reference from your bank/MoMo confirmation (at least 4 characters).' });
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        paymentRef: String(paymentRef).trim().slice(0, 120),
+        payerName: payerName ? String(payerName).trim().slice(0, 120) : req.user.name,
+        claimedAt: new Date(),
+      },
+    });
+
+    // Queue jump for admins: claimed orders sit at the top of the confirm list
+    notifyAdmins({
+      type: 'ADMIN_PURCHASE_CLAIMED',
+      title: 'Buyer reports transfer sent',
+      body: `Purch ${updated.reference} · ${GHS(updated.amount)} · ref ${updated.paymentRef}`,
+      senderId: req.user.id,
+      data: { path: '/admin?tab=purchases', purchaseId: updated.id },
+    }).catch((e) => console.error('Admin claim notify failed:', e.message));
+
+    res.json({ purchase: updated });
+  } catch (error) {
+    console.error('Error claiming payment:', error);
+    res.status(500).json({ message: 'Server error claiming payment' });
   }
 };
 
@@ -365,7 +486,7 @@ const confirmReceived = async (req, res) => {
     if (purchase.buyerId !== req.user.id) {
       return res.status(403).json({ message: 'Not your purchase.' });
     }
-    if (purchase.method !== 'PAYSTACK') {
+    if (purchase.method === 'CASH') {
       return res.status(400).json({ message: 'Cash orders confirm via the seller handover flow.' });
     }
     if (purchase.status !== 'PAID_HELD') {
@@ -493,7 +614,7 @@ const cancelPurchase = async (req, res) => {
       }).catch((e) => console.warn('Purchase cancel: vehicle free skipped:', e.message));
 
       return tx.purchase.findUnique({ where: { id: purchase.id } });
-    });
+    }, { timeout: 15000 }); // pooler round-trips can eat seconds under load
 
     if (!updated) {
       return res.json({ status: 'already-cancelled', purchase });
@@ -552,6 +673,8 @@ module.exports = {
   initiatePurchase,
   initializePurchasePayment,
   verifyPurchase,
+  getPaymentInstructions,
+  claimPayment,
   confirmReceived,
   confirmHandover,
   sellerCollected,
@@ -559,7 +682,9 @@ module.exports = {
   listPurchases,
   getPurchase,
 
-  // Exported for the webhook + tests
+  // Exported for the webhook + admin transfer confirmation + tests
   applyVerifiedPurchase,
+  markEscrowFunded,
+  instructionsFor,
   resolveSellerProfile,
 };

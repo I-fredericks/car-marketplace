@@ -2,9 +2,11 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt, Landmark, Smartphone } from 'lucide-react';
 import OrderProgress from '../components/OrderProgress';
 import SlideToConfirm from '../components/SlideToConfirm';
+
+const ghs = (pesewas) => `GH₵${(pesewas / 100).toLocaleString()}`;
 
 const STATUS_COPY = {
   AWAITING_PAYMENT: { label: 'Awaiting payment', tone: 'text-warn' },
@@ -33,6 +35,10 @@ const PurchaseDetail = () => {
   const [acting, setActing] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [instructions, setInstructions] = useState(null);
+  const [claimRef, setClaimRef] = useState('');
+  const [claimName, setClaimName] = useState('');
+  const [claimBusy, setClaimBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -94,6 +100,24 @@ const PurchaseDetail = () => {
     return () => clearTimeout(retryTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, id, load]);
+
+  // Transfer orders awaiting payment: load the platform account details
+  useEffect(() => {
+    if (!user || !purchase) return;
+    const transfer = purchase.method === 'BANK_TRANSFER' || purchase.method === 'MOMO';
+    if (!transfer || purchase.status !== 'AWAITING_PAYMENT') {
+      setInstructions(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { data } = await api.get(`/purchases/${id}/instructions`);
+        setInstructions(data.instructions);
+      } catch {
+        // detail still renders; instructions card just hides
+      }
+    })();
+  }, [user, purchase?.status, purchase?.method, id, purchase]);
 
   if (!user) return null;
 
@@ -167,6 +191,22 @@ const PurchaseDetail = () => {
     }
   };
 
+  const submitClaim = async () => {
+    setClaimBusy(true);
+    setError('');
+    try {
+      const { data } = await api.post(`/purchases/${id}/claim-payment`, {
+        paymentRef: claimRef,
+        payerName: claimName || undefined,
+      });
+      setPurchase((prev) => ({ ...prev, ...data.purchase }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not submit your payment reference.');
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
   return (
     <div className="bg-bg min-h-screen pt-24 pb-20 px-4">
       <div className="max-w-2xl mx-auto">
@@ -174,6 +214,79 @@ const PurchaseDetail = () => {
 
           {/* AliExpress-style order progress tracker */}
           <OrderProgress status={purchase.status} />
+
+          {/* Transfer payment instructions + claim (before escrow confirms) */}
+          {instructions && purchase.status === 'AWAITING_PAYMENT' && isBuyer && (
+            <div className="mb-6 border-2 border-primary/20 bg-primary/[0.04] rounded-lg p-5">
+              <h3 className="font-display font-bold text-textprimary mb-1 flex items-center gap-2">
+                <Landmark size={18} className="text-primary" /> Pay {ghs(instructions.amountPesewas)} to escrow
+              </h3>
+              <p className="text-xs text-textsecondary mb-4">
+                Send exactly this amount to the CarMarket account below — the money is held in escrow until you confirm you have the car.
+              </p>
+
+              <div className="bg-surface border border-bordercol rounded-md p-4 space-y-2 text-sm mb-4">
+                {purchase.method === 'BANK_TRANSFER' ? (
+                  <>
+                    <div className="flex justify-between gap-4"><span className="text-textsecondary">Bank</span><span className="font-medium text-textprimary text-right">{instructions.bank.name}</span></div>
+                    <div className="flex justify-between gap-4"><span className="text-textsecondary">Account number</span><span className="font-bold text-textprimary tracking-wide text-right">{instructions.bank.accountNumber}</span></div>
+                    <div className="flex justify-between gap-4"><span className="text-textsecondary">Account name</span><span className="font-medium text-textprimary text-right">{instructions.bank.accountName}</span></div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between gap-4"><span className="text-textsecondary">MoMo number</span><span className="font-bold text-textprimary tracking-wide text-right">{instructions.momo.number}</span></div>
+                    <div className="flex justify-between gap-4"><span className="text-textsecondary">Network</span><span className="font-medium text-textprimary text-right">{instructions.momo.network}</span></div>
+                    <div className="flex justify-between gap-4"><span className="text-textsecondary">Name</span><span className="font-medium text-textprimary text-right">{instructions.momo.name}</span></div>
+                  </>
+                )}
+                <div className="border-t border-bordercol pt-2 flex justify-between gap-4">
+                  <span className="text-textsecondary">Amount</span>
+                  <span className="font-bold text-primary">{ghs(instructions.amountPesewas)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-textsecondary">Reference</span>
+                  <span className="font-bold text-accentdark tracking-wide text-right">{instructions.reference}</span>
+                </div>
+              </div>
+              <p className="text-xs text-warn font-medium mb-4">
+                Use <span className="font-bold">{instructions.reference}</span> as the transfer reason — it's how we match your payment.
+              </p>
+
+              {!purchase.claimedAt ? (
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-textsecondary">Transfer / transaction reference</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={claimRef}
+                      onChange={(e) => setClaimRef(e.target.value)}
+                      placeholder="e.g. the confirmation code from your bank"
+                      className="flex-1 h-10 px-3 border border-bordercol rounded-md bg-surface text-base sm:text-sm focus:outline-none focus:border-primary"
+                    />
+                    <input
+                      value={claimName}
+                      onChange={(e) => setClaimName(e.target.value)}
+                      placeholder="Name on your account"
+                      className="flex-1 h-10 px-3 border border-bordercol rounded-md bg-surface text-base sm:text-sm focus:outline-none focus:border-primary"
+                    />
+                    <button
+                      onClick={submitClaim}
+                      disabled={claimBusy || claimRef.trim().length < 4}
+                      className="px-5 h-10 bg-accent text-textprimary font-bold rounded-md text-sm hover:bg-accentdark disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                    >
+                      {claimBusy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={15} />} I have paid
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 bg-surface border border-success/25 rounded-md p-3">
+                  <Loader2 size={16} className="animate-spin text-success" />
+                  <p className="text-sm text-textprimary">
+                    Payment reported (ref <span className="font-medium">{purchase.paymentRef}</span>) — CarMarket is confirming it against the account. You'll be notified shortly.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Verifying overlay note */}
           {verifyState === 'verifying' && (
@@ -194,8 +307,14 @@ const PurchaseDetail = () => {
                 GH₵{(purchase.amount / 100).toLocaleString()}
               </div>
               <div className="text-xs text-textsecondary flex items-center gap-1 justify-end mt-1">
-                {purchase.method === 'PAYSTACK' ? <CreditCard size={13} /> : <Banknote size={13} />}
-                {purchase.method === 'PAYSTACK' ? 'Online (escrow)' : 'Cash at handover'}
+                {purchase.method === 'CASH' ? <Banknote size={13} /> : purchase.method === 'MOMO' ? <Smartphone size={13} /> : <CreditCard size={13} />}
+                {purchase.method === 'CASH'
+                  ? 'Cash at handover'
+                  : purchase.method === 'MOMO'
+                    ? 'MoMo to CarMarket (escrow)'
+                    : purchase.method === 'PAYSTACK'
+                      ? 'Online (escrow)'
+                      : 'Bank transfer (escrow)'}
               </div>
             </div>
           </div>

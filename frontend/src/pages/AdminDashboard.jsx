@@ -274,11 +274,42 @@ const AdminDashboard = () => {
       return;
     }
     try {
-      const { data } = await api.put(`/admin/purchases/${id}/release-payout`, { payoutRef: payoutRef || undefined });
+      const { data } = await api.put(`/admin/purchases/${id}/release-payout`, { payoutRef: payoutRef.trim() });
       toast(data.message || 'Payout marked sent ✅');
       setPurchases(prev => prev.map(p => p.id === id ? { ...p, payoutStatus: 'SENT', payoutRef: data.purchase.payoutRef } : p));
     } catch (err) {
       toast(err.response?.data?.message || 'Release failed.');
+    }
+  };
+
+  // Transfer orders: buyer claims "I paid" -> admin matches the platform
+  // account statement -> escrow starts (or the claim bounces back)
+  const handleVerifyPurchasePayment = async (id) => {
+    const p = purchases.find((x) => x.id === id);
+    const ok = window.confirm(
+      `Confirm ${p ? `GH₵${(p.amount / 100).toLocaleString()}` : 'the payment'} landed in the CarMarket account for ${p?.reference || 'this order'}?` +
+      (p?.paymentRef ? `\n\nBuyer's reference: ${p.paymentRef}` : '')
+    );
+    if (!ok) return;
+    try {
+      const { data } = await api.put(`/admin/purchases/${id}/verify-payment`);
+      toast(data.message || 'Payment confirmed — escrowed ✅');
+      setPurchases(prev => prev.map(x => x.id === id ? { ...x, ...data.purchase, payoutAmount: x.payoutAmount } : x));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Confirmation failed.');
+    }
+  };
+
+  const handleRejectPurchasePayment = async (id) => {
+    const p = purchases.find((x) => x.id === id);
+    const reason = window.prompt(`No matching transfer found for ${p?.reference || 'this order'}.\nOptional note for the log:`);
+    if (reason === null) return; // cancelled
+    try {
+      const { data } = await api.put(`/admin/purchases/${id}/reject-payment`, { reason: reason || undefined });
+      toast(data.message || 'Claim rejected.');
+      setPurchases(prev => prev.map(x => x.id === id ? { ...x, ...data.purchase } : x));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Rejection failed.');
     }
   };
 
@@ -1289,6 +1320,10 @@ const AdminDashboard = () => {
     const awaitingPayout = purchases.filter(p => p.payoutStatus === 'PENDING');
     const rest = purchases.filter(p => p.payoutStatus !== 'PENDING');
 
+    // Transfer orders waiting on the buyer's money (claimed ones first)
+    const awaitingPayment = purchases.filter(p => p.status === 'AWAITING_PAYMENT' && (p.method === 'BANK_TRANSFER' || p.method === 'MOMO'));
+    const confirmedRest = rest.filter(p => p.status !== 'AWAITING_PAYMENT');
+
     const payoutTo = (p) => {
       const parts = [];
       if (p.seller?.payoutMethod) parts.push(p.seller.payoutMethod.replace(/_/g, ' '));
@@ -1360,7 +1395,7 @@ const AdminDashboard = () => {
             Purchases {awaitingPayout.length > 0 && <span className="text-err">({awaitingPayout.length} awaiting payout)</span>}
           </h2>
           <p className="text-sm text-textsecondary">
-            Escrow orders: transfers release once you mark the payout sent (buyer keeps the car).
+            Escrow orders: transfers confirm here against the platform account; payouts release once you mark them sent.
           </p>
         </div>
 
@@ -1375,6 +1410,58 @@ const AdminDashboard = () => {
           </div>
         ) : (
           <>
+            {awaitingPayment.length > 0 && (
+              <div>
+                <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-3">
+                  Awaiting payment confirmation ({awaitingPayment.length})
+                </h3>
+                <div className="space-y-3">
+                  {awaitingPayment.map(p => (
+                    <div key={p.id} className={`bg-surface rounded-lg p-4 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4 ${p.claimedAt ? 'border-2 border-accent/50' : 'border border-bordercol'}`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="font-display font-bold text-textprimary">{p.reference}</span>
+                          <Badge type={p.method === 'MOMO' ? 'neutral' : 'neutral'}>{p.method === 'MOMO' ? 'MoMo' : 'Bank transfer'}</Badge>
+                          {p.claimedAt ? (
+                            <Badge type="accent">Claimed</Badge>
+                          ) : (
+                            <Badge type="neutral">Not claimed yet</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-textsecondary">
+                          {p.buyer?.name} · {p.vehicle ? `${p.vehicle.year} ${p.vehicle.make} ${p.vehicle.model}` : `vehicle #${p.vehicleId}`}
+                        </p>
+                        {p.claimedAt && (
+                          <p className="text-xs text-textmuted mt-0.5">
+                            Buyer ref: <span className="font-medium text-textprimary">{p.paymentRef}</span>
+                            {p.payerName ? ` · ${p.payerName}` : ''} · claimed {new Date(p.claimedAt).toLocaleString()}
+                          </p>
+                        )}
+                        <p className="text-xs text-textmuted mt-0.5">Order placed {new Date(p.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-display font-bold text-lg text-primary">GH₵{Number(p.amount / 100).toLocaleString()}</span>
+                        <button
+                          onClick={() => handleVerifyPurchasePayment(p.id)}
+                          className="px-4 py-2 bg-success/10 text-success border border-success/20 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                        >
+                          <Check size={14} /> Confirm escrow
+                        </button>
+                        {p.claimedAt && (
+                          <button
+                            onClick={() => handleRejectPurchasePayment(p.id)}
+                            className="px-4 py-2 bg-err/10 text-err border border-err/20 rounded hover:bg-err hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                          >
+                            <X size={14} /> Reject claim
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {awaitingPayout.length > 0 && (
               <div>
                 <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-3">Awaiting payout release</h3>
@@ -1389,16 +1476,16 @@ const AdminDashboard = () => {
               </div>
             )}
 
-            {rest.length > 0 && (
+            {confirmedRest.length > 0 && (
               <div>
                 <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-3">
-                  {awaitingPayout.length > 0 ? 'All orders' : 'Orders'}
+                  {(awaitingPayout.length > 0 || awaitingPayment.length > 0) ? 'All orders' : 'Orders'}
                 </h3>
                 <div className="bg-surface border border-bordercol rounded-lg shadow-sm overflow-hidden overflow-x-auto">
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     {tableHead(false)}
                     <tbody className="divide-y divide-bordercol">
-                      {rest.map(p => row(p))}
+                      {confirmedRest.map(p => row(p))}
                     </tbody>
                   </table>
                 </div>

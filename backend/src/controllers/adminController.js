@@ -761,8 +761,9 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
-// @desc    All purchase orders — escrow/payout queue first, newest last.
-//          Each row carries commission/payout breakdown for the payout view.
+// @desc    All purchase orders — claimed transfers first (admin must match
+//          them against the platform account statement), then payout queue,
+//          newest last. Rows carry commission/payout breakdown.
 // @route   GET /api/admin/purchases
 // @access  Private (Admin only)
 const getPurchases = async (req, res) => {
@@ -778,8 +779,7 @@ const getPurchases = async (req, res) => {
           },
         },
       },
-      // payoutStatus PENDING first (admins need to action them), then newest
-      orderBy: [{ payoutStatus: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ claimedAt: { sort: 'desc', nulls: 'last' } }, { payoutStatus: 'asc' }, { createdAt: 'desc' }],
     });
     res.json(purchases.map((p) => ({
       ...p,
@@ -788,6 +788,96 @@ const getPurchases = async (req, res) => {
     })));
   } catch (error) {
     console.error('Error fetching purchases:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Confirm a buyer's transfer landed in the platform collection
+//          account — moves the order into real escrow (PAID_HELD)
+// @route   PUT /api/admin/purchases/:id/verify-payment
+// @access  Private (Admin only)
+const verifyPurchasePayment = async (req, res) => {
+  try {
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
+    if (purchase.method !== 'BANK_TRANSFER' && purchase.method !== 'MOMO') {
+      return res.status(400).json({ message: 'Only transfer orders are confirmed here' });
+    }
+    if (purchase.status !== 'AWAITING_PAYMENT') {
+      return res.status(400).json({ message: `Order is ${purchase.status}, not awaiting payment` });
+    }
+
+    const { markEscrowFunded } = require('./purchaseController');
+    const updated = await markEscrowFunded(purchase.id, {
+      channel: purchase.method === 'MOMO' ? 'mobile_money' : 'bank_transfer',
+      paymentRef: req.body?.paymentRef || purchase.paymentRef,
+      verifiedBy: req.user.id,
+    });
+    if (!updated) {
+      return res.status(400).json({ message: 'Order was already confirmed by someone else' });
+    }
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'PURCHASE.VERIFY_PAYMENT',
+      entityType: 'PURCHASE',
+      entityId: purchase.id,
+      meta: { reference: purchase.reference, amount: purchase.amount, paymentRef: updated.paymentRef },
+    });
+
+    res.json({ message: 'Payment confirmed — funds in escrow', purchase: updated });
+  } catch (error) {
+    console.error('Error verifying purchase payment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Reject a buyer's payment claim (no matching transfer found) —
+//          clears the claim so the buyer can re-send/re-claim
+// @route   PUT /api/admin/purchases/:id/reject-payment
+// @access  Private (Admin only)
+const rejectPurchasePayment = async (req, res) => {
+  try {
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
+    if (purchase.status !== 'AWAITING_PAYMENT') {
+      return res.status(400).json({ message: `Order is ${purchase.status}, not awaiting payment` });
+    }
+    if (!purchase.claimedAt) {
+      return res.status(400).json({ message: 'This order has no payment claim to reject' });
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { paymentRef: null, payerName: null, claimedAt: null },
+    });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'PURCHASE.REJECT_PAYMENT',
+      entityType: 'PURCHASE',
+      entityId: purchase.id,
+      meta: { reference: purchase.reference, reason: req.body?.reason || null },
+    });
+
+    // Tell the buyer their reference didn't match (fire-and-forget)
+    prisma.notification.create({
+      data: {
+        userId: purchase.buyerId,
+        type: 'PURCHASE_PAYMENT_REJECTED',
+        title: 'Payment reference not found',
+        body: `We couldn't find your transfer for order ${purchase.reference}. Check the amount/reference and tap "I have paid" again, or contact support.`,
+        data: { path: `/purchases/${purchase.id}`, purchaseId: purchase.id },
+      },
+    }).catch((e) => console.error('Reject-payment notify failed:', e.message));
+
+    res.json({ message: 'Claim rejected — buyer can re-submit', purchase: updated });
+  } catch (error) {
+    console.error('Error rejecting purchase payment:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -853,4 +943,6 @@ module.exports = {
   rejectAvatar,
   getPurchases,
   releasePayout,
+  verifyPurchasePayment,
+  rejectPurchasePayment,
 };

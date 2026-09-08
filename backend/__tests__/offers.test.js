@@ -215,11 +215,12 @@ describe('Price negotiation (offers in messages)', () => {
     const initiated = await request(app)
       .post('/api/purchases')
       .set('Authorization', `Bearer ${tokens.buyer}`)
-      .send({ vehicleId: ids.vehicleId, method: 'PAYSTACK', deliveryMode: 'PICKUP' });
+      .send({ vehicleId: ids.vehicleId, method: 'BANK_TRANSFER', deliveryMode: 'PICKUP' });
     expect(initiated.statusCode).toEqual(201);
 
     const purchase = initiated.body.purchase;
     expect(purchase.amount).toEqual(7200000); // the agreed price, not 80,000
+    expect(initiated.body.paymentInstructions.amountPesewas).toEqual(7200000);
     ids.purchaseId = purchase.id;
 
     const prisma = require('./_db');
@@ -231,16 +232,17 @@ describe('Price negotiation (offers in messages)', () => {
       // 1% commission on the agreed amount
       expect(row.commissionBps).toEqual(100);
     } finally {
-      
     }
 
-    // Settle the escrow so the platform gets its 1% of GH₵72,000
-    verifyTransaction.mockResolvedValueOnce({
-      status: 'success', amount: purchase.amount, channel: 'mobile_money',
-    });
+    // Buyer claims the transfer, admin confirms -> funds in escrow
+    expect((await request(app)
+      .post(`/api/purchases/${purchase.id}/claim-payment`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ paymentRef: 'TRF-445566' })).statusCode).toEqual(200);
     const verified = await request(app)
-      .get(`/api/purchases/${purchase.id}/verify`)
-      .set('Authorization', `Bearer ${tokens.buyer}`);
+      .put(`/api/admin/purchases/${purchase.id}/verify-payment`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({});
     expect(verified.statusCode).toEqual(200);
     expect(verified.body.purchase.status).toEqual('PAID_HELD');
   });
@@ -254,7 +256,7 @@ describe('Price negotiation (offers in messages)', () => {
     expect((await request(app)
       .post('/api/purchases')
       .set('Authorization', `Bearer ${tokens.rival}`)
-      .send({ vehicleId: ids.vehicleId, method: 'PAYSTACK', deliveryMode: 'PICKUP' })).statusCode).toEqual(409);
+      .send({ vehicleId: ids.vehicleId, method: 'BANK_TRANSFER', deliveryMode: 'PICKUP' })).statusCode).toEqual(409);
   });
 
   it('withdraw takes a live offer back; declined ends the round', async () => {

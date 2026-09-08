@@ -77,6 +77,20 @@ const MOMO = {
   name: 'CarMarket Ghana',
 };
 
+// Car-payment collection rails. Card gateways charge ~1.95% — GH₵1,950 on a
+// GH₵100,000 car — so vehicle purchases settle into CarMarket's OWN accounts
+// over flat-fee rails (GhIPSS bank transfer / MoMo), are confirmed by an
+// admin against the statement, and only then count as escrowed. Paystack
+// remains the rail for small subscription payments only.
+const PLATFORM_ACCOUNTS = {
+  bank: {
+    name: process.env.PLATFORM_BANK_NAME || 'Absa Bank Ghana',
+    accountNumber: process.env.PLATFORM_BANK_ACCOUNT || '1234567890123',
+    accountName: process.env.PLATFORM_BANK_ACCOUNT_NAME || 'CarMarket Ghana Ltd',
+  },
+  momo: MOMO,
+};
+
 function generateReference() {
   // Cryptographically random: predictable Math.random references could be
   // guessed, and collisions would hit the unique constraint.
@@ -94,4 +108,4 @@ function commissionFor(purchase) {
   return Math.round((purchase.amount * purchase.commissionBps) / 10000);
 }
 
-module.exports = { PLANS, FREE_TIER, MOMO, generateReference, getListingLimit, getPlanRank, PLATFORM_COMMISSION_BPS, commissionFor };
+module.exports = { PLANS, FREE_TIER, MOMO, generateReference, getListingLimit, getPlanRank, PLATFORM_COMMISSION_BPS, commissionFor, PLATFORM_ACCOUNTS };

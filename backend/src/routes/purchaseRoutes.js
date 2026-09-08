@@ -5,6 +5,8 @@ const {
   initiatePurchase,
   initializePurchasePayment,
   verifyPurchase,
+  getPaymentInstructions,
+  claimPayment,
   confirmReceived,
   confirmHandover,
   sellerCollected,
@@ -21,6 +23,8 @@ router.get('/', listPurchases);
 router.get('/:id', getPurchase);
 router.post('/:id/initialize', initializePurchasePayment);
 router.get('/:id/verify', verifyPurchase);
+router.get('/:id/instructions', getPaymentInstructions);
+router.post('/:id/claim-payment', claimPayment);
 router.post('/:id/confirm-received', confirmReceived);
 router.post('/:id/confirm-handover', confirmHandover);
 router.post('/:id/seller-collected', sellerCollected);
