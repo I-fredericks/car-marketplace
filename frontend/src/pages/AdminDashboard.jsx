@@ -5,7 +5,7 @@ import api, { getImageThumbUrl } from '../utils/api';
 import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
   Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera,
-  UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight
+  UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight, Package
 } from 'lucide-react';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
@@ -18,7 +18,7 @@ const AdminDashboard = () => {
   // /admin?tab=<name> (e.g. /admin?tab=pending, ?tab=photos, ?tab=users...).
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTabState] = useState(() => {
-    const VALID = new Set(['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'reports', 'users']);
+    const VALID = new Set(['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'purchases', 'reports', 'users']);
     const initial = searchParams.get('tab');
     return initial && VALID.has(initial) ? initial : 'overview';
   });
@@ -32,6 +32,7 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [purchases, setPurchases] = useState([]);
   const [deactivatedCars, setDeactivatedCars] = useState([]);
   const [pendingAvatars, setPendingAvatars] = useState([]);
   const [processingAvatar, setProcessingAvatar] = useState(null);
@@ -87,12 +88,16 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       if (tab === 'overview') {
-        const [{ data: statsData }, { data: auditsData }] = await Promise.all([
+        const [{ data: statsData }, { data: auditsData }, { data: purchasesData }, { data: paymentsData }] = await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/audit-logs?limit=8'),
+          api.get('/admin/purchases'),
+          api.get('/admin/payments'),
         ]);
         setStats(statsData);
         setActivity(auditsData.logs || []);
+        setPurchases(purchasesData);
+        setPayments(paymentsData);
       } else if (tab === 'pending') {
         const { data } = await api.get('/admin/vehicles/pending');
         setPendingCars(data);
@@ -114,6 +119,9 @@ const AdminDashboard = () => {
       } else if (tab === 'payments') {
         const { data } = await api.get('/admin/payments');
         setPayments(data);
+      } else if (tab === 'purchases') {
+        const { data } = await api.get('/admin/purchases');
+        setPurchases(data);
       }
     } catch (err) {
       console.error('Admin fetch error:', err);
@@ -246,6 +254,18 @@ const AdminDashboard = () => {
       setPayments(prev => prev.map(p => p.id === id ? { ...p, status: 'VERIFIED' } : p));
     } catch {
       toast('Verification failed.');
+    }
+  };
+
+  const handleReleasePayout = async (id) => {
+    const payoutRef = window.prompt('Payout reference (transfer ID / receipt no.):', '');
+    if (payoutRef === null) return; // cancelled
+    try {
+      const { data } = await api.put(`/admin/purchases/${id}/release-payout`, { payoutRef: payoutRef || undefined });
+      toast(data.message || 'Payout marked sent ✅');
+      setPurchases(prev => prev.map(p => p.id === id ? { ...p, payoutStatus: 'SENT', payoutRef: data.purchase.payoutRef } : p));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Release failed.');
     }
   };
 
@@ -428,6 +448,7 @@ const AdminDashboard = () => {
     const statusSegments = stats ? [
       { key: 'available', label: 'Live', value: stats.listings.available, color: 'bg-success' },
       { key: 'pending', label: 'Pending', value: stats.listings.pending, color: 'bg-[#EAB308]' },
+      { key: 'reserved', label: 'Reserved', value: stats.listings.reserved || 0, color: 'bg-accent' },
       { key: 'sold', label: 'Sold', value: stats.listings.sold, color: 'bg-primary' },
       { key: 'rejected', label: 'Rejected', value: stats.listings.rejected, color: 'bg-err' },
       { key: 'deactivated', label: 'Taken down', value: stats.listings.deactivated, color: 'bg-orange-500' },
@@ -438,6 +459,7 @@ const AdminDashboard = () => {
     const quickActions = stats ? [
       { label: 'Review pending listings', tab: 'pending', count: stats.listings.pending, accent: stats.listings.pending > 0 },
       { label: 'Pending payments', tab: 'payments', count: payments.filter(p => p.status === 'PENDING').length, accent: payments.filter(p => p.status === 'PENDING').length > 0 },
+      { label: 'Payouts to release', tab: 'purchases', count: purchases.filter(p => p.payoutStatus === 'PENDING').length, accent: purchases.filter(p => p.payoutStatus === 'PENDING').length > 0 },
       { label: 'Open reports', tab: 'reports', count: (stats.reports?.pending ?? reports.length), accent: (stats.reports?.pending ?? 0) > 0 },
       { label: 'Manage users', tab: 'users', count: stats.users.total, accent: false },
       { label: 'Audit log', tab: 'audit', count: null, accent: false },
@@ -1200,6 +1222,127 @@ const AdminDashboard = () => {
     );
   };
 
+  const renderPurchases = () => {
+    const STATUS = {
+      AWAITING_PAYMENT: <Badge type="accent">Awaiting payment</Badge>,
+      PAID_HELD: <Badge type="neutral">Paid (escrow)</Badge>,
+      HANDOVER_PENDING: <Badge type="neutral">Handover pending</Badge>,
+      DELIVERED: <Badge type="neutral">Delivered</Badge>,
+      COMPLETED: <Badge type="success">Completed</Badge>,
+      CANCELLED: <Badge type="err">Cancelled</Badge>,
+      REFUNDED: <Badge type="err">Refunded</Badge>,
+    };
+    const PAYOUT = {
+      NONE: <span className="text-textmuted">—</span>,
+      PENDING: <Badge type="accent">Payout pending</Badge>,
+      SENT: <Badge type="success">Payout sent</Badge>,
+    };
+    const awaitingPayout = purchases.filter(p => p.payoutStatus === 'PENDING');
+    const rest = purchases.filter(p => p.payoutStatus !== 'PENDING');
+
+    const row = (p, withAction = false) => (
+      <tr key={p.id} className="hover:bg-bg/50 transition-colors">
+        <td className="px-6 py-4 font-medium text-textprimary">{p.reference}</td>
+        <td className="px-6 py-4 text-textsecondary">{p.buyer?.name}</td>
+        <td className="px-6 py-4 text-textsecondary">{p.seller?.user?.name}</td>
+        <td className="px-6 py-4 text-textsecondary">{p.vehicle ? `${p.vehicle.year} ${p.vehicle.make} ${p.vehicle.model}` : '—'}</td>
+        <td className="px-6 py-4 font-medium text-textprimary">GH₵{Number(p.amount / 100).toLocaleString()}</td>
+        <td className="px-6 py-4 text-textsecondary">{p.method}</td>
+        <td className="px-6 py-4">{STATUS[p.status] || p.status}</td>
+        <td className="px-6 py-4">
+          {PAYOUT[p.payoutStatus] || p.payoutStatus}
+          {p.payoutRef && <div className="text-xs text-textmuted mt-1">ref {p.payoutRef}</div>}
+        </td>
+        <td className="px-6 py-4 text-textsecondary">{new Date(p.createdAt).toLocaleDateString()}</td>
+        {withAction && (
+          <td className="px-6 py-4">
+            {p.payoutStatus === 'PENDING' && (
+              <button
+                onClick={() => handleReleasePayout(p.id)}
+                className="px-3 py-2 bg-success/10 text-success border border-success/20 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold whitespace-nowrap"
+              >
+                Mark payout sent
+              </button>
+            )}
+          </td>
+        )}
+      </tr>
+    );
+
+    const tableHead = (withAction = false) => (
+      <thead className="bg-bg border-b border-bordercol text-textsecondary uppercase tracking-wider font-semibold text-xs">
+        <tr>
+          <th className="px-6 py-4">Reference</th>
+          <th className="px-6 py-4">Buyer</th>
+          <th className="px-6 py-4">Seller</th>
+          <th className="px-6 py-4">Vehicle</th>
+          <th className="px-6 py-4">Amount</th>
+          <th className="px-6 py-4">Method</th>
+          <th className="px-6 py-4">Status</th>
+          <th className="px-6 py-4">Payout</th>
+          <th className="px-6 py-4">Date</th>
+          {withAction && <th className="px-6 py-4">Action</th>}
+        </tr>
+      </thead>
+    );
+
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <div>
+          <h2 className="font-display font-bold text-2xl text-textprimary mb-1">
+            Purchases {awaitingPayout.length > 0 && <span className="text-err">({awaitingPayout.length} awaiting payout)</span>}
+          </h2>
+          <p className="text-sm text-textsecondary">
+            Escrow orders: transfers release once you mark the payout sent (buyer keeps the car).
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-20 text-textmuted">
+            <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+          </div>
+        ) : purchases.length === 0 ? (
+          <div className="bg-surface border border-bordercol rounded-lg p-12 text-center text-textsecondary">
+            <Package size={48} className="mx-auto text-bordercol mb-4" />
+            <p>No purchases yet. Escrowed checkouts will queue here once a buyer pays.</p>
+          </div>
+        ) : (
+          <>
+            {awaitingPayout.length > 0 && (
+              <div>
+                <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-3">Awaiting payout release</h3>
+                <div className="bg-surface border border-accent/40 rounded-lg shadow-sm overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    {tableHead(true)}
+                    <tbody className="divide-y divide-bordercol">
+                      {awaitingPayout.map(p => row(p, true))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {rest.length > 0 && (
+              <div>
+                <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-3">
+                  {awaitingPayout.length > 0 ? 'All orders' : 'Orders'}
+                </h3>
+                <div className="bg-surface border border-bordercol rounded-lg shadow-sm overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    {tableHead(false)}
+                    <tbody className="divide-y divide-bordercol">
+                      {rest.map(p => row(p))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   const tabs = [
     { id: 'overview', icon: <LayoutDashboard size={18} />, label: 'Overview' },
     { id: 'pending', icon: <Car size={18} />, label: `Pending ${pendingCars.length > 0 ? `(${pendingCars.length})` : ''}` },
@@ -1208,6 +1351,7 @@ const AdminDashboard = () => {
     { id: 'audit', icon: <FileText size={18} />, label: 'Audit Log' },
     { id: 'photos', icon: <Camera size={18} />, label: `Photos ${pendingAvatars.length > 0 ? `(${pendingAvatars.length})` : ''}` },
     { id: 'payments', icon: <CreditCard size={18} />, label: `Payments ${payments.filter(p => p.status === 'PENDING').length > 0 ? `(${payments.filter(p => p.status === 'PENDING').length})` : ''}` },
+    { id: 'purchases', icon: <Package size={18} />, label: `Purchases ${purchases.filter(p => p.payoutStatus === 'PENDING').length > 0 ? `(${purchases.filter(p => p.payoutStatus === 'PENDING').length})` : ''}` },
     { id: 'reports', icon: <AlertTriangle size={18} />, label: `Reports ${reports.filter(r => r.status === 'PENDING').length > 0 ? `(${reports.filter(r => r.status === 'PENDING').length})` : ''}` },
     { id: 'users', icon: <Users size={18} />, label: 'Manage Users' },
   ];
@@ -1269,6 +1413,7 @@ const AdminDashboard = () => {
             {tab === 'audit'       && renderAuditLogs()}
             {tab === 'photos'      && renderPhotoReview()}
             {tab === 'payments'    && renderPayments()}
+            {tab === 'purchases'   && renderPurchases()}
             {tab === 'reports'     && renderReports()}
             {tab === 'users'       && renderUsers()}
           </div>

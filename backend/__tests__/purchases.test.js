@@ -343,6 +343,53 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(retry.body.purchase.status).toEqual('HANDOVER_PENDING');
   });
 
+  it('admins list purchases and release the escrow payout', async () => {
+    // Non-admin cannot touch the admin purchase queue
+    expect((await request(app)
+      .get('/api/admin/purchases')
+      .set('Authorization', `Bearer ${tokens.buyer}`)).statusCode).toEqual(403);
+
+    const list = await request(app)
+      .get('/api/admin/purchases')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(list.statusCode).toEqual(200);
+    const escrowSale = list.body.find((p) => p.id === ids.payPurchase);
+    expect(escrowSale).toBeDefined();
+    expect(escrowSale.payoutStatus).toEqual('PENDING');
+    expect(escrowSale.seller?.user?.name).toEqual('Pay Seller');
+
+    // Cash orders carry no payout (PENDING-only releases)
+    const cashOrder = list.body.find((p) => p.id === ids.cashPurchase);
+    expect(cashOrder).toBeDefined();
+    expect(cashOrder.payoutStatus).toEqual('NONE');
+    expect((await request(app)
+      .put(`/api/admin/purchases/${ids.cashPurchase}/release-payout`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({})).statusCode).toEqual(400);
+
+    // Release the escrow payout with a transfer reference
+    const released = await request(app)
+      .put(`/api/admin/purchases/${ids.payPurchase}/release-payout`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ payoutRef: 'TRX-2026-0001' });
+    expect(released.statusCode).toEqual(200);
+    expect(released.body.purchase.payoutStatus).toEqual('SENT');
+    expect(released.body.purchase.payoutRef).toEqual('TRX-2026-0001');
+
+    // Re-release is blocked (idempotency guard)
+    expect((await request(app)
+      .put(`/api/admin/purchases/${ids.payPurchase}/release-payout`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({})).statusCode).toEqual(400);
+
+    // Audit trail records the release
+    const audit = await request(app)
+      .get('/api/admin/audit-logs?action=PURCHASE.RELEASE_PAYOUT')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(audit.statusCode).toEqual(200);
+    expect(audit.body.logs.some((l) => l.entityId === ids.payPurchase)).toBe(true);
+  });
+
   it('seller sees their sales and the purchase list is scoped', async () => {
     const sales = await request(app)
       .get('/api/purchases')

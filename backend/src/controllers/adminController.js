@@ -452,6 +452,7 @@ const getStats = async (req, res) => {
       rejectedListings,
       deactivatedListings,
       removedListings,
+      reservedListings,
       featuredListings,
       totalFavorites,
       totalMessages,
@@ -467,6 +468,7 @@ const getStats = async (req, res) => {
       prisma.vehicle.count({ where: { status: 'REJECTED' } }),
       prisma.vehicle.count({ where: { status: 'DEACTIVATED' } }),
       prisma.vehicle.count({ where: { status: 'REMOVED' } }),
+      prisma.vehicle.count({ where: { status: 'RESERVED' } }),
       prisma.vehicle.count({ where: { featured: true } }),
       prisma.favorite.count(),
       prisma.message.count(),
@@ -483,9 +485,10 @@ const getStats = async (req, res) => {
         rejected: rejectedListings,
         deactivated: deactivatedListings,
         removed: removedListings,
+        reserved: reservedListings,
         featured: featuredListings,
         total: pendingListings + availableListings + soldListings + rejectedListings
-          + deactivatedListings + removedListings,
+          + deactivatedListings + removedListings + reservedListings,
       },
       engagement: {
         favorites: totalFavorites,
@@ -734,6 +737,67 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+// @desc    All purchase orders — escrow/payout queue first, newest last
+// @route   GET /api/admin/purchases
+// @access  Private (Admin only)
+const getPurchases = async (req, res) => {
+  try {
+    const purchases = await prisma.purchase.findMany({
+      include: {
+        buyer: { select: { id: true, name: true, email: true, phone: true } },
+        vehicle: { select: { id: true, make: true, model: true, year: true } },
+        seller: { include: { user: { select: { id: true, name: true, email: true } } } },
+      },
+      // payoutStatus PENDING first (admins need to action them), then newest
+      orderBy: [{ payoutStatus: 'asc' }, { createdAt: 'desc' }],
+    });
+    res.json(purchases);
+  } catch (error) {
+    console.error('Error fetching purchases:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Mark an escrow payout as sent (manual transfer made off-platform)
+// @route   PUT /api/admin/purchases/:id/release-payout
+// @access  Private (Admin only)
+const releasePayout = async (req, res) => {
+  try {
+    const { payoutRef } = req.body || {};
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
+    if (purchase.status !== 'COMPLETED') {
+      return res.status(400).json({ message: 'Payouts only release once the order is COMPLETED' });
+    }
+    if (purchase.payoutStatus !== 'PENDING') {
+      return res.status(400).json({ message: `Cannot release a payout that is ${purchase.payoutStatus}` });
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: {
+        payoutStatus: 'SENT',
+        payoutRef: payoutRef || null,
+      },
+    });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'PURCHASE.RELEASE_PAYOUT',
+      entityType: 'PURCHASE',
+      entityId: purchase.id,
+      meta: { reference: purchase.reference, amount: purchase.amount, payoutRef: payoutRef || null },
+    });
+
+    res.json({ message: 'Payout marked sent', purchase: updated });
+  } catch (error) {
+    console.error('Error releasing payout:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getPendingVehicles,
   getAllVehicles,
@@ -753,4 +817,6 @@ module.exports = {
   getPendingAvatars,
   approveAvatar,
   rejectAvatar,
+  getPurchases,
+  releasePayout,
 };

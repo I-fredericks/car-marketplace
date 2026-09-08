@@ -19,6 +19,8 @@ const {
   getPendingAvatars,
   approveAvatar,
   rejectAvatar,
+  getPurchases,
+  releasePayout,
 } = require('../controllers/adminController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
@@ -62,5 +64,9 @@ router.put('/reports/:id/resolve', resolveReport);
 router.get('/payments', getPayments);
 router.put('/payments/:id/verify', verifyPayment);
 router.put('/payments/:id/reject', rejectPayment);
+
+// Purchases (escrow orders + payout release)
+router.get('/purchases', getPurchases);
+router.put('/purchases/:id/release-payout', releasePayout);
 
 module.exports = router;

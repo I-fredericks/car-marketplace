@@ -150,7 +150,7 @@ const initiatePurchase = async (req, res) => {
         },
         include: { vehicle: VEHICLE_INCLUDE },
       });
-    });
+    }, { timeout: 15000 }); // pooler round-trips can eat seconds; default 5s races them
 
     if (method === 'CASH') {
       // Cash orders don't need Paystack; surface the hold state immediately.

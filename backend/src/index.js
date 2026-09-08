@@ -93,18 +93,22 @@ app.get('/api/images/:id/thumb', getImageThumb);
 // the requester without blocking anonymous visitors.
 app.get('/api/users/:id/avatar', require('./middlewares/authMiddleware').optionalAuth, require('./controllers/avatarController').getAvatar);
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200
-});
-app.use('/api/', limiter);
+// Test suites register/login many throwaway accounts against the shared
+// test database; a 200-req / 50-auth ceiling per 15 min would race them.
+if (process.env.NODE_ENV !== 'test') {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200
+  });
+  app.use('/api/', limiter);
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  message: { message: 'Too many login attempts, please try again later' }
-});
-app.use('/api/auth/', authLimiter);
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50,
+    message: { message: 'Too many login attempts, please try again later' }
+  });
+  app.use('/api/auth/', authLimiter);
+}
 
 app.use(express.json({
   limit: '50mb',
