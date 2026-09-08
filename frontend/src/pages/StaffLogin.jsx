@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { ShieldCheck, MailCheck, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, MailCheck, ArrowLeft, Car } from 'lucide-react';
 
 /**
  * Staff portal — the ONLY sign-in surface for ADMIN accounts.
@@ -51,9 +51,25 @@ const StaffLogin = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-[#0F1729] py-12 px-4 sm:px-6 lg:px-8 mt-16">
-      <div className="max-w-md w-full">
-        <div className="bg-[#16203A] border border-white/10 rounded-2xl shadow-2xl p-8">
+    <div className="min-h-screen flex flex-col bg-[#0F1729] px-4 sm:px-6 lg:px-8">
+      {/* Branded top bar — the page is chrome-free, so it carries its own identity */}
+      <header className="pt-8 pb-2 flex justify-center">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center">
+            <Car size={20} className="text-accent" />
+          </div>
+          <div className="leading-tight">
+            <div className="font-display font-bold text-lg text-white tracking-tight">
+              CarMarket<span className="text-accent">Ghana</span>
+            </div>
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Staff Portal</div>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex-1 flex items-center justify-center py-8">
+        <div className="max-w-md w-full">
+          <div className="bg-[#16203A] border border-white/10 rounded-2xl shadow-2xl p-8">
           <div className="flex flex-col items-center mb-8 text-center">
             <div className="w-14 h-14 bg-primary/15 rounded-2xl flex items-center justify-center mb-4">
               <ShieldCheck size={28} className="text-primary" />
@@ -143,11 +159,12 @@ const StaffLogin = () => {
               </button>
             </form>
           )}
-        </div>
+          </div>
 
-        <p className="mt-6 text-center text-[11px] text-white/30 leading-relaxed px-4">
-          Protected area. All sign-in attempts are logged and monitored.
-        </p>
+          <p className="mt-6 text-center text-[11px] text-white/30 leading-relaxed px-4">
+            Protected area. All sign-in attempts are logged and monitored.
+          </p>
+        </div>
       </div>
     </div>
   );

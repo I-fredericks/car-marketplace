@@ -355,12 +355,13 @@ const CarDetails = () => {
         </div>
       </div>
 
-      {/* Mobile Sticky Contact Bar */}
+      {/* Mobile Sticky Contact Bar — includes Buy Now for escrow checkout */}
       <StickyContactBar
         phone={sellerPhone}
         sellerUserId={car.seller?.userId}
         vehicleId={car.id}
         isLoggedIn={Boolean(user)}
+        canBuy={car.status === 'AVAILABLE' && (!user || user.id !== car.seller?.userId)}
       />
 
       {/* Report Modal */}

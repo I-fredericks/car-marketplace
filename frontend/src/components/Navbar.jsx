@@ -1,8 +1,8 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useEvents } from '../context/EventContext';
-import { Car, Heart, MessageCircle, Menu, X, User, Package } from 'lucide-react';
+import { Car, Heart, MessageCircle, Menu, X, User, Package, ChevronDown, LayoutDashboard, ShieldCheck, List, LogOut } from 'lucide-react';
 import useBillingStatus from '../hooks/useBillingStatus';
 import Avatar from './Avatar';
 import NotificationsDropdown from './NotificationsDropdown';
@@ -12,12 +12,30 @@ const Navbar = () => {
   const { unreadMessages } = useEvents();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { data: billing } = useBillingStatus();
   const location = useLocation();
+  const userMenuRef = useRef(null);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsUserMenuOpen(false);
   }, [location]);
+
+  // Close the user dropdown on outside click / Escape
+  useEffect(() => {
+    if (!isUserMenuOpen) return undefined;
+    const onDocClick = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setIsUserMenuOpen(false);
+    };
+    const onEsc = (e) => e.key === 'Escape' && setIsUserMenuOpen(false);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [isUserMenuOpen]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -65,47 +83,60 @@ const Navbar = () => {
                    )}
                  </Link>
                 
-                 <div className="flex items-center gap-4 border-l border-bordercol pl-4">
-                  <Link to="/profile" className="hover:opacity-80 transition-opacity" title="Profile" aria-label="Profile">
-                    <Avatar userId={user.id} name={user.name} size={28} version={user.updatedAt} />
-                  </Link>
-                  <div className="text-sm">
-                    <span className="text-textmuted block text-xs">Welcome</span>
-                    <span className="font-medium text-textprimary">{user.name}</span>
-                  </div>
+                 <div className="relative flex items-center border-l border-bordercol pl-4" ref={userMenuRef}>
+                  {/* Account menu: identity trigger + dropdown, standard app pattern */}
+                  <button
+                    onClick={() => setIsUserMenuOpen((o) => !o)}
+                    aria-expanded={isUserMenuOpen}
+                    aria-haspopup="menu"
+                    className="flex items-center gap-2.5 pl-1 pr-2 py-1.5 rounded-lg hover:bg-bg transition-colors"
+                  >
+                    <Avatar userId={user.id} name={user.name} size={32} version={user.updatedAt} />
+                    <div className="text-left leading-tight hidden lg:block">
+                      <div className="text-[13px] font-semibold text-textprimary truncate max-w-[120px]">{user.name}</div>
+                      <div className="text-[11px] text-textmuted">
+                        {user.role === 'ADMIN' ? 'Administrator' : billing ? `${billing.plan.label} plan` : 'Buyer'}
+                      </div>
+                    </div>
+                    <ChevronDown size={15} className={`text-textmuted transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                  {billing && (
-                    <Link
-                      to="/pricing"
-                      title={`${billing.plan.label} plan — view pricing`}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-colors ${
-                        billing.isSubscribed
-                          ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                          : 'bg-bg border border-bordercol text-textmuted hover:border-primary hover:text-primary'
-                      }`}
-                    >
-                      {billing.plan.label}
-                    </Link>
+                  {isUserMenuOpen && (
+                    <div role="menu" className="absolute right-0 top-[calc(100%+8px)] w-60 bg-surface border border-bordercol rounded-xl shadow-lg py-2 z-50">
+                      <div className="px-4 py-2.5 sm:hidden">
+                        <div className="text-sm font-semibold text-textprimary truncate">{user.name}</div>
+                        <div className="text-xs text-textmuted truncate">{user.email}</div>
+                      </div>
+
+                      <Link to="/profile" role="menuitem" className="flex items-center gap-3 px-4 py-2.5 text-sm text-textprimary hover:bg-bg transition-colors">
+                        <User size={16} className="text-textmuted" /> Profile
+                      </Link>
+                      <Link to="/purchases" role="menuitem" className="flex items-center gap-3 px-4 py-2.5 text-sm text-textprimary hover:bg-bg transition-colors">
+                        <Package size={16} className="text-textmuted" /> My Purchases
+                      </Link>
+                      {(user.role === 'SELLER' || user.role === 'ADMIN') && (
+                        <Link to="/seller/dashboard" role="menuitem" className="flex items-center gap-3 px-4 py-2.5 text-sm text-textprimary hover:bg-bg transition-colors">
+                          <List size={16} className="text-textmuted" /> My Listings
+                        </Link>
+                      )}
+                      {user.role === 'ADMIN' && (
+                        <Link to="/admin" role="menuitem" className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors">
+                          <LayoutDashboard size={16} /> Admin Panel
+                        </Link>
+                      )}
+                      {user.sellerProfile?.verified && (
+                        <div className="flex items-center gap-3 px-4 py-2 text-xs text-success">
+                          <ShieldCheck size={15} /> Verified Seller
+                        </div>
+                      )}
+
+                      <div className="border-t border-bordercol mt-2 pt-2">
+                        <button onClick={logout} role="menuitem" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-err hover:bg-err/5 transition-colors">
+                          <LogOut size={16} /> Logout
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  
-                  <div className="flex gap-2">
-                    <Link to="/purchases" className="px-3 py-1.5 text-sm font-medium border border-bordercol rounded-md text-textprimary hover:bg-bg transition-colors">
-                      My Purchases
-                    </Link>
-                    {(user.role === 'SELLER' || user.role === 'ADMIN') && (
-                      <Link to="/seller/dashboard" className="px-3 py-1.5 text-sm font-medium border border-bordercol rounded-md text-textprimary hover:bg-bg transition-colors">
-                        My Listings
-                      </Link>
-                    )}
-                    {user.role === 'ADMIN' && (
-                      <Link to="/admin" className="px-3 py-1.5 text-sm font-medium bg-primarylight text-white rounded-md hover:bg-primary transition-colors">
-                        Admin
-                      </Link>
-                    )}
-                    <button onClick={logout} className="px-3 py-1.5 text-sm font-medium text-err hover:bg-err/10 rounded-md transition-colors">
-                      Logout
-                    </button>
-                  </div>
                 </div>
               </div>
             ) : (
