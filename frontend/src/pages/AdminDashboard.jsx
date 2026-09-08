@@ -34,6 +34,8 @@ const AdminDashboard = () => {
   const [payments, setPayments] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [deactivatedCars, setDeactivatedCars] = useState([]);
+  const [listingsPagination, setListingsPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [takenDownPagination, setTakenDownPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [pendingAvatars, setPendingAvatars] = useState([]);
   const [processingAvatar, setProcessingAvatar] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -50,6 +52,8 @@ const AdminDashboard = () => {
   const [actionMsg, setActionMsg] = useState('');
   const [brokenImages, setBrokenImages] = useState(new Set());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [listingsPage, setListingsPage] = useState(1);
+  const [takenDownPage, setTakenDownPage] = useState(1);
 
   const toast = (msg) => {
     setActionMsg(msg);
@@ -102,11 +106,13 @@ const AdminDashboard = () => {
         const { data } = await api.get('/admin/vehicles/pending');
         setPendingCars(data);
       } else if (tab === 'allListings') {
-        const { data } = await api.get('/admin/vehicles/all');
-        setAllCars(data);
+        const { data } = await api.get(`/admin/vehicles/all?page=${listingsPage}&limit=50`);
+        setAllCars(data.vehicles || []);
+        setListingsPagination(data.pagination || { total: (data.vehicles || []).length, page: 1, limit: 50, totalPages: 1 });
       } else if (tab === 'takenDown') {
-        const { data } = await api.get('/admin/vehicles/all?status=DEACTIVATED');
-        setDeactivatedCars(data);
+        const { data } = await api.get(`/admin/vehicles/all?status=DEACTIVATED&page=${takenDownPage}&limit=50`);
+        setDeactivatedCars(data.vehicles || []);
+        setTakenDownPagination(data.pagination || { total: (data.vehicles || []).length, page: 1, limit: 50, totalPages: 1 });
       } else if (tab === 'photos') {
         const { data } = await api.get('/admin/avatars/pending');
         setPendingAvatars(data);
@@ -128,7 +134,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [tab]);
+  }, [tab, listingsPage, takenDownPage]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -679,10 +685,38 @@ const AdminDashboard = () => {
     </div>
   );
 
+  // Simple pager for the paginated admin tables (50 rows/page server-side)
+  const Pager = ({ page, totalPages, total, onPage }) => {
+    if (totalPages <= 1) {
+      return total > 0 ? (
+        <p className="text-xs text-textmuted text-center">{total} result{total === 1 ? '' : 's'}</p>
+      ) : null;
+    }
+    return (
+      <div className="flex items-center justify-center gap-3 pt-2">
+        <button
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="px-3 py-1.5 text-sm font-medium border border-bordercol rounded-md text-textprimary hover:bg-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          ← Prev
+        </button>
+        <span className="text-sm text-textsecondary">Page {page} of {totalPages} · {total} total</span>
+        <button
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="px-3 py-1.5 text-sm font-medium border border-bordercol rounded-md text-textprimary hover:bg-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next →
+        </button>
+      </div>
+    );
+  };
+
   const renderAllListings = () => (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Live Listings ({allCars.length})</h2>
+        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Live Listings ({listingsPagination.total})</h2>
         <p className="text-sm text-textsecondary">Promote listings to the homepage by starring them as Featured.</p>
       </div>
       
@@ -763,13 +797,15 @@ const AdminDashboard = () => {
           </table>
         </div>
       )}
+
+      <Pager page={listingsPagination.page} totalPages={listingsPagination.totalPages} total={listingsPagination.total} onPage={setListingsPage} />
     </div>
   );
 
   const renderTakenDown = () => (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Taken Down Listings ({deactivatedCars.length})</h2>
+        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Taken Down Listings ({takenDownPagination.total})</h2>
         <p className="text-sm text-textsecondary">Listings removed by admin. You can restore them if the issue is resolved.</p>
       </div>
 
@@ -835,6 +871,8 @@ const AdminDashboard = () => {
           </table>
         </div>
       )}
+
+      <Pager page={takenDownPagination.page} totalPages={takenDownPagination.totalPages} total={takenDownPagination.total} onPage={setTakenDownPage} />
     </div>
   );
 

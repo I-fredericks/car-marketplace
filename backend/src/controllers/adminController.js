@@ -142,8 +142,10 @@ const getPendingVehicles = async (req, res) => {
   }
 };
 
-// @desc    Get vehicle listings (for admin management; ?status= filters)
-// @route   GET /api/admin/vehicles/all?status=AVAILABLE,DEACTIVATED
+// @desc    Get vehicle listings (for admin management; ?status= filters).
+//          Paginated: ?page=1&limit=50 (limit capped at 100) — the unbounded
+//          version shipped every listing row on one request.
+// @route   GET /api/admin/vehicles/all?status=AVAILABLE,DEACTIVATED&page=1&limit=50
 // @access  Private (Admin only)
 const getAllVehicles = async (req, res) => {
   try {
@@ -153,19 +155,31 @@ const getAllVehicles = async (req, res) => {
       .filter((s) => VEHICLE_STATUSES.includes(s));
     const statuses = requested.length > 0 ? requested : ['AVAILABLE'];
 
-    const vehicles = await prisma.vehicle.findMany({
-      where: { status: { in: statuses } },
-      include: {
-        images: { take: 1, select: { id: true, isPrimary: true } },
-        seller: {
-          include: {
-            user: { select: { name: true } }
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+
+    const where = { status: { in: statuses } };
+    const [vehicles, total] = await Promise.all([
+      prisma.vehicle.findMany({
+        where,
+        include: {
+          images: { take: 1, select: { id: true, isPrimary: true } },
+          seller: {
+            include: {
+              user: { select: { name: true } }
+            }
           }
-        }
-      },
-      orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }]
+        },
+        orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.vehicle.count({ where }),
+    ]);
+    res.json({
+      vehicles,
+      pagination: { total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
-    res.json(vehicles);
   } catch (error) {
     console.error('Error fetching all vehicles:', error);
     res.status(500).json({ message: 'Server error' });

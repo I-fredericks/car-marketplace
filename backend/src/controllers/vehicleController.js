@@ -44,12 +44,23 @@ const imageIdSelect = {
   select: { id: true, isPrimary: true },
 };
 
-// Fetch full listing rows for an ordered list of ids, preserving the given order
+// Card fields only: list views (Home/Search/Favorites) never render the
+// free-text description, and it's the heaviest column — leaving it out of
+// hydration keeps list payloads small and the detail page authoritative.
+const listingCardSelect = {
+  id: true, make: true, model: true, year: true, price: true, location: true,
+  condition: true, mileage: true, transmission: true, fuelType: true, bodyType: true,
+  status: true, featured: true, featuredUntil: true, createdAt: true, updatedAt: true,
+  seller: sellerInclude.seller,
+  images: imageIdSelect,
+};
+
+// Fetch listing card rows for an ordered list of ids, preserving the given order
 const hydrateVehiclesByIds = async (ids) => {
   if (ids.length === 0) return [];
   const rows = await prisma.vehicle.findMany({
     where: { id: { in: ids } },
-    include: { ...sellerInclude, images: imageIdSelect },
+    select: listingCardSelect,
   });
   const byId = new Map(rows.map((v) => [v.id, v]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
@@ -259,6 +270,30 @@ const getVehicles = async (req, res) => {
     // Keyword relevance: exact make/model matches outrank incidental
     // mentions in description/location (case-insensitive)
     const q = (search || '').toLowerCase().trim();
+
+    // Fast path — plain browsing with an explicit sort (price/year/mileage)
+    // needs no in-memory ranking at all: push sort+pagination to SQL and
+    // skip the candidates scan entirely. This is the common catalog browse.
+    const explicitSort = Boolean(req.query.sortBy);
+    if (!q && explicitSort) {
+      const [vehicles, total] = await Promise.all([
+        prisma.vehicle.findMany({
+          where,
+          orderBy: { [sortBy]: order },
+          skip,
+          take,
+          select: listingCardSelect,
+        }),
+        prisma.vehicle.count({ where }),
+      ]);
+      const fastResponse = {
+        vehicles,
+        pagination: { total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / limit) },
+      };
+      await cache.setJSON(cacheKey, fastResponse, 30);
+      return res.json(fastResponse);
+    }
+
     const relevance = (v) => {
       if (!q) return 0;
       const makeLc = (v.make || '').toLowerCase();
@@ -274,7 +309,8 @@ const getVehicles = async (req, res) => {
     };
 
     // Lightweight pass over all matches to rank by relevance and seller
-    // plan tier before pagination
+    // plan tier before pagination. `description` only travels when a
+    // keyword needs to score against it.
     const candidates = await prisma.vehicle.findMany({
       where,
       select: {
@@ -288,14 +324,13 @@ const getVehicles = async (req, res) => {
         make: true,
         model: true,
         location: true,
-        description: true,
+        description: q ? true : undefined,
         seller: { select: { user: { select: { subscription: { select: { plan: true, status: true, periodEnd: true } } } } } },
       },
     });
 
     // Explicit sorts (price/year/mileage) must be honored literally: plan
     // and featured boosts only apply to the default newest-first browsing.
-    const explicitSort = Boolean(req.query.sortBy);
 
     candidates.sort((a, b) => {
       const rel = relevance(b) - relevance(a);
@@ -336,6 +371,14 @@ const getVehicles = async (req, res) => {
 // @access  Public
 const getFeaturedCars = async (req, res) => {
   try {
+    // The home feed is the hottest public read — cache it like the search
+    // list (the vehicle version key orphans it on any listing write).
+    const cacheKey = cache.stableKey('vehicles:featured', {});
+    const cached = await cache.getJSON(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const candidateSelect = {
       id: true,
       createdAt: true,
@@ -376,6 +419,7 @@ const getFeaturedCars = async (req, res) => {
 
     const vehicles = await hydrateVehiclesByIds(candidates.slice(0, 6).map((v) => v.id));
 
+    await cache.setJSON(cacheKey, vehicles, 60);
     res.json(vehicles);
   } catch (error) {
     console.error('Error fetching featured cars:', error);

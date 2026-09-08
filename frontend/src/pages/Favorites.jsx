@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageThumbUrl } from '../utils/api';
 import { Heart, Search, Lock } from 'lucide-react';
 import VehicleCard from '../components/VehicleCard';
+import VehicleGridSkeleton from '../components/VehicleGridSkeleton';
 
 const Favorites = () => {
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -68,10 +69,7 @@ const Favorites = () => {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-textmuted">
-            <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
-            <p>Loading your saved cars...</p>
-          </div>
+          <VehicleGridSkeleton count={8} className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
         ) : favorites.length === 0 ? (
           <div className="bg-surface border border-bordercol rounded-lg p-16 text-center flex flex-col items-center">
             <Heart size={48} className="text-bordercol mb-4" />

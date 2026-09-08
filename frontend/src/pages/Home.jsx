@@ -9,6 +9,7 @@ import api, { getImageThumbUrl } from '../utils/api';
 import { getSellerPlanBadge } from '../utils/sellerPlan';
 import useSEO from '../hooks/useSEO';
 import VehicleCard from '../components/VehicleCard';
+import VehicleGridSkeleton from '../components/VehicleGridSkeleton';
 
 // Body-type shortcuts shown as category tiles (jiji-style)
 const CATEGORIES = [
@@ -165,10 +166,7 @@ const Home = () => {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-textmuted">
-            <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
-            <p>Loading featured cars...</p>
-          </div>
+          <VehicleGridSkeleton count={8} className="grid-cols-2 md:grid-cols-3 lg:grid-cols-4" />
         ) : featuredCars.length === 0 ? (
           <div className="bg-surface border border-bordercol rounded-lg p-10 text-center flex flex-col items-center">
             <Car size={44} className="text-bordercol mb-3" />

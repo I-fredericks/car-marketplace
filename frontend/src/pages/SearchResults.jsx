@@ -8,6 +8,7 @@ import useModalA11y from '../hooks/useModalA11y';
 import FilterContent from '../components/FilterContent';
 import { getSellerPlanBadge } from '../utils/sellerPlan';
 import VehicleCard from '../components/VehicleCard';
+import VehicleGridSkeleton from '../components/VehicleGridSkeleton';
 
 const SearchResults = () => {
   useSEO({
@@ -143,10 +144,7 @@ const SearchResults = () => {
             </div>
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 text-textmuted">
-                <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full mb-4"></div>
-                <p>Finding the perfect cars for you...</p>
-              </div>
+              <VehicleGridSkeleton count={9} className="grid-cols-2 lg:grid-cols-3" />
             ) : vehicles.length === 0 ? (
               <div className="bg-surface border border-bordercol rounded-lg p-12 text-center flex flex-col items-center">
                 <Search size={48} className="text-bordercol mb-4" />
