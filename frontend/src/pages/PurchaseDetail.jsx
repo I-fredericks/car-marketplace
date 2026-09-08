@@ -22,7 +22,7 @@ const STATUS_COPY = {
  */
 const PurchaseDetail = () => {
   const { id } = useParams();
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -46,6 +46,8 @@ const PurchaseDetail = () => {
   }, [id]);
 
   useEffect(() => {
+    // Wait for AuthContext bootstrap before redirecting (refresh has user=null).
+    if (authLoading) return;
     if (!user) {
       navigate('/login');
       return;
@@ -89,7 +91,7 @@ const PurchaseDetail = () => {
     init();
     return () => clearTimeout(retryTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, id, load]);
+  }, [user, authLoading, id, load]);
 
   if (!user) return null;
 

@@ -9,7 +9,14 @@ const { sendMail, appUrl } = require('../services/mailer');
 //   CASH:     HANDOVER_PENDING --buyer confirms handover--> DELIVERED --seller confirms cash received--> COMPLETED
 // Anything pre-completion can be CANCELLED (either party), freeing the vehicle.
 
-const VEHICLE_INCLUDE = { select: { id: true, make: true, model: true, year: true, price: true, location: true } };
+// List/detail purchases need the primary image: without `images` the FE
+// purchase cards render a blank placeholder everywhere.
+const VEHICLE_INCLUDE = {
+  select: {
+    id: true, make: true, model: true, year: true, price: true, location: true,
+    images: { select: { id: true, isPrimary: true, data: true }, orderBy: { isPrimary: 'desc' }, take: 1 },
+  },
+};
 
 /**
  * Atomically move the purchase to COMPLETED if it is in the correct source

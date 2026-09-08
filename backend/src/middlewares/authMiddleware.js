@@ -69,14 +69,19 @@ const seller = (req, res, next) => {
   }
 };
 
-// Attaches req.user when a valid Bearer token is present; anonymous requests
-// pass through untouched. For public endpoints with owner-only extras.
+// Attaches req.user when a valid token is present; anonymous requests pass
+// through untouched. For public endpoints with owner-only extras.
+// Image routes (avatar) are fetched via <img> tags, which can't send headers
+// — accept ?token= as a fallback credential there.
 const optionalAuth = async (req, res, next) => {
-  if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer ')) {
+  const bearer = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.split(' ')[1]
+    : null;
+  const token = bearer || (typeof req.query.token === 'string' ? req.query.token : null);
+  if (!token) {
     return next();
   }
   try {
-    const token = req.headers.authorization.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },

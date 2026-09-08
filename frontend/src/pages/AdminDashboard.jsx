@@ -450,6 +450,9 @@ const AdminDashboard = () => {
       { label: 'Sellers', value: stats.users.sellers, Icon: ShieldCheck, color: 'text-success', bg: 'bg-success/10' },
       { label: 'Buyers', value: stats.users.buyers, Icon: Car, color: 'text-accent', bg: 'bg-accent/10' },
       { label: 'Live Listings', value: stats.listings.available, Icon: List, color: 'text-primary', bg: 'bg-primary/10' },
+      // Money flowing through the platform escrow right now
+      { label: 'Escrow held', value: `GH₵${((stats.purchases?.escrowHeldPesewas ?? 0) / 100).toLocaleString()}`, Icon: CreditCard, color: 'text-warn', bg: 'bg-warn/10' },
+      { label: 'Payouts pending', value: stats.purchases?.payoutsPending ?? 0, Icon: Package, color: 'text-err', bg: 'bg-err/10' },
     ] : [];
 
     const statusSegments = stats ? [
@@ -494,7 +497,7 @@ const AdminDashboard = () => {
         ) : (
           <div className="space-y-8">
             {/* KPI tiles */}
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
               {kpis.map(({ label, value, Icon, color, bg }) => (
                 <div key={label} className="bg-surface border border-bordercol rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group">
                   <div className={`w-10 h-10 ${bg} ${color} rounded-lg flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
@@ -555,17 +558,18 @@ const AdminDashboard = () => {
             </div>
 
             <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
-              {/* Quick actions */}
+              {/* Quick actions — 2x3 tile grid keeps it the same height as
+                  Recent activity, so the two columns stay level */}
               <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
                 <h3 className="font-display font-semibold text-textprimary mb-4">Quick actions</h3>
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {quickActions.map(({ label, tab, count, accent }) => (
                     <button
                       key={tab + label}
                       onClick={() => setTab(tab)}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-bordercol hover:border-primary/40 hover:bg-bg transition-colors text-left group"
+                      className="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border border-bordercol hover:border-primary/40 hover:bg-bg transition-colors text-left group"
                     >
-                      <span className="text-sm font-medium text-textprimary">{label}</span>
+                      <span className="text-sm font-medium text-textprimary leading-tight">{label}</span>
                       <span className="flex items-center gap-2">
                         {count != null && (
                           <span className={`min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold ${accent ? 'bg-[#EAB308]/15 text-[#EAB308]' : 'bg-bg border border-bordercol text-textmuted'}`}>
@@ -856,7 +860,7 @@ const AdminDashboard = () => {
             <div key={u.id} className="bg-surface border border-bordercol rounded-lg shadow-sm p-5 flex flex-col items-center text-center">
               <div className="w-24 h-24 rounded-full overflow-hidden bg-bg border border-bordercol flex items-center justify-center mb-3">
                 <img
-                  src={`/api/users/${u.id}/avatar?v=${encodeURIComponent(u.updatedAt || '')}`}
+                  src={`/api/users/${u.id}/avatar?v=${encodeURIComponent(u.updatedAt || '')}&token=${encodeURIComponent(localStorage.getItem('token') || '')}`}
                   alt={`${u.name}'s profile photo`}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   className="w-full h-full object-cover"

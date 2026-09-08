@@ -20,13 +20,15 @@ const STATUS_LABEL = {
  */
 const PurchaseReceipt = () => {
   const { id } = useParams();
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [purchase, setPurchase] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // Wait for AuthContext bootstrap before redirecting (refresh has user=null).
+    if (authLoading) return;
     if (!user) {
       navigate('/login');
       return;
@@ -41,7 +43,7 @@ const PurchaseReceipt = () => {
         setLoading(false);
       }
     })();
-  }, [user, id, navigate]);
+  }, [user, authLoading, id, navigate]);
 
   if (!user) return null;
 

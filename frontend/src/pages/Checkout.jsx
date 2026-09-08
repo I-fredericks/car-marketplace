@@ -13,7 +13,7 @@ import { ShieldCheck, MapPin, Truck, CreditCard, Loader2 } from 'lucide-react';
  */
 const Checkout = () => {
   const { vehicleId } = useParams();
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const [deliveryMode, setDeliveryMode] = useState('PICKUP');
@@ -35,11 +35,13 @@ const Checkout = () => {
     enabled: Boolean(user),
   });
 
+  // Wait for the auth bootstrap (/auth/me) before redirecting — a plain
+  // refresh starts with user=null, and bouncing to /login here flashes it.
   useEffect(() => {
-    if (!user) navigate('/login');
-  }, [user, navigate]);
+    if (!authLoading && !user) navigate('/login');
+  }, [user, authLoading, navigate]);
 
-  if (!user || isLoading) {
+  if (authLoading || !user || isLoading) {
     return (
       <div className="min-h-screen pt-24 pb-20 flex items-center justify-center bg-bg">
         <Loader2 size={36} className="animate-spin text-primary" />

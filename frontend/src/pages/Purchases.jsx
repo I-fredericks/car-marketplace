@@ -27,13 +27,16 @@ const STATUS_LABEL = {
  * My purchases: orders placed as a buyer, plus (for sellers) sales made.
  */
 const Purchases = () => {
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const [data, setData] = useState({ purchases: [], sales: [] });
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('buying');
 
   useEffect(() => {
+    // Wait for AuthContext to rehydrate session before redirecting:
+    // a refresh has user=null during /auth/me — don't bounce to /login.
+    if (authLoading) return;
     if (!user) {
       navigate('/login');
       return;
@@ -48,7 +51,7 @@ const Purchases = () => {
         setLoading(false);
       }
     })();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   if (!user) return null;
 

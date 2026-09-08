@@ -459,6 +459,8 @@ const getStats = async (req, res) => {
       totalMessages,
       pendingReports,
       totalReports,
+      escrowHeld,
+      payoutsPending,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { role: 'SELLER' } }),
@@ -475,6 +477,9 @@ const getStats = async (req, res) => {
       prisma.message.count(),
       prisma.report.count({ where: { status: 'PENDING' } }),
       prisma.report.count(),
+      // Escrow health: buyer money still held + seller payouts queued
+      prisma.purchase.aggregate({ _sum: { amount: true }, where: { status: 'PAID_HELD' } }),
+      prisma.purchase.count({ where: { payoutStatus: 'PENDING' } }),
     ]);
 
     res.json({
@@ -498,6 +503,10 @@ const getStats = async (req, res) => {
       reports: {
         pending: pendingReports,
         total: totalReports,
+      },
+      purchases: {
+        escrowHeldPesewas: escrowHeld._sum.amount ?? 0,
+        payoutsPending,
       },
     });
   } catch (error) {

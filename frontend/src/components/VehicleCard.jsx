@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, ShieldCheck, SlidersHorizontal, Fuel, Gauge } from 'lucide-react';
 import Badge from './Badge';
@@ -25,6 +25,7 @@ const VehicleCard = ({
   sellerPlanBadge,
   imageUrl
 }) => {
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <div className="group bg-surface border border-bordercol rounded-xl overflow-hidden flex flex-col shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_32px_-16px_rgba(27,42,74,0.35)] hover:border-primary/30 focus-within:ring-2 ring-primary/30">
       <Link
@@ -32,12 +33,17 @@ const VehicleCard = ({
         className="block relative aspect-[4/3] overflow-hidden bg-bg outline-none"
         aria-label={`View details for ${title}`}
       >
-        {imageUrl ? (
+        {imageUrl && !imgFailed ? (
           <img
             src={imageUrl}
             alt={title}
-            loading="lazy"
+            // eager + fetchpriority="low": Chrome's native lazy-load defers the
+            // last card in long grids indefinitely when the scroller isn't the
+            // document; thumbs via /api/images/:id/thumb are small anyway.
+            loading="eager"
+            fetchpriority="low"
             decoding="async"
+            onError={() => setImgFailed(true)}
             className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
           />
         ) : (
