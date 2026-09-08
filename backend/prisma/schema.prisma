@@ -393,6 +393,10 @@ model Purchase {
   payerName    String? // name on the sending account
   claimedAt    DateTime?
 
+  // Escrow handover: seller marks the physical handover the moment the
+  // buyer takes the car; the buyer's receipt-confirmation closes the sale.
+  sellerHandoverAt DateTime?
+
   deliveryMode String // PICKUP (buyer collects) | DELIVERY (seller ships)
   address      String?
   phone        String?

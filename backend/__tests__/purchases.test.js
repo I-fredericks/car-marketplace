@@ -321,6 +321,37 @@ describe('Vehicle purchase (escrow checkout)', () => {
     }
     expect(escrowNotified).toBe(true);
 
+    // ── Handover step: seller marks, buyer confirms ──
+    // Wrong roles/statuses are fenced out
+    expect((await request(app)
+      .post(`/api/purchases/${purchase.id}/seller-handover`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)).statusCode).toEqual(403);
+    expect((await request(app)
+      .post(`/api/purchases/${ids.cashPurchase}/seller-handover`)
+      .set('Authorization', `Bearer ${tokens.sellerCash}`)).statusCode).toEqual(400);
+
+    const handover = await request(app)
+      .post(`/api/purchases/${purchase.id}/seller-handover`)
+      .set('Authorization', `Bearer ${tokens.sellerPay}`);
+    expect(handover.statusCode).toEqual(200);
+    expect(handover.body.purchase.sellerHandoverAt).not.toBeNull();
+
+    // Idempotent: marking again is a safe no-op
+    expect((await request(app)
+      .post(`/api/purchases/${purchase.id}/seller-handover`)
+      .set('Authorization', `Bearer ${tokens.sellerPay}`)).body.status).toEqual('already-marked');
+
+    // Buyer is told to confirm receipt
+    let handoverNotified = false;
+    for (let i = 0; i < 5 && !handoverNotified; i += 1) {
+      const notes = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${tokens.buyer}`);
+      handoverNotified = notes.body.notifications.some((n) => n.type === 'PURCHASE_HANDOVER_MARKED');
+      if (!handoverNotified) await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(handoverNotified).toBe(true);
+
     // Buyer confirms receipt -> COMPLETED + payout queued for admin payout
     const received = await request(app)
       .post(`/api/purchases/${purchase.id}/confirm-received`)

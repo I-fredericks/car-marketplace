@@ -213,7 +213,7 @@ const PurchaseDetail = () => {
         <div className="bg-surface border border-bordercol rounded-xl p-5 sm:p-7 shadow-sm">
 
           {/* AliExpress-style order progress tracker */}
-          <OrderProgress status={purchase.status} />
+          <OrderProgress status={purchase.status} handoverMarked={Boolean(purchase.sellerHandoverAt)} />
 
           {/* Transfer payment instructions + claim (before escrow confirms) */}
           {instructions && purchase.status === 'AWAITING_PAYMENT' && isBuyer && (
@@ -414,8 +414,41 @@ const PurchaseDetail = () => {
           {/* Actions by role + state. Irreversible money moves use
               slide-to-confirm so a stray tap can't release escrowed cash. */}
           <div className="space-y-3">
-            {isBuyer && purchase.method === 'PAYSTACK' && purchase.status === 'PAID_HELD' && (
+            {/* Escrow orders: seller marks the physical handover first… */}
+            {isSeller && purchase.method !== 'CASH' && purchase.status === 'PAID_HELD' && !purchase.sellerHandoverAt && (
               <div>
+                <SlideToConfirm
+                  label="Slide to mark — I handed the car over"
+                  confirmLabel="Handover marked"
+                  busy={acting}
+                  onConfirm={() => act('seller-handover')}
+                />
+                <p className="mt-2 text-xs text-textmuted leading-relaxed">
+                  Slide once the buyer has physically taken the car. They'll be asked to confirm receipt, which releases your payout.
+                </p>
+              </div>
+            )}
+            {isSeller && purchase.method !== 'CASH' && purchase.status === 'PAID_HELD' && purchase.sellerHandoverAt && (
+              <div className="flex items-center gap-3 bg-success/10 border border-success/25 rounded-lg p-4">
+                <Handshake size={20} className="text-success flex-shrink-0" />
+                <p className="text-sm text-textprimary">
+                  <span className="font-medium">Handover marked.</span> Waiting for the buyer to confirm receipt and release your payout.
+                </p>
+              </div>
+            )}
+
+            {/* …and the buyer confirms receipt to release the escrow.
+                Applies to every escrow rail (transfer/MoMo/legacy card). */}
+            {isBuyer && purchase.method !== 'CASH' && purchase.status === 'PAID_HELD' && (
+              <div>
+                {purchase.sellerHandoverAt && (
+                  <div className="mb-3 flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-lg p-3">
+                    <Handshake size={18} className="text-primary flex-shrink-0" />
+                    <p className="text-sm text-textprimary">
+                      The seller marked the car as handed over — confirm receipt below when you have it.
+                    </p>
+                  </div>
+                )}
                 <SlideToConfirm
                   label="Slide to confirm — I received the car"
                   confirmLabel="Receipt confirmed"

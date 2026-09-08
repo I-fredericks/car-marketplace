@@ -2,8 +2,10 @@ import React from 'react';
 import { Check, ShoppingBag, ShieldCheck, Handshake, Flag } from 'lucide-react';
 
 /**
- * Order progress tracker (AliExpress-style). Steps map to both escrow and
- * cash flows; cancelled/refunded orders show a red banner instead.
+ * Order progress tracker (AliExpress-style). Steps map to escrow and cash
+ * flows. The Handover lamp lights either from the cash flow's DELIVERED
+ * status or the escrow flow's sellerHandoverAt mark. Cancelled/refunded
+ * orders show a red banner instead.
  */
 const STEPS = [
   { key: 'ordered', label: 'Ordered', icon: ShoppingBag },
@@ -24,7 +26,7 @@ const STATUS_INDEX = {
 
 const CANCELLED_LABEL = { CANCELLED: 'Order cancelled', REFUNDED: 'Order refunded' };
 
-const OrderProgress = ({ status }) => {
+const OrderProgress = ({ status, handoverMarked }) => {
   const current = STATUS_INDEX[status] ?? 0;
 
   if (current < 0) {
@@ -39,8 +41,10 @@ const OrderProgress = ({ status }) => {
     <div className="mb-6">
       <div className="flex items-start">
         {STEPS.map((step, i) => {
-          const done = i < current || (i === current && status === 'COMPLETED');
-          const active = i === current && status !== 'COMPLETED';
+          const done = i < current || (i === current && status === 'COMPLETED')
+            || (step.key === 'handover' && handoverMarked && current >= 1 && current < 3);
+          const active = i === current && status !== 'COMPLETED'
+            && !(step.key === 'handover' && handoverMarked);
           const Icon = step.icon;
           return (
             <React.Fragment key={step.key}>

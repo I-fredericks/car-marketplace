@@ -178,7 +178,7 @@ async function markEscrowFunded(purchaseId, { channel, paymentRef, verifiedBy } 
     });
     if (claim.count === 0) return null;
     return tx.purchase.findUnique({ where: { id: purchaseId } });
-  }, { timeout: 15000 }); // pooler round-trips can eat seconds under load
+  }, { maxWait: 15000, timeout: 15000 });
   if (updated) onEscrowFunded(updated, { actorId: verifiedBy });
   return updated;
 }
@@ -290,7 +290,7 @@ const initiatePurchase = async (req, res) => {
       }
 
       return created;
-    }, { timeout: 15000 }); // pooler round-trips can eat seconds; default 5s races them
+    }, { maxWait: 15000, timeout: 15000 }); // pooler: maxWait covers pool-queue acquisition too
 
     // Tell the seller someone is buying their car (fire-and-forget)
     notifyUser({
@@ -472,6 +472,51 @@ const claimPayment = async (req, res) => {
   }
 };
 
+// @desc    Seller marks the car as physically handed to the buyer
+//          (escrow orders at PAID_HELD; buyer still confirms to close)
+// @route   POST /api/purchases/:id/seller-handover
+// @access  Private (Seller, own)
+const sellerHandover = async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found.' });
+
+    const seller = await resolveSellerProfile(req.user.id);
+    if (!seller || purchase.sellerId !== seller.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+    if (purchase.method === 'CASH') {
+      return res.status(400).json({ message: 'Cash orders hand over via the buyer handover flow.' });
+    }
+    if (purchase.status !== 'PAID_HELD') {
+      return res.status(400).json({ message: `Cannot mark handover from status ${purchase.status}.` });
+    }
+    if (purchase.sellerHandoverAt) {
+      return res.json({ status: 'already-marked', purchase });
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id: purchaseId },
+      data: { sellerHandoverAt: new Date() },
+    });
+
+    // Ping the buyer to confirm receipt and release the escrow
+    notifyUser({
+      userId: purchase.buyerId,
+      type: 'PURCHASE_HANDOVER_MARKED',
+      title: 'Seller marked the car handed over',
+      body: `Order ${updated.reference} — confirm you received the car to release ${GHS(updated.amount - commissionFor(updated))} to the seller.`,
+      data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
+    });
+
+    res.json({ status: 'success', purchase: updated });
+  } catch (error) {
+    console.error('Error marking handover:', error);
+    res.status(500).json({ message: 'Server error marking handover' });
+  }
+};
+
 // @desc    Buyer confirms they received the vehicle (PAID_HELD -> COMPLETED)
 // @route   POST /api/purchases/:id/confirm-received
 // @access  Private (Buyer, own)
@@ -614,7 +659,7 @@ const cancelPurchase = async (req, res) => {
       }).catch((e) => console.warn('Purchase cancel: vehicle free skipped:', e.message));
 
       return tx.purchase.findUnique({ where: { id: purchase.id } });
-    }, { timeout: 15000 }); // pooler round-trips can eat seconds under load
+  }, { maxWait: 15000, timeout: 15000 }); // pooler: maxWait covers pool-queue acquisition too
 
     if (!updated) {
       return res.json({ status: 'already-cancelled', purchase });
@@ -678,6 +723,7 @@ module.exports = {
   confirmReceived,
   confirmHandover,
   sellerCollected,
+  sellerHandover,
   cancelPurchase,
   listPurchases,
   getPurchase,
