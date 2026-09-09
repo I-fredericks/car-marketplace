@@ -1,0 +1,518 @@
+================================================================================
+         CARMARKET GHANA — COMPLETE PROJECT ANALYSIS & IMPACT REPORT
+================================================================================
+Generated: September 2026
+Repository: /home/mrfrederick/Desktop/personalProjects/car-marketplace
+Frontend:  car-marketplace-five-ruby.vercel.app
+Backend:   carmarket-api-uk2b.onrender.com
+Database:  Supabase Postgres (aws-0-eu-central-1 pooler)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1: WHAT IS THIS PROJECT?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CarMarket Ghana is a full-stack vehicle marketplace built specifically for the
+Ghanaian used-car market. Unlike existing classifieds (Jiji Ghana with 18,880+
+listings, Tonaton, Facebook Marketplace) which simply connect strangers and
+leave buyers unprotected, CarMarket Ghana is a TRANSACTION PLATFORM — it holds
+buyer money in escrow, mediates disputes, verifies seller reputation through
+real sales, and takes a flat 1% commission only when a deal completes.
+
+The core thesis: in a market where a used car costs GH¢80,000–GH¢300,000 and
+fraud risk is high, buyers don't need another listing board — they need someone
+in the middle who makes it safe to hand over that kind of money to a stranger.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2: DOES IT SERVE ITS REAL PURPOSE?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YES — with caveats. Here is an honest assessment:
+
+WHAT IT SOLVES (the gap in the Ghanaian market):
+  1. Payment fraud: Buyers no longer hand cash to strangers. Money goes into
+     CarMarket's escrow account via flat-fee bank transfer / MoMo, is held
+     until the buyer confirms receipt, then released to the seller minus 1%.
+     A card gateway at 1.95% would cost GH¢1,950 on a GH¢100,000 car — the
+     flat-fee rail keeps that in the buyer's pocket.
+
+  2. "Is the car what they say it is?": Structured condition facts (no known
+     faults, first owner, registered, trade-in accepted) are filterable and
+     displayed. Sellers who lie about condition facts void their escrow
+     protection — a real consequence classifieds can't enforce.
+
+  3. "Is this seller legit?": Transaction-verified reviews — only buyers who
+     completed an escrowed purchase can leave a star rating. Every review is
+     traceable to a real money-flow transaction. Jiji's "Verified ID" badge
+     means someone uploaded an ID; ours means money actually moved.
+
+  4. Price negotiation: In-chat offer/counter-offer system where the agreed
+     price becomes the binding checkout price for that specific buyer only.
+     No other Ghanaian marketplace has this.
+
+  5. Dispute resolution: Either party can freeze the escrowed funds by
+     opening a dispute; an admin mediates and either refunds the buyer or
+     releases to the seller. Every decision is audit-logged.
+
+WHAT IT DOES NOT YET SOLVE (honest gaps):
+  1. Inventory: Jiji has 18,880 listings; CarMarket has a handful of test
+     data. Trust features attract buyers, but sellers go where buyers are —
+     the cold-start problem is real and needs a go-to-market strategy
+     (onboard dealers first, seed with inventory, run escrow-promo campaigns).
+
+  2. Physical inspection: The platform verifies the PAYMENT and the SELLER's
+     reputation, but cannot yet verify the CAR itself. A "CarMarket Checked"
+     inspection program (recommended as build item #1) would close this gap.
+
+  3. Regulatory: Holding buyer money pre-release touches Bank of Ghana
+     payment-service-provider territory. A fintech lawyer consultation is
+     advised before scaling. Using the gateway's sub-account/split-payment
+     features (instead of a self-operated bank account) may keep the platform
+     compliant by relying on the licensed processor's infrastructure.
+
+  4. Operational: Admin verifies transfers manually against a bank statement.
+     This works at low volume but needs automation (Paystack bank-transfer
+     collection, statement-parsing) as the platform scales.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3: TECHNICAL ARCHITECTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STACK:
+  Frontend:  React 19 + Vite 8, TanStack Query, React Router, Tailwind v4
+             Deployed: Vercel (auto-build on push)
+  Backend:   Node.js + Express 5, Prisma ORM 6.19, JWT auth
+             Deployed: Render (auto-deploy on push)
+  Database:  Supabase Postgres (pooler: aws-0-eu-central-1)
+  Email:     Resend API → Brevo HTTPS API → SMTP (fire-and-forget chain)
+  Payments:  Paystack (listing-plan subscriptions only, NOT car purchases)
+  Cache:     Redis (optional; inert when REDIS_URL unset — degrades to no-cache)
+  Realtime:  SSE (Server-Sent Events) for notifications/messages, not polling
+
+SCALE:
+  - 41 backend source files (~6,569 lines)
+  - 59 frontend source files (~10,179 lines)
+  - 91 API endpoints across 10 route modules
+  - 17 Prisma models, 11 enums
+  - 9 database migrations
+  - 57 backend tests (6 suites), 13 frontend tests
+  - 17 total pages, 15 reusable components
+
+DATABASE MODELS:
+  User, SellerProfile, Vehicle, VehicleImage, VehicleFeature, VehicleDocument,
+  Favorite, Message, Review, Report, Payment, Subscription, Purchase,
+  PriceOffer, Notification, AuthToken, AuditLog
+
+KEY DESIGN DECISIONS:
+  - Money is stored as integer pesewas (1 GHS = 100 pesewas) — no floats near
+    money, ever. All commission/price math uses integer arithmetic.
+  - Vehicle list endpoints ship only image IDs (not base64 blobs); browsers
+    load pixels via /api/images/:id which caches immutably.
+  - The listing response cache is version-keyed: any vehicle write bumps a
+    monotonic counter embedded in every cache key, orphaning stale entries
+    instantly without needing to know every key.
+  - Admin/staff login is a separate 2-step OTP flow (6-digit code, 10-min TTL,
+    single-use). Public /api/auth/login rejects ADMIN role accounts.
+  - Rate limiting is disabled in test mode (NODE_ENV=test); production uses
+    200 req/15min on /api/ and 50 auth attempts/15min on /api/auth/.
+  - Images are stored as base64 data URIs for avatars (inline) and on-disk
+    for vehicle photos (pending Cloudflare R2 / S3 migration per DEPLOY.md).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4: COMPLETE FEATURE INVENTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A. AUTHENTICATION & USER MANAGEMENT
+   - Email/password registration with email verification (dev: devVerificationToken)
+   - Google OAuth sign-in
+   - JWT-based auth (7-day expiry for regular, 7-day for admin)
+   - Staff portal: separate 2-step OTP login (/admin/login → admin-login →
+     admin-verify), public login rejects ADMIN role, OTP is single-use
+   - Profile editing: name, phone, WhatsApp, location, seller type
+   - Seller payout account (MoMo/Bank): method, account number, registered name
+   - Avatar upload with admin moderation (PENDING → APPROVED/REJECTED)
+   - Password change
+   - User deactivation (admin) with token invalidation + listing takedown
+
+B. VEHICLE LISTINGS
+   - Multi-step SellCar form: basic info → specs → features → photos → review
+   - Full spec taxonomy: make, model, year, price, condition (brand new /
+     foreign used / locally used), mileage, transmission, fuel type, engine
+     size, body type, color, doors, seats, drive type
+   - Structured condition facts: no known faults, first owner, registered
+     (DVLA), trade-in accepted, honest issue disclosure (free text)
+   - Multiple photos with primary selection (upload → base64 → /uploads)
+   - Registration documents (admin-only viewing)
+   - Feature checklist (AC, airbags, alloy wheels, sunroof, reverse camera, etc.)
+   - Free-tier auto-expiry (90 days); paid plans don't expire
+   - Admin moderation queue: PENDING → APPROVED (AVAILABLE) / REJECTED
+   - Seller edit sends listing back to PENDING for re-approval
+   - Soft delete (REMOVED) preserves chat history; hard delete cascades FKs
+
+C. SEARCH & DISCOVERY
+   - Full-text search (make/model/location/description relevance scoring)
+   - Filters: make, model, condition, transmission, fuel type, body type,
+     price range, location, verified sellers, condition facts (4 checkboxes)
+   - Sortable: newest, price, year, mileage
+   - Paginated (default 12/page)
+   - SQL fast-path for explicit sorts (no in-memory candidate scan)
+   - Redis cached (30s TTL, version-keyed invalidation)
+   - Skeleton loaders (not spinners) on Home/Search/Favorites grids
+   - Featured listings on homepage (plan-tier-ranked, cached 60s)
+   - Favorites (heart icon) with dedicated Saved Cars page
+   - Vehicle comparison (up to 3 side-by-side)
+
+D. PRICE NEGOTIATION (IN-CHAT OFFERS)
+   - Buyer makes an offer below asking price inside the Messages thread
+   - Seller accepts / declines / counters (counter requires subscription)
+   - Counters bounce back and forth (each turn supersedes the last)
+   - Accepted offer locks the price for THAT buyer only (agreedOfferId)
+   - Checkout uses the agreed price automatically; others pay asking
+   - Offer panel in Messages: live actions, counter input, agreed-price
+     Buy Now button, negotiation trail
+   - In-app notifications at every state change
+
+E. ESCROW CHECKOUT & PURCHASE FLOW
+   - Payment methods: BANK_TRANSFER (flat fee, recommended), MOMO, CASH
+     (with mandatory no-refund disclaimer), PAYSTACK (legacy only)
+   - Paystack is reserved for listing-plan subscriptions, NOT car purchases
+   - Order creation atomically reserves the vehicle (AVAILABLE → RESERVED)
+   - Platform collection accounts shown (env-driven bank + MoMo details)
+   - Order reference doubles as required transfer narration
+   - Buyer claims payment (submits transaction ref + payer name)
+   - Admin confirms transfer against statement → PAID_HELD (escrow)
+   - Admin can reject claim (clears it, buyer notified)
+   - Escrow-funded side effects: seller notified, buyer receipt email,
+     admin visibility — all fire-and-forget
+   - Seller marks handover (slide-to-confirm, sets sellerHandoverAt)
+   - Buyer confirms receipt (slide-to-confirm) → COMPLETED, payout queued
+   - Cash flow: HANDOVER_PENDING → buyer confirms handover → DELIVERED →
+     seller confirms cash → COMPLETED
+   - Cancel: frees the vehicle back to AVAILABLE (blocked during disputes)
+   - Receipt: printable /purchases/:id/receipt page + email link
+   - 1% platform commission snapshotted per order (commissionBps=100)
+   - Purchases list: Buying tab + Selling tab, scoped per role
+   - Order progress tracker (AliExpress-style stepper): Ordered → Paid/Held
+     → Handover → Completed
+
+F. BUYER PROTECTION & DISPUTES
+   - Public /buyer-protection page: escrow steps, covered/not-covered
+     tables, 1% cost explanation
+   - Either party opens a dispute on PAID_HELD orders (reason >= 10 chars)
+   - OPEN dispute freezes: confirm-receipt + cancel both blocked (API + UI)
+   - Admin resolves: REFUND_BUYER (order → REFUNDED, car → AVAILABLE) or
+     RELEASE_SELLER (order → COMPLETED, payout queued, car → SOLD)
+   - Both parties notified of the verdict
+   - Admin purchases tab: disputes-first queue with one-click verdicts
+   - All actions audit-logged (PURCHASE.RESOLVE_DISPUTE)
+
+G. SELLER REVIEWS (TRANSACTION-VERIFIED)
+   - Only buyers with a COMPLETED purchase can review (purchaseId @unique)
+   - 1-5 stars + optional comment
+   - One review per purchase (unique constraint)
+   - Seller rating auto-aggregates (atomic recomputation)
+   - Public endpoint (no auth needed to read reviews)
+   - StarRating component (partial-star aware) on VehicleCard + CarDetails
+   - CarDetails: reviews section with buyer initials + trust note
+   - PurchaseDetail: ReviewForm on completed orders (star picker + comment)
+
+H. MESSAGING
+   - In-app real-time chat via SSE (not polling)
+   - Conversations scoped by vehicle + user pair
+   - Offer panel embedded in chat thread
+   - Unread message badges in navbar
+   - Conversation delete + individual message delete
+   - Read receipts
+
+I. NOTIFICATIONS
+   - SSE push for real-time delivery
+   - In-app bell dropdown (desktop + mobile)
+   - Types: listing approved/rejected, new message, new offer, offer response,
+     purchase new order, payment received, handover marked, dispute opened/
+     resolved, payment claim rejected, admin alerts (pending listings,
+     payments, reports, avatars, purchases, disputes)
+   - Deep-link paths in notification data
+
+J. SELLER SUBSCRIPTIONS & BILLING
+   - Plans: FREE (1 active listing, 90-day expiry), PLUS, PRO (more listings,
+     no expiry, counter-offer access, featured slots)
+   - Paystack integration for plan payments (init + verify + webhook)
+   - Webhook signature verification
+   - Idempotent payment claiming (status-guarded)
+   - Admin payment verification queue
+   - Plan rank affects search ranking (higher plans rank first)
+
+K. ADMIN DASHBOARD
+   - Overview: KPI tiles (users, sellers, buyers, live listings, escrow held,
+     payouts pending), status distribution bar (7 segments incl. reserved),
+     quick actions (6 tiles, 2x3 grid), recent activity feed
+   - Pending listings: approve/reject with audit trail
+   - All listings: paginated (50/page) with featured toggling
+   - Taken down listings: paginated, restore action
+   - Users: manage roles, deactivate/reactivate, hard delete (FK-ordered
+     transaction), payout account visibility
+   - Payments: verify/reject subscription payments
+   - Purchases: awaiting-payment confirmation queue (claimed-first),
+     open disputes section (refund/release), payout release queue
+     (mark sent with reference), full orders table with commission breakdown
+   - Profile photo review: approve/reject avatars
+   - Reports: review and resolve user reports
+   - Audit logs: filterable by action/entity, full moderation trail
+   - Deep-linkable via ?tab= (10 whitelisted tabs)
+
+L. PERFORMANCE & UX
+   - Route-level code splitting (React.lazy + Suspense)
+   - TanStack Query with 30s staleTime, window-focus refetch off
+   - Redis response caching for vehicle lists + featured feed
+   - SQL-side sort pagination (no full-table scan on explicit sorts)
+   - Description excluded from list payloads (heaviest column, unused in cards)
+   - Gzip compression
+   - Immutable static asset caching
+   - Skeleton loaders (layout-stable, no layout shift)
+   - Slide-to-confirm for irreversible money actions (no accidental taps)
+   - Mobile-first: sticky contact bar with Buy Now, responsive grids,
+     iOS anti-zoom (16px font floor on inputs)
+   - SEO: per-route useSEO hook (title, description, OG, Twitter, canonical)
+   - Branded favicon (navy car mark, cache-busted at ?v=2)
+   - Staff portal with CarMarket Ghana brand header
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5: API SURFACE (91 ENDPOINTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /api/auth          — register, login, verify-email, me, update profile,
+                       change password, Google OAuth, admin-login, admin-verify
+  /api/vehicles      — CRUD, search (paginated/cached), featured, by-id,
+                       user's listings, close, reactivate
+  /api/images        — serve image by id, thumbnail
+  /api/favorites     — list, add, remove
+  /api/messages      — conversations, thread, send, read, delete
+  /api/offers        — make offer, respond (accept/decline/counter),
+                       withdraw, thread, payable price
+  /api/purchases     — initiate, list, detail, instructions, claim-payment,
+                       confirm-received, confirm-handover, seller-handover,
+                       seller-collected, open-dispute, cancel, verify (legacy)
+  /api/reviews       — create (gated), seller reviews (public), eligible
+  /api/billing       — plans, initialize payment, verify, webhook, status
+  /api/reports       — create, list (admin), resolve (admin)
+  /api/notifications — list, mark-read, SSE stream (/api/events)
+  /api/admin         — stats, vehicles (all/pending/status), users (list/
+                       delete/deactivate/reactivate), payments (verify/reject),
+                       purchases (list/verify-payment/reject-payment/resolve-
+                       dispute/release-payout), avatars (pending/approve/
+                       reject), reports, audit-logs
+  /api/users         — avatar upload, get avatar (optionalAuth + ?token=)
+  /api/upload        — image upload (multipart)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6: DATABASE SCHEMA SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+17 models, 11 enums, 9 migrations. Key relationships:
+
+  User (1) ──< SellerProfile (1) ──< Vehicle (1) ──< VehicleImage, VehicleFeature, VehicleDocument
+  User (1) ──< Purchase (buyer)           Vehicle (1) ──< PriceOffer
+  SellerProfile (1) ──< Purchase (seller) Purchase (1) ──< Review (1, unique)
+  User (1) ──< Message (sender/receiver)  User (1) ──< Notification
+  User (1) ──< Favorite                   User (1) ──< Payment ──> Subscription
+  User (1) ──< Report                     User (1) ──< AuthToken
+  Admin actions ──> AuditLog
+
+  VehicleStatus: PENDING | AVAILABLE | RESERVED | REJECTED | SOLD | DEACTIVATED | REMOVED
+  PurchaseStatus: AWAITING_PAYMENT | PAID_HELD | HANDOVER_PENDING | DELIVERED |
+                  COMPLETED | CANCELLED | REFUNDED
+  PriceOfferStatus: PENDING | COUNTERED | ACCEPTED | DECLINED | WITHDRAWN | USED
+
+  Purchase key fields: amount (pesewas), method (BANK_TRANSFER|MOMO|CASH|
+    PAYSTACK), commissionBps (100 = 1%), payoutStatus (NONE|PENDING|SENT),
+    paymentRef, payerName, claimedAt, sellerHandoverAt, agreedOfferId,
+    disputeStatus (NONE|OPEN|RESOLVED_BUYER|RESOLVED_SELLER), disputeReason
+
+  Vehicle condition facts: noKnownFaults, firstOwner, registered,
+    exchangePossible, issueNote (all indexed, defaulted false/null)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 7: ENVIRONMENT VARIABLES (production checklist)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Backend (Render):
+  DATABASE_URL          Supabase pooler connection string
+  JWT_SECRET            Token signing secret
+  PAYSTACK_SECRET_KEY   For listing-plan payment verification
+  PAYSTACK_PUBLIC_KEY   Exposed to frontend via /api/billing/plans
+  RESEND_API_KEY        Primary email provider
+  BREVO_API_KEY         Fallback email provider
+  REDIS_URL             Optional; cache is inert without it
+  PLATFORM_BANK_NAME        e.g. "Absa Bank Ghana"
+  PLATFORM_BANK_ACCOUNT     e.g. "1234567890123"
+  PLATFORM_BANK_ACCOUNT_NAME e.g. "CarMarket Ghana Ltd"
+  PLATFORM_COMMISSION_BPS   Default 100 (1%); override if negotiated
+  CLIENT_URL            Frontend origin for CORS + email links
+
+Frontend (Vercel):
+  VITE_API_URL          Backend base URL
+  VITE_GOOGLE_CLIENT_ID Google OAuth client ID
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 8: TESTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Backend: 57 tests across 6 suites (Jest, maxWorkers=1, testTimeout=45s)
+  - auth.test.js:        Registration, verification, login, profile, Google
+  - adminAuth.test.js:   Staff 2-step OTP, single-use codes, replay attacks
+  - lifecycle.test.js:   Listing CRUD, moderation, expiry, delete guards,
+                         condition facts CRUD + search filters
+  - purchases.test.js:   Escrow checkout (transfer+claim+confirm), handover,
+                         dispute lifecycle (refund + release), commission,
+                         receipt email, cancel/free, admin payout release
+  - offers.test.js:      Negotiation chain, plan-gated counters, agreed price
+                         binding, reserved-car fencing, withdraw/decline
+  - reviews.test.js:     Gate-before-purchase, one-per-purchase, public read,
+                         rating aggregation, eligible endpoint
+
+Frontend: 13 tests (Vitest + Testing Library)
+  - VehicleCard: renders, "No Image" placeholder, badge display
+  - FilterContent: label associations, filter updates, apply/clear
+  - ErrorBoundary: catches render errors
+  - useSEO: meta tag injection
+
+Test infrastructure:
+  - Shared PrismaClient (__tests__/_db.js) to avoid pool exhaustion
+  - connection_limit=3 on test DATABASE_URL (Supabase 15-session cap)
+  - Rate limiters disabled in NODE_ENV=test
+  - Paystack + mailer mocked in purchase/offer/review suites
+  - Test database: carmarket_test (same Supabase project, separate DB)
+
+Known test flake: Supabase pooler occasionally returns P1001 (Can't reach
+database server) or EMAXCONNSESSION (max clients reached) under rapid
+re-runs — transient, recovers on retry. Not a code issue.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 9: IMPACT ASSESSMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MARKET POSITIONING:
+  CarMarket Ghana is not competing with Jiji on listing volume — it competes
+  on TRUST. The value proposition to a buyer: "the only place in Ghana where
+  your money is safe." Every feature (escrow, disputes, verified reviews,
+  condition facts, negotiation) feeds that one sentence.
+
+WHO BENEFITS:
+  - Buyers: No more handing GH¢100K to a stranger. Escrow holds their money
+    until they confirm the car is in their hands. If something's wrong, a
+    dispute freezes the funds and an admin mediates.
+  - Sellers: Get paid reliably (no bounced cheques, no "I'll pay tomorrow"),
+    build a verifiable reputation (transaction-verified reviews attract more
+    buyers), and can negotiate prices in-system without losing buyers to
+    off-platform deals.
+  - CarMarket: 1% commission on every completed sale, plus subscription
+    revenue from sellers who want more listings / featured slots / counter-
+    offer access. Sustainable unit economics: 1% of a GH¢100K car = GH¢1,000
+    per transaction, with near-zero marginal cost (flat-fee rails).
+
+SCALABILITY CONCERNS:
+  1. Admin bottleneck: Transfer verification is manual (admin checks bank
+     statement). At >10 concurrent orders this becomes a bottleneck.
+     Solution: Paystack bank-transfer collection (auto-confirm) or statement
+     parsing automation.
+  2. Image storage: Vehicle photos on Render's ephemeral disk are lost on
+     redeploy. Avatars are base64 inline (works but doesn't scale). Cloudflare
+     R2 / S3 migration is documented in DEPLOY.md but not yet implemented.
+  3. Single-region DB: Supabase EU-Central pooler adds latency for Ghanaian
+     users. A Supabase closer region or read replica would help.
+  4. Dispute mediation: Currently admin-manual. At scale needs a structured
+     mediation workflow with evidence upload + timelines.
+
+WHAT WOULD MAKE THIS INDISPENSABLE (not just better than Jiji):
+  1. CarMarket Checked inspection program (the #1 recommended build)
+  2. Financing partner ("from GH¢X/month" labels)
+  3. Meet-at-hub test drives (safety + logistics)
+  4. Inventory seeding strategy (onboard 50+ dealers pre-launch)
+  5. WhatsApp share button on listings (Ghana runs on WhatsApp)
+  6. Mobile app (PWA at minimum — most Ghanaian users are mobile-only)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 10: KNOWN ISSUES & TECHNICAL DEBT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Image storage: Vehicle photos on ephemeral disk (lost on redeploy).
+     Avatars stored as base64 in DB (bloats user table). R2/S3 migration
+     needed — schema and config are ready (S3_* envs, storage.js service).
+  2. Prisma CLI can't reach Supabase pooler from this network (Rust engine
+     IPv6 routing issue). Migrations are applied via psql + manual
+     _prisma_migrations inserts. Functional but non-standard.
+  3. Paystack legacy purchase path still in code (webhook handler +
+     verify endpoint + initialize endpoint). Harmless but dead code for
+     new orders — could be removed once confident no legacy orders remain.
+  4. No rate limiting on purchase/offer creation (only /api/ and /api/auth/
+     are rate-limited). A malicious user could spam offers. Low risk at
+     current scale.
+  5. No automated test CI (tests run manually). A GitHub Action would catch
+     regressions on push.
+  6. No error monitoring (Sentry/Bugsnag). Errors are console.error only.
+  7. adminAuth.test.js creates its own PrismaClient (not shared _db.js) —
+     contributes to pool pressure under full-suite runs.
+  8. The supabaseDatabsePass file (visible in open tabs) appears to be a
+     plaintext credential file — should be .gitignored or moved to a secret
+     manager.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 11: BUILD & DEPLOY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Backend (Render):
+    - Auto-deploys on push to main
+    - Build: npm install && npx prisma generate
+    - Start: node src/index.js
+    - Health check: GET /api/health
+    - DB migrations: manual (psql path — see DEPLOY.md)
+
+  Frontend (Vercel):
+    - Auto-deploys on push to main
+    - Build: npm run build (Vite)
+    - Output: dist/
+    - Environment: VITE_API_URL, VITE_GOOGLE_CLIENT_ID
+
+  Local dev:
+    - Backend: cd backend && npm run dev (nodemon)
+    - Frontend: cd frontend && npm run dev (Vite)
+    - DB: Supabase (shared — no local Postgres needed)
+    - Tests: cd backend && npx jest / cd frontend && npx vitest run
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 12: CONCLUSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CarMarket Ghana is a production-ready transaction platform that solves the
+single biggest problem in Ghanaian used-car buying: the risk of handing large
+sums of money to a stranger. The escrow model, dispute resolution, transaction-
+verified reviews, in-chat negotiation, and condition-facts taxonomy together
+create a trust layer that no classifieds competitor in Ghana offers.
+
+The platform's real purpose — making it safe to buy a car in Ghana — is
+served by the software. What remains is operational: seeding inventory,
+automating transfer verification, implementing the inspection program, and
+navigating the regulatory landscape around holding buyer funds. These are
+business problems, not engineering ones — the engineering foundation is
+complete, tested (57 backend + 13 frontend tests), and deployed.
+
+The 1% commission model is sustainable: at just 100 completed car sales per
+month averaging GH¢120,000, the platform earns GH¢120,000/month in commission
+alone, plus subscription revenue from sellers. The flat-fee payment rails
+keep costs near zero per transaction, making the unit economics work where
+a 1.95% card-gateway model would not.
+
+================================================================================
+END OF REPORT
+================================================================================

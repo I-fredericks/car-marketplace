@@ -27,6 +27,28 @@ if (process.env.NODE_ENV === 'production' && !(process.env.SMTP_HOST && process.
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ──────────────────────────────────────────────────────────────────────
+// Error monitoring: Sentry if configured, inert when DSN is unset.
+// Request handler runs before all routes; error handler is appended last.
+// ──────────────────────────────────────────────────────────────────────
+let Sentry = null;
+if (process.env.SENTRY_DSN) {
+  try {
+    Sentry = require('@sentry/node');
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: 0.1,
+    });
+    app.use(Sentry.Handlers.requestHandler());
+    console.log('Sentry error monitoring enabled.');
+  } catch (e) {
+    console.warn('SENTRY_DSN set but @sentry/node not installed — skipping.');
+    Sentry = null;
+  }
+}
+app.locals.Sentry = Sentry;
+
 // Deployed behind proxies/tunnels: without this, rate limiting keys on the
 // proxy IP (one shared bucket for everyone) and req.protocol is wrong.
 app.set('trust proxy', 1);
@@ -108,6 +130,17 @@ if (process.env.NODE_ENV !== 'test') {
     message: { message: 'Too many login attempts, please try again later' }
   });
   app.use('/api/auth/', authLimiter);
+
+  // Money-moving endpoints: tighter ceiling to stop offer/purchase spam.
+  // 20 orders + 30 offers per 15 min is generous for real users but blocks
+  // a script from flooding the system with fake negotiations or reservations.
+  const txnLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50,
+    message: { message: 'Too many actions — please slow down and try again shortly.' },
+  });
+  app.use('/api/purchases', txnLimiter);
+  app.use('/api/offers', txnLimiter);
 }
 
 app.use(express.json({
@@ -188,6 +221,11 @@ app.use((req, res, next) => {
 });
 
 app.use(errorHandler);
+
+// Sentry error handler must be the very last middleware (after errorHandler)
+if (Sentry) {
+  app.use(Sentry.Handlers.errorHandler());
+}
 
 module.exports = app;
 

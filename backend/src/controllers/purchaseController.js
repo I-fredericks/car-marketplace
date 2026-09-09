@@ -318,7 +318,15 @@ const initiatePurchase = async (req, res) => {
   }
 };
 
-// @desc    Initialize Paystack checkout for a purchase (returns authorization URL)
+// ──────────────────────────────────────────────────────────────────────
+// LEGACY PAYSTACK PURCHASE PATH
+// These handlers settle orders created when Paystack was the car-payment
+// rail. New orders use BANK_TRANSFER / MOMO (flat-fee escrow) instead.
+// Kept for backward compat with any historical PAYSTACK orders still in
+// AWAITING_PAYMENT — safe to delete once all such orders are resolved.
+// ──────────────────────────────────────────────────────────────────────
+
+// @desc    Initialize Paystack checkout (LEGACY — new orders use transfers)
 // @route   POST /api/purchases/:id/initialize
 // @access  Private (Buyer, own)
 const initializePurchasePayment = async (req, res) => {

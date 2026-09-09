@@ -180,3 +180,28 @@ PostgreSQL, so before pointing `DATABASE_URL` at it you must:
 
 Skipping the provider switch and pointing at Supabase directly **will fail**
 — Prisma rejects the mismatched provider.
+
+### Migration workaround: Prisma CLI + Supabase pooler
+
+The Prisma schema engine (Rust binary) sometimes can't route to the Supabase
+pooler (`P1001: Can't reach database server`) due to IPv6 resolution
+preferences on certain networks. When this happens, apply migrations manually:
+
+```bash
+# 1. Write the migration SQL (as normal, via prisma migrate dev --create-only
+#    on a local Postgres, or hand-write the SQL).
+
+# 2. Apply via psql (the libpq client routes correctly):
+PGURL="postgresql://<user>:<pass>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require"
+psql "$PGURL" -v ON_ERROR_STOP=1 -f prisma/migrations/<migration_name>/migration.sql
+
+# 3. Record it so `prisma migrate status` stays consistent:
+SUM=$(sha256sum prisma/migrations/<migration_name>/migration.sql | cut -d' ' -f1)
+psql "$PGURL" -c "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, started_at, applied_steps_count) VALUES (gen_random_uuid()::text, '$SUM', now(), '<migration_name>', now(), 1);"
+
+# 4. Regenerate the client (works without DB connectivity):
+npx prisma generate
+```
+
+Apply the same SQL to the `carmarket_test` database if it exists.
+

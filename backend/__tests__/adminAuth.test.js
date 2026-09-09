@@ -2,8 +2,7 @@
 // code. The public login must refuse admins; the portal must refuse everyone
 // else; the code must be single-use and expiring.
 const request = require('supertest');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('./_db');
 const app = require('../src/index');
 
 jest.setTimeout(30000);
@@ -40,7 +39,6 @@ describe('Staff portal (admin two-step login)', () => {
   afterAll(async () => {
     await prisma.authToken.deleteMany({ where: { userId: adminId } });
     await prisma.user.delete({ where: { id: adminId } }).catch(() => {});
-    await prisma.$disconnect();
   });
 
   it('public login rejects ADMIN accounts with the staff-portal message', async () => {

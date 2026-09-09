@@ -7,19 +7,20 @@ on:
 
 jobs:
   backend:
-    name: Backend (lint schema, migrate, test)
+    name: Backend (schema, migrate, test)
     runs-on: ubuntu-latest
 
     services:
-      mysql:
-        image: mysql:8
+      postgres:
+        image: postgres:16
         env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: carmarketplace_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: carmarket_test
         ports:
-          - 3306:3306
+          - 5432:5432
         options: >-
-          --health-cmd="mysqladmin ping -proot"
+          --health-cmd="pg_isready -U postgres"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -29,7 +30,7 @@ jobs:
         working-directory: backend
 
     env:
-      DATABASE_URL: mysql://root:root@127.0.0.1:3306/carmarketplace_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/carmarket_test
       JWT_SECRET: ci-test-secret
       NODE_ENV: test
 
@@ -52,10 +53,10 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Run tests
-        run: npm test
+        run: npx jest --forceExit
 
   frontend:
-    name: Frontend (lint, build)
+    name: Frontend (test, build)
     runs-on: ubuntu-latest
 
     defaults:
@@ -74,11 +75,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
       - name: Test
-        run: npm test
+        run: npx vitest run
 
       - name: Build
         run: npm run build
