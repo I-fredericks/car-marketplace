@@ -139,10 +139,11 @@ const SellCar = () => {
   }
 
   const update = (field, value) => setForm(prev => {
-    // Object form patches several fields at once (e.g. ticking "no known
-    // faults" also clears a stale issue note); string form sets one field.
-    if (typeof field === 'object' && field !== null) {
-      return { ...prev, ...field };
+    // When value is a plain object (the condition-facts toggles patch
+    // several fields at once, e.g. ticking "no known faults" also clears
+    // a stale issue note), spread it as a multi-field patch.
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return { ...prev, ...value };
     }
     return { ...prev, [field]: value };
   });
