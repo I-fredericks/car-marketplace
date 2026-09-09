@@ -517,6 +517,74 @@ const sellerHandover = async (req, res) => {
   }
 };
 
+// @desc    Open a dispute on an escrowed order — freezes the money until
+//          an admin mediates (refund buyer or release to seller)
+// @route   POST /api/purchases/:id/open-dispute
+// @access  Private (Buyer or Seller of the order)
+const openDispute = async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    const { reason } = req.body || {};
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: { seller: { include: { user: { select: { id: true } } } } },
+    });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found.' });
+
+    const isBuyer = purchase.buyerId === req.user.id;
+    const isSeller = purchase.seller.user.id === req.user.id;
+    if (!isBuyer && !isSeller) {
+      return res.status(403).json({ message: 'Not your purchase.' });
+    }
+    if (purchase.method === 'CASH') {
+      return res.status(400).json({ message: 'Cash deals happen outside the platform — no funds to freeze.' });
+    }
+    if (purchase.status !== 'PAID_HELD') {
+      return res.status(400).json({ message: `Disputes only apply to escrowed orders (this one is ${purchase.status}).` });
+    }
+    if (purchase.disputeStatus === 'OPEN') {
+      return res.status(400).json({ message: 'A dispute is already open on this order.' });
+    }
+    if (purchase.disputeStatus !== 'NONE') {
+      return res.status(400).json({ message: 'This dispute was already resolved.' });
+    }
+    if (!reason || String(reason).trim().length < 10) {
+      return res.status(400).json({ message: 'Describe the problem in at least 10 characters so CarMarket can mediate.' });
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id: purchaseId },
+      data: {
+        disputeStatus: 'OPEN',
+        disputeReason: String(reason).trim().slice(0, 2000),
+        disputeOpenedAt: new Date(),
+      },
+    });
+
+    // Tell the other side and the admins (fire-and-forget)
+    const counterpartId = isBuyer ? purchase.seller.user.id : purchase.buyerId;
+    notifyUser({
+      userId: counterpartId,
+      type: 'PURCHASE_DISPUTE_OPENED',
+      title: 'Dispute opened on your order',
+      body: `Order ${updated.reference}: ${isBuyer ? 'the buyer' : 'the seller'} reported a problem. Funds stay frozen until CarMarket mediates.`,
+      data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
+    });
+    notifyAdmins({
+      type: 'ADMIN_PURCHASE_DISPUTE',
+      title: 'Escrow dispute opened',
+      body: `Purch ${updated.reference} · ${GHS(updated.amount)} frozen · opened by ${isBuyer ? 'buyer' : 'seller'}`,
+      senderId: req.user.id,
+      data: { path: '/admin?tab=purchases', purchaseId: updated.id },
+    }).catch((e) => console.error('Admin dispute notify failed:', e.message));
+
+    res.json({ status: 'success', purchase: updated });
+  } catch (error) {
+    console.error('Error opening dispute:', error);
+    res.status(500).json({ message: 'Server error opening dispute' });
+  }
+};
+
 // @desc    Buyer confirms they received the vehicle (PAID_HELD -> COMPLETED)
 // @route   POST /api/purchases/:id/confirm-received
 // @access  Private (Buyer, own)
@@ -536,6 +604,9 @@ const confirmReceived = async (req, res) => {
     }
     if (purchase.status !== 'PAID_HELD') {
       return res.status(400).json({ message: `Cannot confirm receipt from status ${purchase.status}.` });
+    }
+    if (purchase.disputeStatus === 'OPEN') {
+      return res.status(400).json({ message: 'A dispute is open on this order — CarMarket resolves it before funds move.' });
     }
 
     const updated = await prisma.$transaction((tx) => completePurchase(tx, purchase, { vehicle: purchase.vehicle }));
@@ -644,6 +715,9 @@ const cancelPurchase = async (req, res) => {
     if (!['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'].includes(purchase.status)) {
       return res.status(400).json({ message: `Cannot cancel from status ${purchase.status}.` });
     }
+    if (purchase.disputeStatus === 'OPEN') {
+      return res.status(400).json({ message: 'A dispute is open on this order — CarMarket resolves it before anything changes.' });
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       const claim = await tx.purchase.updateMany({
@@ -724,6 +798,7 @@ module.exports = {
   confirmHandover,
   sellerCollected,
   sellerHandover,
+  openDispute,
   cancelPurchase,
   listPurchases,
   getPurchase,

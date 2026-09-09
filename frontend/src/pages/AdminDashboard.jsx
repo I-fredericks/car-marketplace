@@ -313,6 +313,23 @@ const AdminDashboard = () => {
     }
   };
 
+  // Frozen money: refund the buyer (car back on sale) or release to the
+  // seller (sale completes, payout queues)
+  const handleResolveDispute = async (id, outcome) => {
+    const p = purchases.find((x) => x.id === id);
+    const action = outcome === 'REFUND_BUYER'
+      ? `REFUND the buyer GH₵${(p.amount / 100).toLocaleString()} and put the car back on sale`
+      : `RELEASE GH₵${((p.payoutAmount ?? p.amount * 0.99) / 100).toLocaleString()} to the seller and complete the sale`;
+    if (!window.confirm(`Dispute on ${p?.reference || 'this order'}.\n\nThis will ${action}. Continue?`)) return;
+    try {
+      const { data } = await api.put(`/admin/purchases/${id}/resolve-dispute`, { outcome });
+      toast(data.message || 'Dispute resolved.');
+      setPurchases(prev => prev.map(x => x.id === id ? { ...x, ...data.purchase } : x));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Resolution failed.');
+    }
+  };
+
   const handleRejectPayment = async (id) => {
     if (!window.confirm('Reject this payment? The seller will need to pay again.')) return;
     try {
@@ -1323,6 +1340,8 @@ const AdminDashboard = () => {
     // Transfer orders waiting on the buyer's money (claimed ones first)
     const awaitingPayment = purchases.filter(p => p.status === 'AWAITING_PAYMENT' && (p.method === 'BANK_TRANSFER' || p.method === 'MOMO'));
     const confirmedRest = rest.filter(p => p.status !== 'AWAITING_PAYMENT');
+    // Frozen money first: open escrow disputes need a verdict
+    const openDisputes = purchases.filter(p => p.disputeStatus === 'OPEN');
 
     const payoutTo = (p) => {
       const parts = [];
@@ -1410,6 +1429,49 @@ const AdminDashboard = () => {
           </div>
         ) : (
           <>
+            {openDisputes.length > 0 && (
+              <div>
+                <h3 className="font-medium text-err uppercase tracking-wider text-xs mb-3">
+                  Open disputes — funds frozen ({openDisputes.length})
+                </h3>
+                <div className="space-y-3">
+                  {openDisputes.map(p => (
+                    <div key={p.id} className="bg-surface rounded-lg p-4 shadow-sm border-2 border-err/40">
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-display font-bold text-textprimary">{p.reference}</span>
+                            <Badge type="err">Dispute</Badge>
+                            <span className="text-xs text-textmuted">GH₵{Number(p.amount / 100).toLocaleString()} frozen</span>
+                          </div>
+                          <p className="text-xs text-textmuted mb-1.5">
+                            {p.buyer?.name} ↔ {p.seller?.user?.name} · {p.vehicle ? `${p.vehicle.year} ${p.vehicle.make} ${p.vehicle.model}` : `vehicle #${p.vehicleId}`} · opened {new Date(p.disputeOpenedAt).toLocaleString()}
+                          </p>
+                          <p className="text-sm text-textprimary bg-bg border border-bordercol rounded-md p-3">
+                            “{p.disputeReason}”
+                          </p>
+                        </div>
+                        <div className="flex flex-row sm:flex-col gap-2 shrink-0">
+                          <button
+                            onClick={() => handleResolveDispute(p.id, 'REFUND_BUYER')}
+                            className="px-4 py-2 bg-success/10 text-success border border-success/25 rounded hover:bg-success hover:text-white transition-colors text-xs font-bold whitespace-nowrap"
+                          >
+                            Refund buyer
+                          </button>
+                          <button
+                            onClick={() => handleResolveDispute(p.id, 'RELEASE_SELLER')}
+                            className="px-4 py-2 bg-primary/10 text-primary border border-primary/25 rounded hover:bg-primary hover:text-white transition-colors text-xs font-bold whitespace-nowrap"
+                          >
+                            Release to seller
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {awaitingPayment.length > 0 && (
               <div>
                 <h3 className="font-medium text-textsecondary uppercase tracking-wider text-xs mb-3">

@@ -781,6 +781,10 @@ const getPurchases = async (req, res) => {
       },
       orderBy: [{ claimedAt: { sort: 'desc', nulls: 'last' } }, { payoutStatus: 'asc' }, { createdAt: 'desc' }],
     });
+    // Frozen money outranks everything: open disputes first, then claimed
+    // transfers, then the rest (DB-side enum-free ordering for TEXT status)
+    const rank = (p) => (p.disputeStatus === 'OPEN' ? 0 : p.status === 'AWAITING_PAYMENT' && p.claimedAt ? 1 : 2);
+    purchases.sort((a, b) => rank(a) - rank(b));
     res.json(purchases.map((p) => ({
       ...p,
       commission: commissionFor(p),
@@ -922,6 +926,90 @@ const releasePayout = async (req, res) => {
   }
 };
 
+// @desc    Resolve an escrow dispute: refund the buyer (car returns to
+//          sale) or release the funds to the seller (sale completes)
+// @route   PUT /api/admin/purchases/:id/resolve-dispute
+// @access  Private (Admin only)
+const resolveDispute = async (req, res) => {
+  try {
+    const { outcome, note } = req.body || {};
+    if (!['REFUND_BUYER', 'RELEASE_SELLER'].includes(outcome)) {
+      return res.status(400).json({ message: 'outcome must be REFUND_BUYER or RELEASE_SELLER' });
+    }
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: parseInt(req.params.id) },
+    });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
+    if (purchase.disputeStatus !== 'OPEN') {
+      return res.status(400).json({ message: 'No open dispute on this order' });
+    }
+    if (purchase.status !== 'PAID_HELD') {
+      return res.status(400).json({ message: `Order is ${purchase.status}, not escrowed` });
+    }
+
+    const now = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const claim = await tx.purchase.updateMany({
+        where: { id: purchase.id, disputeStatus: 'OPEN', status: 'PAID_HELD' },
+        data: {
+          disputeStatus: outcome === 'REFUND_BUYER' ? 'RESOLVED_BUYER' : 'RESOLVED_SELLER',
+          disputeResolvedAt: now,
+          completedAt: now,
+          ...(outcome === 'REFUND_BUYER'
+            ? { status: 'REFUNDED' }
+            : { status: 'COMPLETED', payoutStatus: 'PENDING' }),
+        },
+      });
+      if (claim.count === 0) return null;
+
+      // Refund puts the car back on the market; release finishes the sale
+      await tx.vehicle.update({
+        where: { id: purchase.vehicleId },
+        data: { status: outcome === 'REFUND_BUYER' ? 'AVAILABLE' : 'SOLD' },
+      }).catch((e) => console.warn('Dispute resolve: vehicle flip skipped:', e.message));
+
+      return tx.purchase.findUnique({ where: { id: purchase.id } });
+    }, { maxWait: 15000, timeout: 15000 });
+    if (!updated) {
+      return res.status(400).json({ message: 'Dispute was already resolved by someone else' });
+    }
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'PURCHASE.RESOLVE_DISPUTE',
+      entityType: 'PURCHASE',
+      entityId: purchase.id,
+      meta: { reference: purchase.reference, outcome, note: note || null },
+    });
+
+    // Tell both parties how it landed (fire-and-forget)
+    const sellerRow = await prisma.sellerProfile.findUnique({ where: { id: purchase.sellerId } });
+    const verdict = outcome === 'REFUND_BUYER'
+      ? { title: 'Dispute resolved — refund', body: `Order ${purchase.reference}: the buyer gets their GH₵${(purchase.amount / 100).toLocaleString()} back and the car returns to sale.` }
+      : { title: 'Dispute resolved — released', body: `Order ${purchase.reference}: funds released to the seller. Payout of GH₵${((purchase.amount - commissionFor(purchase)) / 100).toLocaleString()} is queued.` };
+    const verdictType = outcome === 'REFUND_BUYER' ? 'PURCHASE_DISPUTE_REFUNDED' : 'PURCHASE_DISPUTE_RELEASED';
+    for (const userId of [purchase.buyerId, sellerRow?.userId].filter(Boolean)) {
+      prisma.notification.create({
+        data: {
+          userId,
+          type: verdictType,
+          title: verdict.title,
+          body: verdict.body,
+          data: { path: `/purchases/${purchase.id}`, purchaseId: purchase.id },
+        },
+      }).catch((e) => console.error('Dispute verdict notify failed:', e.message));
+    }
+
+    res.json({
+      message: outcome === 'REFUND_BUYER' ? 'Dispute resolved — buyer refunded' : 'Dispute resolved — funds released',
+      purchase: updated,
+    });
+  } catch (error) {
+    console.error('Error resolving dispute:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getPendingVehicles,
   getAllVehicles,
@@ -945,4 +1033,5 @@ module.exports = {
   releasePayout,
   verifyPurchasePayment,
   rejectPurchasePayment,
+  resolveDispute,
 };

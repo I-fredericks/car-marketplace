@@ -23,6 +23,7 @@ const {
   releasePayout,
   verifyPurchasePayment,
   rejectPurchasePayment,
+  resolveDispute,
 } = require('../controllers/adminController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
@@ -71,6 +72,7 @@ router.put('/payments/:id/reject', rejectPayment);
 router.get('/purchases', getPurchases);
 router.put('/purchases/:id/verify-payment', verifyPurchasePayment);
 router.put('/purchases/:id/reject-payment', rejectPurchasePayment);
+router.put('/purchases/:id/resolve-dispute', resolveDispute);
 router.put('/purchases/:id/release-payout', releasePayout);
 
 module.exports = router;

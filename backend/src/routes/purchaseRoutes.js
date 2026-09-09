@@ -11,6 +11,7 @@ const {
   confirmHandover,
   sellerCollected,
   sellerHandover,
+  openDispute,
   cancelPurchase,
   listPurchases,
   getPurchase,
@@ -30,6 +31,7 @@ router.post('/:id/confirm-received', confirmReceived);
 router.post('/:id/confirm-handover', confirmHandover);
 router.post('/:id/seller-collected', sellerCollected);
 router.post('/:id/seller-handover', sellerHandover);
+router.post('/:id/open-dispute', openDispute);
 router.post('/:id/cancel', cancelPurchase);
 
 module.exports = router;

@@ -260,7 +260,7 @@ const Checkout = () => {
             <ShieldCheck size={14} className="text-success flex-shrink-0 mt-0.5" />
             {payMode === 'CASH'
               ? 'Cash reservation: the car is held for you, but the handover deal is between you and the seller — no platform protection.'
-              : 'Escrow protected: CarMarket holds your payment and only releases it to the seller after you confirm you have the car. Card gateways would cost ~2% — bank and MoMo transfers keep that in your pocket.'}
+              : <>Escrow protected: CarMarket holds your payment and only releases it to the seller after you confirm you have the car. Card gateways would cost ~2% — bank and MoMo transfers keep that in your pocket. Read the <Link to="/buyer-protection" className="text-primary font-semibold underline">Buyer Protection Guarantee</Link>.</>}
           </p>
         </div>
 

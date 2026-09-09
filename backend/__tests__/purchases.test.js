@@ -514,4 +514,156 @@ describe('Vehicle purchase (escrow checkout)', () => {
     expect(statuses).toContain('COMPLETED');
     expect(statuses).toContain('CANCELLED');
   });
+
+  // ── Buyer protection: dispute freezes escrow; admin refunds or releases ──
+  it('dispute lifecycle: open freezes, admin resolves with refund, car returns to sale', async () => {
+    // Fresh listing (the pay vehicle is SOLD by now)
+    const created = await request(app)
+      .post('/api/vehicles')
+      .set('Authorization', `Bearer ${tokens.sellerPay}`)
+      .send({
+        make: 'Mazda', model: 'CX-5', year: 2022, price: 300000,
+        location: 'Accra', images: [{ data: PNG_1PX, isPrimary: true }],
+      });
+    expect(created.statusCode).toEqual(201);
+    const disputeVehicle = created.body.id;
+    await request(app)
+      .put(`/api/admin/vehicles/${disputeVehicle}/status`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ status: 'AVAILABLE' });
+
+    const order = await request(app)
+      .post('/api/purchases')
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ vehicleId: disputeVehicle, method: 'MOMO', deliveryMode: 'PICKUP' });
+    expect(order.statusCode).toEqual(201);
+    const disputePurchase = order.body.purchase.id;
+
+    await request(app)
+      .post(`/api/purchases/${disputePurchase}/claim-payment`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ paymentRef: 'TRF-DISPUTE-1' });
+    expect((await request(app)
+      .put(`/api/admin/purchases/${disputePurchase}/verify-payment`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({})).statusCode).toEqual(200);
+
+    // Guards: strangers can't dispute; thin reasons rejected
+    expect((await request(app)
+      .post(`/api/purchases/${disputePurchase}/open-dispute`)
+      .set('Authorization', `Bearer ${tokens.stranger}`)
+      .send({ reason: 'not my order at all here' })).statusCode).toEqual(403);
+    expect((await request(app)
+      .post(`/api/purchases/${disputePurchase}/open-dispute`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ reason: 'bad' })).statusCode).toEqual(400);
+
+    // Buyer opens a real dispute
+    const disputed = await request(app)
+      .post(`/api/purchases/${disputePurchase}/open-dispute`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
+      .send({ reason: 'Seller delivered a different car than the listing described.' });
+    expect(disputed.statusCode).toEqual(200);
+    expect(disputed.body.purchase.disputeStatus).toEqual('OPEN');
+
+    // Frozen: confirm-received and cancel are both blocked while OPEN
+    expect((await request(app)
+      .post(`/api/purchases/${disputePurchase}/confirm-received`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)).statusCode).toEqual(400);
+    expect((await request(app)
+      .post(`/api/purchases/${disputePurchase}/cancel`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)).statusCode).toEqual(400);
+
+    // Admin queue surfaces the dispute on top
+    const queue = await request(app)
+      .get('/api/admin/purchases')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(queue.body[0].id).toEqual(disputePurchase);
+
+    // Resolution must be a valid outcome
+    expect((await request(app)
+      .put(`/api/admin/purchases/${disputePurchase}/resolve-dispute`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ outcome: 'FLIP_A_COIN' })).statusCode).toEqual(400);
+
+    // Refund the buyer: order REFUNDED, car back on sale
+    const refunded = await request(app)
+      .put(`/api/admin/purchases/${disputePurchase}/resolve-dispute`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ outcome: 'REFUND_BUYER', note: 'listing mismatch confirmed' });
+    expect(refunded.statusCode).toEqual(200);
+    expect(refunded.body.purchase.status).toEqual('REFUNDED');
+    expect(refunded.body.purchase.disputeStatus).toEqual('RESOLVED_BUYER');
+
+    const prisma = require('./_db');
+    try {
+      const v = await prisma.vehicle.findUnique({ where: { id: disputeVehicle } });
+      expect(v.status).toEqual('AVAILABLE');
+    } finally {
+    }
+
+    // Both parties hear the verdict
+    let verdict = false;
+    for (let i = 0; i < 5 && !verdict; i += 1) {
+      const notes = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${tokens.buyer}`);
+      verdict = notes.body.notifications.some((n) => n.type === 'PURCHASE_DISPUTE_REFUNDED');
+      if (!verdict) await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(verdict).toBe(true);
+  });
+
+  it('dispute resolution can release funds to the seller instead', async () => {
+    // Reuse the refunded vehicle: it's AVAILABLE again
+    const prisma = require('./_db');
+    let vehicleId;
+    try {
+      const v = await prisma.vehicle.findFirst({ where: { make: 'Mazda', model: 'CX-5' }, orderBy: { id: 'desc' } });
+      vehicleId = v.id;
+    } finally {
+    }
+
+    const order = await request(app)
+      .post('/api/purchases')
+      .set('Authorization', `Bearer ${tokens.stranger}`)
+      .send({ vehicleId, method: 'BANK_TRANSFER', deliveryMode: 'PICKUP' });
+    expect(order.statusCode).toEqual(201);
+    const pid = order.body.purchase.id;
+    await request(app)
+      .post(`/api/purchases/${pid}/claim-payment`)
+      .set('Authorization', `Bearer ${tokens.stranger}`)
+      .send({ paymentRef: 'TRF-RELEASE-9' });
+    await request(app)
+      .put(`/api/admin/purchases/${pid}/verify-payment`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({});
+
+    // Seller opens this one
+    expect((await request(app)
+      .post(`/api/purchases/${pid}/open-dispute`)
+      .set('Authorization', `Bearer ${tokens.sellerPay}`)
+      .send({ reason: 'Buyer collected the car and now refuses to confirm receipt.' })).statusCode).toEqual(200);
+
+    const released = await request(app)
+      .put(`/api/admin/purchases/${pid}/resolve-dispute`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ outcome: 'RELEASE_SELLER' });
+    expect(released.statusCode).toEqual(200);
+    expect(released.body.purchase.status).toEqual('COMPLETED');
+    expect(released.body.purchase.disputeStatus).toEqual('RESOLVED_SELLER');
+    expect(released.body.purchase.payoutStatus).toEqual('PENDING');
+
+    try {
+      const v = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+      expect(v.status).toEqual('SOLD');
+    } finally {
+    }
+
+    // Double-resolution is fenced
+    expect((await request(app)
+      .put(`/api/admin/purchases/${pid}/resolve-dispute`)
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ outcome: 'REFUND_BUYER' })).statusCode).toEqual(400);
+  });
 });

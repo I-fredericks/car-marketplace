@@ -421,6 +421,14 @@ model Purchase {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Buyer-protection disputes: either party can freeze an escrowed order
+  // (PAID_HELD); an admin mediates and either refunds the buyer or
+  // releases the funds to the seller. NONE | OPEN | RESOLVED_BUYER | RESOLVED_SELLER
+  disputeStatus   String    @default("NONE")
+  disputeReason   String?
+  disputeOpenedAt DateTime?
+  disputeResolvedAt DateTime?
+
   @@index([buyerId])
   @@index([vehicleId])
   @@index([sellerId])

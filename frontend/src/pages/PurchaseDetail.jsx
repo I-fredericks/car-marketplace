@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt, Landmark, Smartphone } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt, Landmark, Smartphone, Scale } from 'lucide-react';
 import OrderProgress from '../components/OrderProgress';
 import SlideToConfirm from '../components/SlideToConfirm';
 
@@ -207,6 +207,29 @@ const PurchaseDetail = () => {
     }
   };
 
+  // Freeze the escrow: dispute blocks confirm/cancel until admin mediates
+  const openDisputePrompt = async () => {
+    const reason = window.prompt(
+      'Describe the problem in detail (at least 10 characters).\n\nThis freezes the funds on this order until CarMarket mediates.',
+      ''
+    );
+    if (reason === null) return; // cancelled
+    if (reason.trim().length < 10) {
+      setError('Describe the problem in at least 10 characters so CarMarket can mediate.');
+      return;
+    }
+    setActing(true);
+    setError('');
+    try {
+      const { data } = await api.post(`/purchases/${id}/open-dispute`, { reason: reason.trim() });
+      setPurchase((prev) => ({ ...prev, ...data.purchase }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not open the dispute.');
+    } finally {
+      setActing(false);
+    }
+  };
+
   return (
     <div className="bg-bg min-h-screen pt-24 pb-20 px-4">
       <div className="max-w-2xl mx-auto">
@@ -347,7 +370,7 @@ const PurchaseDetail = () => {
           )}
 
           {/* Escrow reassurance while held */}
-          {purchase.status === 'PAID_HELD' && (
+          {purchase.status === 'PAID_HELD' && purchase.disputeStatus !== 'OPEN' && (
             <div className="mb-6 flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-lg p-4">
               <ShieldCheck size={22} className="text-success flex-shrink-0" />
               <p className="text-sm text-textprimary">
@@ -355,6 +378,37 @@ const PurchaseDetail = () => {
                 {isBuyer
                   ? ' Collect the car, then confirm receipt below to release the payment to the seller.'
                   : ` ${buyerName} paid online. Hand the car over — funds release once they confirm receipt.`}
+              </p>
+            </div>
+          )}
+
+          {/* Dispute states */}
+          {purchase.disputeStatus === 'OPEN' && (
+            <div className="mb-6 border-2 border-err/40 bg-err/5 rounded-lg p-4">
+              <h4 className="font-bold text-err text-sm mb-1 flex items-center gap-2">
+                <Scale size={16} /> Dispute open — funds frozen
+              </h4>
+              <p className="text-sm text-textprimary leading-relaxed">
+                {purchase.disputeReason}
+              </p>
+              <p className="text-xs text-textsecondary mt-2">
+                CarMarket is mediating. Nothing moves on this order until the dispute is resolved. Opened {new Date(purchase.disputeOpenedAt).toLocaleString()}.
+              </p>
+            </div>
+          )}
+          {purchase.disputeStatus === 'RESOLVED_BUYER' && (
+            <div className="mb-6 flex items-center gap-3 bg-success/10 border border-success/25 rounded-lg p-4">
+              <Scale size={20} className="text-success flex-shrink-0" />
+              <p className="text-sm text-textprimary">
+                <span className="font-medium">Dispute resolved — buyer refunded.</span> The payment was returned and the car returned to sale.
+              </p>
+            </div>
+          )}
+          {purchase.disputeStatus === 'RESOLVED_SELLER' && (
+            <div className="mb-6 flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-lg p-4">
+              <Scale size={20} className="text-primary flex-shrink-0" />
+              <p className="text-sm text-textprimary">
+                <span className="font-medium">Dispute resolved — funds released to the seller.</span> The escrow was paid out after mediation.
               </p>
             </div>
           )}
@@ -412,7 +466,9 @@ const PurchaseDetail = () => {
           {error && <p className="mb-4 text-sm text-err font-medium" role="alert">{error}</p>}
 
           {/* Actions by role + state. Irreversible money moves use
-              slide-to-confirm so a stray tap can't release escrowed cash. */}
+              slide-to-confirm so a stray tap can't release escrowed cash.
+              An open dispute freezes all of them (backend enforces too). */}
+          {purchase.disputeStatus !== 'OPEN' && (
           <div className="space-y-3">
             {/* Escrow orders: seller marks the physical handover first… */}
             {isSeller && purchase.method !== 'CASH' && purchase.status === 'PAID_HELD' && !purchase.sellerHandoverAt && (
@@ -506,8 +562,17 @@ const PurchaseDetail = () => {
               {isBuyer && purchase.method === 'PAYSTACK' && purchase.status === 'AWAITING_PAYMENT' && verifyState !== 'verifying' && (
                 <ActionButton label="Continue to payment" onClick={retryPayment} primary icon={CreditCard} />
               )}
+              {(isBuyer || isSeller) && purchase.method !== 'CASH' && purchase.status === 'PAID_HELD' && purchase.disputeStatus === 'NONE' && (
+                <button
+                  onClick={openDisputePrompt}
+                  className="flex-1 py-3 rounded-md font-medium border border-err/40 text-err hover:bg-err/5 transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  <Scale size={16} /> Report a problem
+                </button>
+              )}
             </div>
           </div>
+          )}
 
           {purchase.status === 'CANCELLED' && (
             <p className="mt-4 text-sm text-textmuted">This order was cancelled and the vehicle went back on sale.</p>

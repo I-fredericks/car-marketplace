@@ -25,6 +25,7 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold text-lg text-textprimary mb-4">Quick Links</h4>
             <ul className="space-y-3">
+              <li><Link to="/buyer-protection" className="text-textsecondary hover:text-primary transition-colors text-sm">Buyer Protection</Link></li>
               <li><Link to="/search" className="text-textsecondary hover:text-primary transition-colors text-sm">Buy Cars</Link></li>
               <li><Link to="/sell" className="text-textsecondary hover:text-primary transition-colors text-sm">Sell Your Car</Link></li>
               <li><Link to="/favorites" className="text-textsecondary hover:text-primary transition-colors text-sm">Saved Cars</Link></li>
