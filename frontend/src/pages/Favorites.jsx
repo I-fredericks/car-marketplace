@@ -94,6 +94,7 @@ const Favorites = () => {
                      price={car.price}
                      location={car.location}
                      condition={car.condition?.replace('_', ' ')}
+                     facts={car}
                      specs={[car.transmission, car.fuelType, car.mileage ? `${car.mileage.toLocaleString()} km` : null].filter(Boolean)}
                      sellerName={car.seller?.name || 'Private Seller'}
                      verified={Boolean(car.seller?.verified)}

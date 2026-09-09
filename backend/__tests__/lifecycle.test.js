@@ -273,4 +273,59 @@ describe('Listing lifecycle & moderation', () => {
     expect(update.actorName).toBeDefined();
     expect(update.meta).toBeDefined();
   });
+
+  // ── Structured condition facts (Jiji-style discovery filters) ──
+  it('stores condition facts on create/update and filters search by them', async () => {
+    // Fresh seller (free tier allows one active listing; earlier ones closed)
+    const sellerFacts = { email: `facts-seller-${run}@example.com`, password: 'password123', name: 'Facts Seller' };
+    const reg = await request(app).post('/api/auth/register')
+      .send({ ...sellerFacts, role: 'SELLER', sellerType: 'PRIVATE' });
+    expect(reg.statusCode).toEqual(201);
+    await request(app).get('/api/auth/verify-email').query({ token: reg.body.devVerificationToken });
+    const sellerFactsToken = (await request(app).post('/api/auth/login')
+      .send(sellerFacts)).body.token;
+
+    // Create with all facts set + an honest issue disclosure
+    const created = await createVehicle(sellerFactsToken, {
+      make: 'Honda', model: 'Accord', year: 2019, price: 115000,
+      location: 'Tema', condition: 'FOREIGN_USED',
+      noKnownFaults: true, firstOwner: true, registered: true, exchangePossible: false,
+      issueNote: 'Minor scratch on rear bumper',
+      images: [{ data: PNG_1PX, isPrimary: true }],
+    });
+    expect(created.statusCode).toEqual(201);
+    expect(created.body.noKnownFaults).toBe(true);
+    expect(created.body.firstOwner).toBe(true);
+    expect(created.body.registered).toBe(true);
+    expect(created.body.exchangePossible).toBe(false);
+    expect(created.body.issueNote).toEqual('Minor scratch on rear bumper');
+
+    await request(app)
+      .put(`/api/admin/vehicles/${created.body.id}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'AVAILABLE' });
+
+    // Search filters narrow to it; contradictory filters exclude it
+    const noFaults = await request(app)
+      .get('/api/vehicles?noKnownFaults=true&make=Honda');
+    expect(noFaults.body.vehicles.some((v) => v.id === created.body.id)).toBe(true);
+
+    const registered = await request(app)
+      .get('/api/vehicles?registered=true&make=Honda');
+    expect(registered.body.vehicles.some((v) => v.id === created.body.id)).toBe(true);
+
+    const exchange = await request(app)
+      .get('/api/vehicles?exchangePossible=true&make=Honda');
+    expect(exchange.body.vehicles.some((v) => v.id === created.body.id)).toBe(false);
+
+    // Update flips a fact and clears the note
+    const updated = await request(app)
+      .put(`/api/vehicles/${created.body.id}`)
+      .set('Authorization', `Bearer ${sellerFactsToken}`)
+      .send({ exchangePossible: true, issueNote: '' });
+    expect(updated.statusCode).toEqual(200);
+    expect(updated.body.exchangePossible).toBe(true);
+    expect(updated.body.issueNote).toBeNull();
+    expect(updated.body.noKnownFaults).toBe(true); // untouched fact survives
+  });
 });

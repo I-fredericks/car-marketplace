@@ -69,6 +69,29 @@ const FilterContent = ({ filters, setFilters, onApply, onClear }) => (
         <span className="text-sm font-medium text-textprimary">Verified Sellers Only</span>
       </label>
 
+      {/* Structured condition facts (Jiji-style discovery filters) */}
+      <div className="pt-2 border-t border-bordercol">
+        <p className="text-xs font-bold text-textmuted uppercase tracking-wider mb-2">Condition facts</p>
+        <div className="flex flex-col gap-2">
+          {[
+            { key: 'noKnownFaults', label: 'No known faults' },
+            { key: 'firstOwner', label: 'First owner' },
+            { key: 'registered', label: 'Registered (DVLA)' },
+            { key: 'exchangePossible', label: 'Trade-in accepted' },
+          ].map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters[key] === 'true'}
+                onChange={(e) => setFilters({ ...filters, [key]: e.target.checked ? 'true' : '' })}
+                className="w-4 h-4 text-primary rounded border-bordercol focus:ring-primary"
+              />
+              <span className="text-sm font-medium text-textprimary">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       <button type="submit" className="w-full py-3 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors mt-4">
         Apply Filters
       </button>

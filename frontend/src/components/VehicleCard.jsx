@@ -18,6 +18,7 @@ const VehicleCard = ({
   price,
   location,
   condition,
+  facts,
   specs = [],
   sellerName,
   verified,
@@ -65,12 +66,25 @@ const VehicleCard = ({
           </div>
         )}
 
-        {/* Condition chip floats above the gradient */}
-        {condition && (
-          <span className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-white/90 text-[#1B2A4A] text-[9px] sm:text-[11px] font-bold rounded-md shadow-sm backdrop-blur-sm">
-            {condition}
-          </span>
-        )}
+        {/* Condition chip floats above the gradient; honest-facts chips
+            (No faults / 1st owner / Trade-in) sit beside it when true */}
+        <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-1 sm:gap-1.5 flex-wrap max-w-[92%]">
+          {condition && (
+            <span className="px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-white/90 text-[#1B2A4A] text-[9px] sm:text-[11px] font-bold rounded-md shadow-sm backdrop-blur-sm">
+              {condition}
+            </span>
+          )}
+          {facts?.noKnownFaults && (
+            <span className="px-1.5 py-0.5 sm:px-2 sm:py-0.5 bg-success/90 text-white text-[8px] sm:text-[10px] font-bold rounded-md shadow-sm">
+              No faults
+            </span>
+          )}
+          {facts?.exchangePossible && (
+            <span className="px-1.5 py-0.5 sm:px-2 sm:py-0.5 bg-primary/85 text-white text-[8px] sm:text-[10px] font-bold rounded-md shadow-sm backdrop-blur-sm">
+              Trade-in
+            </span>
+          )}
+        </div>
       </Link>
 
       <div className="p-2.5 sm:p-4 md:p-5 flex flex-col gap-1.5 sm:gap-3 flex-1">

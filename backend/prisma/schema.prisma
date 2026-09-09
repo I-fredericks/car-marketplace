@@ -152,6 +152,15 @@ model Vehicle {
   featuredUntil DateTime?
   expiresAt    DateTime?
 
+  // Structured condition facts (Jiji-style discovery): buyers filter on
+  // these instead of trusting free-text claims. issueNote is the honest
+  // disclosure when something IS wrong (engine/gear/body/…).
+  noKnownFaults    Boolean @default(false)
+  firstOwner       Boolean @default(false)
+  registered       Boolean @default(false) // registered with DVLA in Ghana
+  exchangePossible Boolean @default(false) // seller accepts a trade-in
+  issueNote        String?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

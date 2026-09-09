@@ -71,6 +71,13 @@ const vehicleSchema = z.object({
   doors: z.coerce.number().int().positive().optional(),
   seats: z.coerce.number().int().positive().optional(),
   description: z.string().optional(),
+  // Structured condition facts — buyers filter on these, so they must be
+  // real booleans, and the issue disclosure is bounded free text.
+  noKnownFaults: z.boolean().optional(),
+  firstOwner: z.boolean().optional(),
+  registered: z.boolean().optional(),
+  exchangePossible: z.boolean().optional(),
+  issueNote: z.string().max(1000, 'Issue note is too long').optional(),
   features: z.array(z.string()).optional(),
   images: z.array(z.object({
     data: z.string().min(1, 'Image data is required'),

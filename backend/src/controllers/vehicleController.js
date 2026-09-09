@@ -51,6 +51,7 @@ const listingCardSelect = {
   id: true, make: true, model: true, year: true, price: true, location: true,
   condition: true, mileage: true, transmission: true, fuelType: true, bodyType: true,
   status: true, featured: true, featuredUntil: true, createdAt: true, updatedAt: true,
+  noKnownFaults: true, firstOwner: true, registered: true, exchangePossible: true,
   seller: sellerInclude.seller,
   images: imageIdSelect,
 };
@@ -124,6 +125,7 @@ const createVehicle = async (req, res) => {
       make, model, year, price, location, condition,
       mileage, transmission, fuelType, engineSize, bodyType, color,
       description,
+      noKnownFaults, firstOwner, registered, exchangePossible, issueNote,
       features,
       images,
       documents
@@ -154,6 +156,11 @@ const createVehicle = async (req, res) => {
         bodyType,
         color,
         description,
+        noKnownFaults: Boolean(noKnownFaults),
+        firstOwner: Boolean(firstOwner),
+        registered: Boolean(registered),
+        exchangePossible: Boolean(exchangePossible),
+        issueNote: issueNote?.trim() || null,
         expiresAt,
         features: features && features.length > 0 ? {
           create: features.map(f => ({ featureName: f }))
@@ -211,6 +218,7 @@ const getVehicles = async (req, res) => {
     const {
       make, model, condition, transmission, fuelType, bodyType,
       minPrice, maxPrice, location, verifiedOnly, search,
+      noKnownFaults, firstOwner, registered, exchangePossible,
       order = 'desc', page = 1, limit = 12
     } = req.query;
     const sortBy = SORTABLE_FIELDS.includes(req.query.sortBy) ? req.query.sortBy : 'createdAt';
@@ -237,6 +245,12 @@ const getVehicles = async (req, res) => {
       where.seller = { verified: true };
     }
 
+    // Structured condition facts (Jiji-style discovery filters)
+    if (noKnownFaults === 'true') where.noKnownFaults = true;
+    if (firstOwner === 'true') where.firstOwner = true;
+    if (registered === 'true') where.registered = true;
+    if (exchangePossible === 'true') where.exchangePossible = true;
+
     // Keyword and expiry clauses are AND-ed so expired free listings stay hidden during searches
     where.AND = [notExpiredFilter()];
     if (search) {
@@ -260,6 +274,7 @@ const getVehicles = async (req, res) => {
     const queryParams = {
       make, model, condition, transmission, fuelType, bodyType,
       minPrice, maxPrice, location, verifiedOnly, search, sortBy, order, page, limit,
+      noKnownFaults, firstOwner, registered, exchangePossible,
     };
     const cacheKey = cache.stableKey('vehicles:list', queryParams);
     const cached = await cache.getJSON(cacheKey);
@@ -536,7 +551,8 @@ const updateVehicle = async (req, res) => {
     const {
       make, model, year, price, location, condition,
       mileage, transmission, fuelType, engineSize, bodyType, color,
-      description, features, images, documents
+      description, features, images, documents,
+      noKnownFaults, firstOwner, registered, exchangePossible, issueNote
     } = req.body;
 
     const formattedImgList = images ? formatImages(images) : null;
@@ -558,6 +574,12 @@ const updateVehicle = async (req, res) => {
         bodyType,
         color,
         description,
+        // Condition facts: undefined keeps the stored value, booleans set it
+        noKnownFaults: noKnownFaults === undefined ? undefined : Boolean(noKnownFaults),
+        firstOwner: firstOwner === undefined ? undefined : Boolean(firstOwner),
+        registered: registered === undefined ? undefined : Boolean(registered),
+        exchangePossible: exchangePossible === undefined ? undefined : Boolean(exchangePossible),
+        issueNote: issueNote === undefined ? undefined : (issueNote?.trim() || null),
         status: nextStatus,
         features: features ? {
           deleteMany: {},

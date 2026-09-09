@@ -4,7 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import useBillingStatus from '../hooks/useBillingStatus';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import { compressImage, MIN_RECOMMENDED_WIDTH } from '../utils/imageCompression';
-import { Car, Check, X, UploadCloud, ChevronRight, ChevronLeft, Save, ShieldAlert } from 'lucide-react';
+import { Car, Check, X, UploadCloud, ChevronRight, ChevronLeft, Save, ShieldAlert, CheckCircle } from 'lucide-react';
 
 const TOTAL_STEPS = 5;
 
@@ -19,6 +19,8 @@ const emptyForm = {
   make: '', model: '', year: '', price: '', location: '', condition: 'FOREIGN_USED',
   mileage: '', transmission: 'AUTOMATIC', fuelType: 'PETROL',
   engineSize: '', bodyType: '', color: '', description: '',
+  noKnownFaults: false, firstOwner: false, registered: false, exchangePossible: false,
+  issueNote: '',
   features: [],
 };
 
@@ -57,8 +59,13 @@ const SellCar = () => {
           fuelType:     data.fuelType     || 'PETROL',
           engineSize:   data.engineSize   || '',
           bodyType:     data.bodyType     || '',
-          color:        data.color        || '',
+          color:         data.color         || '',
           description:  data.description  || '',
+          noKnownFaults: Boolean(data.noKnownFaults),
+          firstOwner: Boolean(data.firstOwner),
+          registered: Boolean(data.registered),
+          exchangePossible: Boolean(data.exchangePossible),
+          issueNote: data.issueNote || '',
           features:     data.features?.map(f => f.featureName) || [],
         });
         if (data.images && data.images.length > 0) {
@@ -131,7 +138,14 @@ const SellCar = () => {
     );
   }
 
-  const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  const update = (field, value) => setForm(prev => {
+    // Object form patches several fields at once (e.g. ticking "no known
+    // faults" also clears a stale issue note); string form sets one field.
+    if (typeof field === 'object' && field !== null) {
+      return { ...prev, ...field };
+    }
+    return { ...prev, [field]: value };
+  });
 
   const toggleFeature = (feat) => {
     setForm(prev => ({
@@ -428,6 +442,53 @@ const SellCar = () => {
                   rows={4}
                   className="w-full p-3 border border-bordercol rounded-md bg-bg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow resize-none"
                 />
+              </div>
+
+              {/* Condition facts: structured, filterable truth buyers search by */}
+              <div className="space-y-3 pt-4 border-t border-bordercol">
+                <div>
+                  <label className="block text-sm font-medium text-textprimary">Condition facts</label>
+                  <p className="text-xs text-textmuted mt-0.5">
+                    Buyers filter on these — only tick what's true. False claims void escrow protection.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'noKnownFaults', label: 'No known faults' },
+                    { key: 'firstOwner', label: 'First owner' },
+                    { key: 'registered', label: 'Registered (DVLA)' },
+                    { key: 'exchangePossible', label: 'Trade-in accepted' },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => update(key, key === 'noKnownFaults' && !form.noKnownFaults ? { noKnownFaults: true, issueNote: '' } : { [key]: !form[key] })}
+                      className={`px-3 py-2.5 rounded-lg border-2 text-sm font-semibold transition-colors text-left ${
+                        form[key]
+                          ? 'border-success bg-success/5 text-success'
+                          : 'border-bordercol bg-bg text-textsecondary hover:border-textmuted'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {form[key] && <CheckCircle size={15} />}
+                        {label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {!form.noKnownFaults && (
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-warn">What's wrong with it? (honesty builds trust)</label>
+                    <textarea
+                      value={form.issueNote}
+                      onChange={e => update('issueNote', e.target.value)}
+                      placeholder="e.g. AC needs regassing; small dent on the rear door…"
+                      rows={2}
+                      maxLength={1000}
+                      className="w-full p-3 border border-warn/40 rounded-md bg-warn/5 text-sm focus:outline-none focus:border-warn resize-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

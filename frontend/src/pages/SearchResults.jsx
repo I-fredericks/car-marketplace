@@ -36,6 +36,10 @@ const SearchResults = () => {
     condition: searchParams.get('condition') || '',
     sellerType: searchParams.get('sellerType') || '',
     verifiedOnly: searchParams.get('verifiedOnly') || '',
+    noKnownFaults: searchParams.get('noKnownFaults') || '',
+    firstOwner: searchParams.get('firstOwner') || '',
+    registered: searchParams.get('registered') || '',
+    exchangePossible: searchParams.get('exchangePossible') || '',
   });
 
   const { data } = useQuery({
@@ -68,7 +72,7 @@ const SearchResults = () => {
   };
 
   const clearFilters = () => {
-    setFilters({ make: '', model: '', minPrice: '', maxPrice: '', year: '', minMileage: '', maxMileage: '', location: '', transmission: '', fuelType: '', condition: '', sellerType: '', verifiedOnly: '' });
+    setFilters({ make: '', model: '', minPrice: '', maxPrice: '', year: '', minMileage: '', maxMileage: '', location: '', transmission: '', fuelType: '', condition: '', sellerType: '', verifiedOnly: '', noKnownFaults: '', firstOwner: '', registered: '', exchangePossible: '' });
     setSearchParams({});
     setShowMobileFilters(false);
   };
@@ -167,6 +171,7 @@ const SearchResults = () => {
                         price={car.price}
                         location={car.location}
                         condition={car.condition.replace('_', ' ')}
+                        facts={car}
                         specs={[car.transmission, car.fuelType, car.mileage ? `${car.mileage.toLocaleString()} km` : null].filter(Boolean)}
                         sellerName={car.seller?.user?.name || 'Private Seller'}
                         verified={Boolean(car.seller?.verified)}

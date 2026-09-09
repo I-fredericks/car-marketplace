@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
 import useModalA11y from '../hooks/useModalA11y';
-import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart } from 'lucide-react';
+import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart, X, ShieldAlert } from 'lucide-react';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
 import Badge from '../components/Badge';
@@ -232,6 +232,34 @@ const CarDetails = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Structured condition facts — what buyers actually filter by */}
+            {(car.noKnownFaults || car.firstOwner || car.registered || car.exchangePossible || car.issueNote) && (
+              <div className="bg-surface border border-bordercol rounded-xl p-6">
+                <h2 className="font-display font-semibold text-xl text-textprimary mb-4">Condition</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { ok: car.noKnownFaults, label: 'No known faults' },
+                    { ok: car.firstOwner, label: 'First owner' },
+                    { ok: car.registered, label: 'Registered (DVLA)' },
+                    { ok: car.exchangePossible, label: 'Trade-in accepted' },
+                  ].map(({ ok, label }) => (
+                    <div key={label} className={`flex items-center gap-2 text-sm font-medium ${ok ? 'text-success' : 'text-textmuted'}`}>
+                      {ok ? <CheckCircle size={16} className="flex-shrink-0" /> : <X size={16} className="flex-shrink-0" />}
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                {car.issueNote && (
+                  <div className="mt-4 flex items-start gap-2 bg-warn/5 border border-warn/25 rounded-lg p-3">
+                    <ShieldAlert size={16} className="text-warn flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-textprimary">
+                      <span className="font-semibold">Seller's disclosure:</span> {car.issueNote}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

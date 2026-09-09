@@ -185,6 +185,7 @@ const Home = () => {
                   price={car.price}
                   location={car.location}
                   condition={car.condition}
+                  facts={car}
                   specs={[car.transmission, car.fuelType, car.mileage != null ? `${car.mileage} km` : ''].filter(Boolean)}
                   sellerName={car.seller?.user?.name || 'Private Seller'}
                   verified={Boolean(car.seller?.verified)}
