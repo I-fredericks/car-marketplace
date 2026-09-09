@@ -275,14 +275,16 @@ model Message {
 }
 
 model Review {
-  id        Int           @id @default(autoincrement())
-  authorId  Int
-  author    User          @relation("ReviewAuthor", fields: [authorId], references: [id])
-  sellerId  Int
-  seller    SellerProfile @relation("SellerReviews", fields: [sellerId], references: [id])
-  rating    Int
-  comment   String?
-  createdAt DateTime      @default(now())
+  id          Int           @id @default(autoincrement())
+  authorId    Int
+  author      User          @relation("ReviewAuthor", fields: [authorId], references: [id])
+  sellerId    Int
+  seller      SellerProfile @relation("SellerReviews", fields: [sellerId], references: [id])
+  purchaseId  Int           @unique // one review per completed transaction
+  purchase    Purchase      @relation("PurchaseReview", fields: [purchaseId], references: [id])
+  rating      Int           // 1-5 stars
+  comment     String?
+  createdAt   DateTime      @default(now())
 
   @@index([authorId])
   @@index([sellerId])
@@ -415,6 +417,8 @@ model Purchase {
   payoutStatus String   @default("NONE") // NONE | PENDING | SENT
   payoutRef    String?
   agreedOfferId Int?    // if bought via a negotiated price, which PriceOffer sealed it
+
+  review       Review?  @relation("PurchaseReview")
 
   paidAt      DateTime?
   completedAt DateTime?

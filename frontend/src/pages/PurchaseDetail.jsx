@@ -5,6 +5,7 @@ import api, { getImageUrl } from '../utils/api';
 import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt, Landmark, Smartphone, Scale } from 'lucide-react';
 import OrderProgress from '../components/OrderProgress';
 import SlideToConfirm from '../components/SlideToConfirm';
+import ReviewForm from '../components/ReviewForm';
 
 const ghs = (pesewas) => `GH₵${(pesewas / 100).toLocaleString()}`;
 
@@ -576,6 +577,16 @@ const PurchaseDetail = () => {
 
           {purchase.status === 'CANCELLED' && (
             <p className="mt-4 text-sm text-textmuted">This order was cancelled and the vehicle went back on sale.</p>
+          )}
+
+          {/* Post-sale: buyer rates the seller on a completed order */}
+          {purchase.status === 'COMPLETED' && isBuyer && (
+            <div className="mt-6">
+              <ReviewForm
+                purchaseId={purchase.id}
+                sellerName={purchase.seller?.user?.name || 'the seller'}
+              />
+            </div>
           )}
         </div>
 

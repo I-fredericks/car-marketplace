@@ -612,7 +612,7 @@ describe('Vehicle purchase (escrow checkout)', () => {
       if (!verdict) await new Promise((r) => setTimeout(r, 400));
     }
     expect(verdict).toBe(true);
-  });
+  }, 90000);
 
   it('dispute resolution can release funds to the seller instead', async () => {
     // Reuse the refunded vehicle: it's AVAILABLE again

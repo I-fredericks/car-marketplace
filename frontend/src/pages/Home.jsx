@@ -189,6 +189,7 @@ const Home = () => {
                   specs={[car.transmission, car.fuelType, car.mileage != null ? `${car.mileage} km` : ''].filter(Boolean)}
                   sellerName={car.seller?.user?.name || 'Private Seller'}
                   verified={Boolean(car.seller?.verified)}
+                  sellerRating={car.seller?.rating || 0}
                   badge="Featured"
                   sellerPlanBadge={getSellerPlanBadge(car)}
                   imageUrl={imageUrl}

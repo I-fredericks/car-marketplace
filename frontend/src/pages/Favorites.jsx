@@ -98,6 +98,7 @@ const Favorites = () => {
                      specs={[car.transmission, car.fuelType, car.mileage ? `${car.mileage.toLocaleString()} km` : null].filter(Boolean)}
                      sellerName={car.seller?.name || 'Private Seller'}
                      verified={Boolean(car.seller?.verified)}
+                     sellerRating={car.seller?.rating || 0}
                      imageUrl={imageUrl}
                    />
                    <button 

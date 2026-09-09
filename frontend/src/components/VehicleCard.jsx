@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { MapPin, ShieldCheck, SlidersHorizontal, Fuel, Gauge } from 'lucide-react';
 import Badge from './Badge';
 import Avatar from './Avatar';
+import StarRating from './StarRating';
 
 const SPEC_ICONS = [SlidersHorizontal, Fuel, Gauge];
 
@@ -24,7 +25,8 @@ const VehicleCard = ({
   verified,
   badge,
   sellerPlanBadge,
-  imageUrl
+  imageUrl,
+  sellerRating = 0,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   return (
@@ -97,6 +99,12 @@ const VehicleCard = ({
           <div className="font-display font-bold text-lg sm:text-2xl text-primary tracking-tight mt-0.5 sm:mt-1">
             {typeof price === 'number' ? `GH₵ ${price.toLocaleString()}` : price}
           </div>
+          {verified && sellerRating > 0 && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <StarRating value={sellerRating} size={12} />
+              <span className="text-[10px] sm:text-xs font-medium text-textmuted">verified seller</span>
+            </div>
+          )}
         </div>
 
         {/* Spec chips (kept minimal on phones) */}

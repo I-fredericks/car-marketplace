@@ -175,6 +175,7 @@ const SearchResults = () => {
                         specs={[car.transmission, car.fuelType, car.mileage ? `${car.mileage.toLocaleString()} km` : null].filter(Boolean)}
                         sellerName={car.seller?.user?.name || 'Private Seller'}
                         verified={Boolean(car.seller?.verified)}
+                        sellerRating={car.seller?.rating || 0}
                         sellerPlanBadge={getSellerPlanBadge(car)}
                         imageUrl={imageUrl}
                       />

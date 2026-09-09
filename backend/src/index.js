@@ -159,6 +159,7 @@ app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/billing', require('./routes/billingRoutes'));
 app.use('/api/purchases', require('./routes/purchaseRoutes'));
 app.use('/api/offers', require('./routes/offerRoutes'));
+app.use('/api/reviews', require('./routes/reviewRoutes'));
 
 // Serve static frontend build if dist folder exists (for single-tunnel ngrok presentation)
 const distPath = path.join(__dirname, '../../frontend/dist');

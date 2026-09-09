@@ -5,7 +5,8 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
 import useModalA11y from '../hooks/useModalA11y';
-import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart, X, ShieldAlert } from 'lucide-react';
+import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart, X, ShieldAlert, MessageSquare } from 'lucide-react';
+import StarRating from '../components/StarRating';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
 import Badge from '../components/Badge';
@@ -31,6 +32,18 @@ const CarDetails = () => {
       return data;
     },
     retry: false,
+  });
+
+  // Seller reviews — transaction-verified reputation
+  const sellerId = car?.seller?.id;
+  const { data: reviewsData } = useQuery({
+    queryKey: ['seller-reviews', sellerId],
+    queryFn: async () => {
+      const { data } = await api.get(`/reviews/seller/${sellerId}`);
+      return data;
+    },
+    enabled: Boolean(sellerId),
+    staleTime: 60_000,
   });
 
   // Shared favorites list (deduped with the Favorites page via the cache);
@@ -272,6 +285,41 @@ const CarDetails = () => {
                     {car.description}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Seller reviews — transaction-verified */}
+            {reviewsData && reviewsData.reviews.length > 0 && (
+              <div className="mb-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <h2 className="font-display font-semibold text-xl text-textprimary">Seller Reviews</h2>
+                  <StarRating value={reviewsData.rating} size={18} showNumber />
+                  <span className="text-sm text-textmuted">({reviewsData.reviewCount} review{reviewsData.reviewCount === 1 ? '' : 's'})</span>
+                </div>
+                <div className="space-y-3">
+                  {reviewsData.reviews.slice(0, 5).map((r) => (
+                    <div key={r.id} className="bg-surface border border-bordercol rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                            {r.author?.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <span className="font-medium text-textprimary text-sm">{r.author?.name || 'Anonymous buyer'}</span>
+                        </div>
+                        <StarRating value={r.rating} size={14} />
+                      </div>
+                      {r.comment && <p className="text-sm text-textsecondary leading-relaxed">{r.comment}</p>}
+                      <p className="text-xs text-textmuted mt-2">{new Date(r.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  ))}
+                  {reviewsData.reviews.length > 5 && (
+                    <p className="text-center text-sm text-textmuted pt-2">+ {reviewsData.reviews.length - 5} more review{reviewsData.reviews.length - 5 === 1 ? '' : 's'}</p>
+                  )}
+                </div>
+                <p className="text-xs text-textmuted mt-3 flex items-center gap-1.5">
+                  <ShieldCheck size={13} className="text-success" />
+                  Every review is from a buyer who completed an escrowed purchase on CarMarket.
+                </p>
               </div>
             )}
           </div>
