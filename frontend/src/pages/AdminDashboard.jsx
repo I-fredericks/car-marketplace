@@ -946,7 +946,7 @@ const AdminDashboard = () => {
             <div key={u.id} className="bg-surface border border-bordercol rounded-lg shadow-sm p-5 flex flex-col items-center text-center">
               <div className="w-24 h-24 rounded-full overflow-hidden bg-bg border border-bordercol flex items-center justify-center mb-3">
                 <img
-                  src={`/api/users/${u.id}/avatar?v=${encodeURIComponent(u.updatedAt || '')}&token=${encodeURIComponent(localStorage.getItem('token') || '')}`}
+                  src={`/api/users/${u.id}/avatar?v=${encodeURIComponent(u.updatedAt || '')}`}
                   alt={`${u.name}'s profile photo`}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   className="w-full h-full object-cover"

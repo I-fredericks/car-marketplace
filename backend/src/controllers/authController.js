@@ -174,6 +174,15 @@ const login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    // HTTP-only cookie: lets <img> avatar requests authenticate without
+    // putting the JWT in a URL query param (which leaks into logs/history).
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     res.json({
       token,
       user: {

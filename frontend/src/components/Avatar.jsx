@@ -27,16 +27,9 @@ const Avatar = ({ userId, name = '', size = 40, version = '', className = '', fa
   if (!userId || failed) return fallback;
 
   const versionQuery = version ? `?v=${encodeURIComponent(version)}` : '';
-  // <img> tags can't send Authorization headers, so a Bearer-authed request
-  // can't reach the avatar route. Passing the token as a query param keeps
-  // unapproved-owner/admin previews working (backend optionalAuth accepts it).
-  const sessionToken = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null;
-  const tokenQuery = sessionToken
-    ? `${versionQuery ? '&' : '?'}token=${encodeURIComponent(sessionToken)}`
-    : '';
   return (
     <img
-      src={`/api/users/${userId}/avatar${versionQuery}${tokenQuery}`}
+      src={`/api/users/${userId}/avatar${versionQuery}`}
       alt={name ? `${name}'s profile` : 'Profile'}
       loading="lazy"
       decoding="async"

@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const path = require('path');
 const { errorHandler } = require('./middlewares/errorHandler');
@@ -71,6 +72,7 @@ app.use('/api/events', require('./routes/eventRoutes'));
 
 // Gzip/deflate all API + static responses (images already compressed formats stay cheap)
 app.use(compression());
+app.use(cookieParser());
 
 // CORS allowlist: production origins come from FRONTEND_URL (comma-separated).
 // Dev origins are always allowed. Requests without an Origin header (mobile

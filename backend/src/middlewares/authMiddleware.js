@@ -71,13 +71,15 @@ const seller = (req, res, next) => {
 
 // Attaches req.user when a valid token is present; anonymous requests pass
 // through untouched. For public endpoints with owner-only extras.
-// Image routes (avatar) are fetched via <img> tags, which can't send headers
-// — accept ?token= as a fallback credential there.
+// Token sources, in priority: Authorization header > httpOnly cookie.
+// (The cookie lets <img> avatar requests authenticate without exposing the
+// JWT in a URL query param, which leaks into logs and browser history.)
 const optionalAuth = async (req, res, next) => {
   const bearer = req.headers.authorization?.startsWith('Bearer ')
     ? req.headers.authorization.split(' ')[1]
     : null;
-  const token = bearer || (typeof req.query.token === 'string' ? req.query.token : null);
+  const cookieToken = req.cookies?.auth_token;
+  const token = bearer || cookieToken || null;
   if (!token) {
     return next();
   }
