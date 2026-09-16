@@ -15,10 +15,10 @@ jest.mock('../src/services/mailer', () => ({
 }));
 
 const run = Date.now();
-const seller = { email: `rev-seller-${run}@example.com`, password: 'password123', name: 'Rev Seller' };
-const buyer = { email: `rev-buyer-${run}@example.com`, password: 'password123', name: 'Rev Buyer' };
-const stranger = { email: `rev-stranger-${run}@example.com`, password: 'password123', name: 'Stranger' };
-const admin = { email: `rev-admin-${run}@example.com`, password: 'password123', name: 'Rev Admin' };
+const seller = { email: `rev-seller-${run}@example.com`, password: 'Password123!', name: 'Rev Seller' };
+const buyer = { email: `rev-buyer-${run}@example.com`, password: 'Password123!', name: 'Rev Buyer' };
+const stranger = { email: `rev-stranger-${run}@example.com`, password: 'Password123!', name: 'Stranger' };
+const admin = { email: `rev-admin-${run}@example.com`, password: 'Password123!', name: 'Rev Admin' };
 const PNG_1PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 const tokens = {};

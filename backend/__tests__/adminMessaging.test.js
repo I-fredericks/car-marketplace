@@ -12,22 +12,22 @@ const app = require('../src/index');
 const run = Date.now();
 const buyer1 = {
   email: `supp-buyer-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Support Buyer',
 };
 const buyer2 = {
   email: `supp-stranger-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Never Contacted Buyer',
 };
 const seller = {
   email: `supp-seller-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Support Seller',
 };
 const admin = {
   email: `supp-admin-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Support Admin',
 };
 const PNG_1PX =

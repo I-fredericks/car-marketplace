@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircle, CheckCheck } from 'lucide-react';
+import { Bell, MessageCircle, CheckCheck, Megaphone } from 'lucide-react';
 import api from '../utils/api';
 import { useEvents } from '../context/EventContext';
 
@@ -50,8 +50,10 @@ const NotificationsDropdown = () => {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)));
     }
     if (n.data?.path) navigate(n.data.path);
-    else if (n.type === 'NEW_MESSAGE' && n.data?.senderId != null && n.data?.vehicleId != null) {
-      navigate(`/messages/${n.data.senderId}/${n.data.vehicleId}`);
+    else if (n.type === 'NEW_MESSAGE' && n.data?.senderId != null) {
+      // Support threads carry no vehicleId — the 'general' sentinel routes
+      // them to the listing-less conversation.
+      navigate(`/messages/${n.data.senderId}/${n.data.vehicleId ?? 'general'}`);
     }
     setOpen(false);
   };
@@ -104,7 +106,7 @@ const NotificationsDropdown = () => {
                   className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-bg transition-colors ${!n.readAt ? 'bg-primary/5' : ''}`}
                 >
                   <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {n.type === 'NEW_MESSAGE' ? <MessageCircle size={15} /> : <Bell size={15} />}
+                    {n.type === 'NEW_MESSAGE' ? <MessageCircle size={15} /> : n.type === 'BROADCAST' ? <Megaphone size={15} /> : <Bell size={15} />}
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-medium text-textprimary truncate">{n.title}</span>

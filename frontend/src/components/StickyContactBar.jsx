@@ -1,13 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, MessageCircle, ShoppingCart } from 'lucide-react';
+import { Phone, MessageCircle, ShoppingCart, Share2 } from 'lucide-react';
 
 /**
  * Mobile-only sticky action bar.
  * Buy Now takes buyers into the escrow checkout; "Chat" opens the in-app
  * messaging conversation (both fall back to /login when signed out).
  */
-const StickyContactBar = ({ phone, sellerUserId, vehicleId, isLoggedIn, canBuy = false }) => {
+const StickyContactBar = ({ phone, sellerUserId, vehicleId, isLoggedIn, canBuy = false, onShare }) => {
   const navigate = useNavigate();
 
   const openChat = () => {
@@ -47,6 +47,15 @@ const StickyContactBar = ({ phone, sellerUserId, vehicleId, isLoggedIn, canBuy =
       >
         <MessageCircle size={18} /> Chat
       </button>
+      {onShare && (
+        <button
+          className="min-w-[44px] min-h-[44px] px-2 border border-bordercol text-textsecondary rounded-md flex items-center justify-center"
+          onClick={onShare}
+          aria-label="Share this listing"
+        >
+          <Share2 size={18} />
+        </button>
+      )}
     </div>
   );
 };

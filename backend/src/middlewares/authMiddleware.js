@@ -24,14 +24,33 @@ const protect = async (req, res, next) => {
           email: true,
           role: true,
           isActive: true,
+          passwordChangedAt: true,
         },
       });
 
       // Token is valid but the account is gone or deactivated: refuse.
       // (req.user is reloaded from the DB on every request, so a deactivation
-      // takes effect immediately without waiting for the 7-day JWT to expire.)
+      // takes effect immediately without waiting for the JWT to expire.)
       if (!user) {
         return res.status(401).json({ message: 'Not authorized' });
+      }
+      if (!user.isActive) {
+        return res.status(401).json({
+          message: 'This account has been deactivated.',
+          deactivated: true,
+        });
+      }
+
+      // Password-change revocation: any session minted before the last
+      // password change dies instantly (stolen-token containment).
+      if (user.passwordChangedAt && decoded.iat) {
+        const changedAtSec = Math.floor(user.passwordChangedAt.getTime() / 1000);
+        if (decoded.iat < changedAtSec) {
+          return res.status(401).json({
+            message: 'Your password was changed. Please sign in again.',
+            passwordChanged: true,
+          });
+        }
       }
       if (!user.isActive) {
         return res.status(401).json({

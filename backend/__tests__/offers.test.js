@@ -19,10 +19,10 @@ jest.mock('../src/services/mailer', () => ({
 // Negotiation coverage: offer -> counter chain -> accept -> agreed price
 // flows into exactly the buyer's purchase amount (others pay asking).
 const run = Date.now();
-const seller = { email: `neg-seller-${run}@example.com`, password: 'password123', name: 'Neg Seller' };
-const buyer = { email: `neg-buyer-${run}@example.com`, password: 'password123', name: 'Neg Buyer' };
-const rival = { email: `neg-rival-${run}@example.com`, password: 'password123', name: 'Rival Buyer' };
-const admin = { email: `neg-admin-${run}@example.com`, password: 'password123', name: 'Neg Admin' };
+const seller = { email: `neg-seller-${run}@example.com`, password: 'Password123!', name: 'Neg Seller' };
+const buyer = { email: `neg-buyer-${run}@example.com`, password: 'Password123!', name: 'Neg Buyer' };
+const rival = { email: `neg-rival-${run}@example.com`, password: 'Password123!', name: 'Rival Buyer' };
+const admin = { email: `neg-admin-${run}@example.com`, password: 'Password123!', name: 'Neg Admin' };
 const PNG_1PX =
   'data:image/png;base64,iVBORw0KGgoAAA748+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 

@@ -28,12 +28,12 @@ const { sendMail } = require('../src/services/mailer');
 // Free-tier sellers are limited to ONE active listing, so each purchase flow
 // needs its own seller (same split as lifecycle.test.js).
 const run = Date.now();
-const sellerCash = { email: `buy-seller-cash-${run}@example.com`, password: 'password123', name: 'Cash Seller' };
-const sellerPay = { email: `buy-seller-pay-${run}@example.com`, password: 'password123', name: 'Pay Seller' };
-const sellerCancel = { email: `buy-seller-cancel-${run}@example.com`, password: 'password123', name: 'Cancel Seller' };
-const buyer = { email: `buy-buyer-${run}@example.com`, password: 'password123', name: 'Test Buyer' };
-const stranger = { email: `buy-stranger-${run}@example.com`, password: 'password123', name: 'Stranger' };
-const admin = { email: `buy-admin-${run}@example.com`, password: 'password123', name: 'Test Admin' };
+const sellerCash = { email: `buy-seller-cash-${run}@example.com`, password: 'Password123!', name: 'Cash Seller' };
+const sellerPay = { email: `buy-seller-pay-${run}@example.com`, password: 'Password123!', name: 'Pay Seller' };
+const sellerCancel = { email: `buy-seller-cancel-${run}@example.com`, password: 'Password123!', name: 'Cancel Seller' };
+const buyer = { email: `buy-buyer-${run}@example.com`, password: 'Password123!', name: 'Test Buyer' };
+const stranger = { email: `buy-stranger-${run}@example.com`, password: 'Password123!', name: 'Stranger' };
+const admin = { email: `buy-admin-${run}@example.com`, password: 'Password123!', name: 'Test Admin' };
 const PNG_1PX =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 

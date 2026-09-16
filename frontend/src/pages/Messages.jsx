@@ -21,6 +21,11 @@ const Messages = () => {
   const [filter, setFilter] = useState('all');
   const chatScrollRef = useRef(null);
 
+  // Listing-less support threads (admin <-> user) use the 'general' sentinel;
+  // the backend stores vehicleId NULL for them.
+  const GENERAL = 'general';
+  const isGeneral = vehicleId === GENERAL;
+
   const filteredConversations = conversations.filter((conv) => {
     if (filter === 'unread') return conv.unreadCount > 0;
     if (filter === 'spam') return conv.spamCount > 0;
@@ -28,6 +33,10 @@ const Messages = () => {
   });
 
   const isConversationView = Boolean(userId) && Boolean(vehicleId);
+
+  // Every route into a conversation: support threads fall back to the sentinel
+  // instead of building /messages/5/undefined links.
+  const convPath = (conv) => `/messages/${conv.otherUser.id}/${conv.vehicle?.id ?? GENERAL}`;
 
   const fetchConversations = async () => {
     try {
@@ -49,10 +58,10 @@ const Messages = () => {
   // for the conversation the user is already reading)
   useEffect(() => {
     setActiveConversation(
-      isConversationView ? { userId: Number(userId), vehicleId: Number(vehicleId) } : null
+      isConversationView ? { userId: Number(userId), vehicleId: isGeneral ? null : Number(vehicleId) } : null
     );
     return () => setActiveConversation(null);
-  }, [isConversationView, userId, vehicleId, setActiveConversation]);
+  }, [isConversationView, isGeneral, userId, vehicleId, setActiveConversation]);
 
   useEffect(() => {
     if (!isConversationView && user) {
@@ -82,7 +91,12 @@ const Messages = () => {
   useEffect(() => {
     if (!user) return undefined;
     return subscribeToMessages((msg) => {
-      if (isConversationView && msg.senderId === Number(userId) && msg.vehicleId === Number(vehicleId)) {
+      // (msg.vehicleId ?? null) === null matches support threads, where the
+      // live payload carries no vehicle at all.
+      const matchesThread = isConversationView
+        && msg.senderId === Number(userId)
+        && (msg.vehicleId ?? null) === (isGeneral ? null : Number(vehicleId));
+      if (matchesThread) {
         setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
         markConversationRead(userId, vehicleId);
       } else if (!isConversationView) {
@@ -90,7 +104,7 @@ const Messages = () => {
         fetchConversations();
       }
     });
-  }, [user, isConversationView, userId, vehicleId, subscribeToMessages, markConversationRead]);
+  }, [user, isConversationView, isGeneral, userId, vehicleId, subscribeToMessages, markConversationRead]);
 
   // Keep the newest message in view as messages arrive
   useEffect(() => {
@@ -103,7 +117,12 @@ const Messages = () => {
     if (!newMessage.trim()) return;
     setSending(true);
     try {
-      const { data } = await api.post('/messages', {
+      // Support threads send no vehicleId at all — the backend reserves
+      // vehicle-less messages for admins and replies in existing threads.
+      const { data } = await api.post('/messages', isGeneral ? {
+        receiverId: userId,
+        content: newMessage.trim()
+      } : {
         receiverId: userId,
         vehicleId: vehicleId,
         content: newMessage.trim()
@@ -119,9 +138,9 @@ const Messages = () => {
 
   const handleDeleteConversation = async (conv) => {
     if (!window.confirm('Delete this entire conversation? This cannot be undone.')) return;
-    setDeletingConv(conv.vehicle?.id);
+    setDeletingConv(conv.vehicle?.id ?? GENERAL);
     try {
-      await api.delete(`/messages/${conv.otherUser.id}/${conv.vehicle?.id}`);
+      await api.delete(convPath(conv));
       setConversations(prev => prev.filter(c => c.otherUser.id !== conv.otherUser.id || c.vehicle?.id !== conv.vehicle?.id));
     } catch (err) {
       console.error('Error deleting conversation:', err);
@@ -237,7 +256,7 @@ const Messages = () => {
                         className="flex items-center gap-4 p-4 sm:p-6 hover:bg-bg transition-colors"
                       >
                         <Link
-                          to={`/messages/${conv.otherUser.id}/${conv.vehicle?.id}`}
+                          to={convPath(conv)}
                           className="flex items-center gap-4 flex-1 min-w-0"
                         >
                           <Avatar userId={conv.otherUser.id} name={conv.otherUser.name} size={48} />
@@ -255,10 +274,12 @@ const Messages = () => {
                                  {new Date(conv.lastMessageAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                </span>
                              </div>
-                            {conv.vehicle && (
+                            {conv.vehicle ? (
                               <p className="text-xs font-medium text-primary mb-1 truncate">
                                 {conv.vehicle.year} {conv.vehicle.make} {conv.vehicle.model}
                               </p>
+                            ) : (
+                              <p className="text-xs font-medium text-accent mb-1 truncate">Support</p>
                             )}
                             <p className="text-sm text-textsecondary truncate">
                               {conv.lastMessage}
@@ -267,7 +288,7 @@ const Messages = () => {
                         </Link>
                         <button
                           onClick={(e) => { e.preventDefault(); handleDeleteConversation(conv); }}
-                          disabled={deletingConv === conv.vehicle?.id}
+                          disabled={deletingConv === (conv.vehicle?.id ?? GENERAL)}
                           className="p-2 text-textmuted hover:text-err hover:bg-err/10 rounded-md transition-colors disabled:opacity-50"
                           title="Delete conversation"
                         >
@@ -300,8 +321,9 @@ const Messages = () => {
 
               {/* Chat Messages Area */}
               <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 bg-bg flex flex-col gap-4 custom-scrollbar">
-                {/* Price negotiation surface for this vehicle */}
-                <OfferPanel vehicleId={vehicleId} otherUserId={userId} />
+                {/* Price negotiation surface for this vehicle (support
+                    threads have no listing to negotiate on) */}
+                {!isGeneral && <OfferPanel vehicleId={vehicleId} otherUserId={userId} />}
 
                 {loading ? (
                   <div className="flex justify-center py-10 text-textmuted">

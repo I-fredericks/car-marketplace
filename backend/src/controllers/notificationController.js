@@ -1,10 +1,12 @@
 const prisma = require('../config/db');
 const { pushToUser } = require('../services/eventBus');
+const { pushToDevices } = require('../services/fcm');
 
 const NOTIFICATION_TYPES = ['NEW_MESSAGE', 'LISTING_SAVED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_REMOVED', 'LISTING_EXPIRED', 'LISTING_SOLD', 'PROFILE_PHOTO_APPROVED', 'PROFILE_PHOTO_REJECTED', 'SYSTEM', 'BROADCAST'];
 
 /**
- * Create a notification row and push it over the user's SSE stream.
+ * Create a notification row, push it over the user's SSE stream, and — when
+ * they have no open stream — deliver it as an FCM push to their device.
  * Returns the created notification (data carries routing info for clients).
  * senderId/vehicleId are stored as columns for NEW_MESSAGE so a single
  * conversation's badge can be cleared with read-all?senderId=&vehicleId=.
@@ -13,7 +15,12 @@ async function createNotification({ userId, type, title, body = null, data = nul
   const notification = await prisma.notification.create({
     data: { userId, type, title, body, data, senderId, vehicleId },
   });
-  pushToUser(userId, 'notification:new', notification);
+  const deliveredLive = pushToUser(userId, 'notification:new', notification);
+  if (!deliveredLive) {
+    // App closed or backgrounded: fire-and-forget push (never blocks the
+    // caller — the row and the SSE attempt already happened).
+    pushToDevices(userId, { title, body, data }).catch(() => {});
+  }
   return notification;
 }
 

@@ -10,9 +10,19 @@ const validate = (schema) => (req, res, next) => {
   next();
 };
 
+// Passwords must be 8+ and not on the "everyone types this" list — the goal
+// is raising the cost of credential stuffing, not NIST-grade entropy.
+const COMMON_PASSWORDS = new Set([
+  'password', 'password1', 'password123', '12345678', '123456789', 'qwerty123',
+  'iloveyou', 'admin123', 'letmein1', 'welcome1', 'abc12345', 'passw0rd',
+]);
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .refine((p) => !COMMON_PASSWORDS.has(p.toLowerCase()), 'That password is too common — choose something less guessable');
+
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: passwordSchema,
   name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().optional(),
   role: z.enum(['BUYER', 'SELLER']).optional(),
@@ -25,12 +35,12 @@ const emailOnlySchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(10, 'Reset token is required'),
-  password: z.string().min(6, 'Password must be at least 6 characters')
+  password: passwordSchema
 });
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(6, 'New password must be at least 6 characters')
+  newPassword: passwordSchema
 });
 
 const loginSchema = z.object({

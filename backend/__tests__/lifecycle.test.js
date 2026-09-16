@@ -11,22 +11,22 @@ const app = require('../src/index');
 const run = Date.now();
 const sellerA = {
   email: `life-seller-a-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Life Seller A',
 };
 const sellerB = {
   email: `life-seller-b-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Life Seller B',
 };
 const buyer = {
   email: `life-buyer-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Life Buyer',
 };
 const admin = {
   email: `life-admin-${run}@example.com`,
-  password: 'password123',
+  password: 'Password123!',
   name: 'Life Admin',
 };
 const PNG_1PX =
@@ -277,7 +277,7 @@ describe('Listing lifecycle & moderation', () => {
   // ── Structured condition facts (Jiji-style discovery filters) ──
   it('stores condition facts on create/update and filters search by them', async () => {
     // Fresh seller (free tier allows one active listing; earlier ones closed)
-    const sellerFacts = { email: `facts-seller-${run}@example.com`, password: 'password123', name: 'Facts Seller' };
+    const sellerFacts = { email: `facts-seller-${run}@example.com`, password: 'Password123!', name: 'Facts Seller' };
     const reg = await request(app).post('/api/auth/register')
       .send({ ...sellerFacts, role: 'SELLER', sellerType: 'PRIVATE' });
     expect(reg.statusCode).toEqual(201);

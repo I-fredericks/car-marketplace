@@ -60,11 +60,16 @@ const broadcastNotification = async (req, res) => {
       await prisma.notification.createMany({ data: rows });
 
       // Live toast on any open SSE stream (in-memory fan-out; per-user failure
-      // is non-fatal — the rows are already committed).
+      // is non-fatal — the rows are already committed). Users with no open
+      // stream get an FCM push instead.
       const { pushToUser } = require('../services/eventBus');
+      const { pushToDevices } = require('../services/fcm');
       for (let i = 0; i < users.length; i++) {
         try {
-          pushToUser(users[i].id, 'notification:new', rows[i]);
+          const deliveredLive = pushToUser(users[i].id, 'notification:new', rows[i]);
+          if (!deliveredLive) {
+            pushToDevices(users[i].id, { title, body, data: { type: 'BROADCAST', path: '/' } }).catch(() => {});
+          }
         } catch (_) {}
       }
 

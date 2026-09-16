@@ -140,4 +140,21 @@ const getAvatar = async (req, res) => {
   }
 };
 
-module.exports = { avatarUpload, uploadAvatar, getAvatar };
+// @desc    Register/refresh this device's FCM push token (latest wins)
+// @route   PUT /api/users/device-token
+// @access  Private
+const saveDeviceToken = async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (token.length < 20 || token.length > 512) {
+      return res.status(400).json({ message: 'Invalid device token' });
+    }
+    await prisma.user.update({ where: { id: req.user.id }, data: { deviceToken: token } });
+    res.json({ message: 'Device registered for push' });
+  } catch (error) {
+    console.error('Error saving device token:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+module.exports = { avatarUpload, uploadAvatar, getAvatar, saveDeviceToken };

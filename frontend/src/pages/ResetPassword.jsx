@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ShieldCheck, ShieldX } from 'lucide-react';
+import { passwordProblem } from '../utils/password';
 import api from '../utils/api';
 
 const ResetPassword = () => {
@@ -18,8 +19,9 @@ const ResetPassword = () => {
     if (form.password !== form.confirmPassword) {
       return setError('Passwords do not match.');
     }
-    if (form.password.length < 6) {
-      return setError('Password must be at least 6 characters.');
+    const passwordError = passwordProblem(form.password);
+    if (passwordError) {
+      return setError(passwordError);
     }
     setLoading(true);
     try {

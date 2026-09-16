@@ -171,7 +171,7 @@ const login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     // HTTP-only cookie: lets <img> avatar requests authenticate without
@@ -257,7 +257,7 @@ const upgradeToSeller = async (req, res) => {
     const token = jwt.sign(
       { id: updatedUser.id, role: updatedUser.role },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     res.json({
@@ -373,7 +373,7 @@ const googleLogin = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     res.json({
@@ -448,7 +448,7 @@ const resetPasswordPage = async (req, res) => {
     <h2 style="color:#1B2A4A;margin:0 0 6px;">Choose a new password</h2>
     <p style="color:#4B5563;line-height:1.6;margin:0 0 20px;font-size:14px;">CarMarket Ghana — this link expires in 1 hour.</p>
     <div id="form">
-      <input id="pw1" type="password" placeholder="New password (min 6 characters)"
+      <input id="pw1" type="password" placeholder="New password (min 8 characters)"
         style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #D1D5DB;border-radius:8px;font-size:15px;margin-bottom:12px;">
       <input id="pw2" type="password" placeholder="Confirm new password"
         style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #D1D5DB;border-radius:8px;font-size:15px;margin-bottom:16px;">
@@ -470,7 +470,7 @@ async function submitReset() {
   const msg = document.getElementById('msg');
   const btn = document.getElementById('btn');
   msg.textContent = '';
-  if (pw1.length < 6) { msg.textContent = 'Password must be at least 6 characters.'; return; }
+  if (pw1.length < 8) { msg.textContent = 'Password must be at least 8 characters.'; return; }
   if (pw1 !== pw2) { msg.textContent = 'Passwords do not match.'; return; }
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -510,9 +510,10 @@ const resetPassword = async (req, res) => {
     await prisma.$transaction([
       // Completing a reset proves mailbox control, so it also verifies the
       // email — otherwise a reset would leave the account still locked.
+      // passwordChangedAt revokes every session issued before this reset.
       prisma.user.update({
         where: { id: record.userId },
-        data: { password: hashedPassword, emailVerified: true },
+        data: { password: hashedPassword, emailVerified: true, passwordChangedAt: new Date() },
       }),
       prisma.authToken.deleteMany({ where: { userId: record.userId } }),
     ]);
@@ -616,7 +617,10 @@ const changePassword = async (req, res) => {
     // Any pending reset/verification links are retired too: the password just
     // changed, and old links should no longer be able to change it back.
     await prisma.$transaction([
-      prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword, passwordChangedAt: new Date() },
+      }),
       prisma.authToken.deleteMany({ where: { userId: user.id } }),
     ]);
 
@@ -775,7 +779,7 @@ const adminVerifyCode = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     audit.logAction({

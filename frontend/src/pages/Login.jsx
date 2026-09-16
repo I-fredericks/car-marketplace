@@ -14,6 +14,14 @@ const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Session-revocation bounce from the API interceptor (password changed
+  // elsewhere or token expired): explain instead of a silent logout.
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('session') === 'changed') {
+      setError('Your password was changed on another device. Please sign in again.');
+    }
+  }, []);
   // Set when the backend blocks sign-in due to an unconfirmed email
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [resendMsg, setResendMsg] = useState('');

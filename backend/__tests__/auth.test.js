@@ -13,7 +13,7 @@ describe('Auth API', () => {
       .post('/api/auth/register')
       .send({
         email: testEmail,
-        password: 'password123',
+        password: 'Password123!',
         name: 'Test User',
         role: 'BUYER'
       });
@@ -27,7 +27,7 @@ describe('Auth API', () => {
   it('should block login until the email is verified', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: testEmail, password: 'password123' });
+      .send({ email: testEmail, password: 'Password123!' });
     expect(res.statusCode).toEqual(403);
     expect(res.body.emailNotVerified).toEqual(true);
   });
@@ -48,7 +48,7 @@ describe('Auth API', () => {
       .post('/api/auth/register')
       .send({
         email: testEmail,
-        password: 'password123',
+        password: 'Password123!',
         name: 'Test User',
         role: 'BUYER'
       });
@@ -57,7 +57,7 @@ describe('Auth API', () => {
       .post('/api/auth/register')
       .send({
         email: testEmail,
-        password: 'password123',
+        password: 'Password123!',
         name: 'Test User',
         role: 'BUYER'
       });
@@ -68,7 +68,7 @@ describe('Auth API', () => {
   it('should verify the email with the token and allow login', async () => {
     const login = await request(app)
       .post('/api/auth/login')
-      .send({ email: testEmail, password: 'password123' });
+      .send({ email: testEmail, password: 'Password123!' });
     expect(login.statusCode).toEqual(200);
     expect(login.body.token).toBeDefined();
     expect(login.body.user.email).toEqual(testEmail);
@@ -97,7 +97,7 @@ describe('Auth API', () => {
     // Old password no longer works, the new one does
     const oldLogin = await request(app)
       .post('/api/auth/login')
-      .send({ email: testEmail, password: 'password123' });
+      .send({ email: testEmail, password: 'Password123!' });
     expect(oldLogin.statusCode).toEqual(400);
 
     const newLogin = await request(app)
@@ -125,7 +125,7 @@ describe('Auth API', () => {
       .post('/api/auth/register')
       .send({
         email: 'invalid-email',
-        password: 'password123',
+        password: 'Password123!',
         name: 'Test User'
       });
     expect(res.statusCode).toEqual(400);

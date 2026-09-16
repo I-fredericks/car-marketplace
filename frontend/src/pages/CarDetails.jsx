@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl, getImageThumbUrl } from '../utils/api';
 import useSEO from '../hooks/useSEO';
 import useModalA11y from '../hooks/useModalA11y';
-import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart, X, ShieldAlert, MessageSquare } from 'lucide-react';
+import { Heart, Flag, MapPin, Phone, CheckCircle, ShieldCheck, Car, Star, ShoppingCart, X, ShieldAlert, MessageSquare, Share2 } from 'lucide-react';
 import StarRating from '../components/StarRating';
 import SpecGrid from '../components/SpecGrid';
 import StickyContactBar from '../components/StickyContactBar';
@@ -64,6 +64,21 @@ const CarDetails = () => {
     image: car.images?.length > 0 ? getImageUrl(car.images[0]) : undefined,
     type: 'product',
   } : { title: 'Car Details' });
+
+  // WhatsApp-first share: in this market, forwarding a car to a group chat is
+  // how most buying decisions move. Falls back to wa.me when the browser has
+  // no native share sheet.
+  const shareListing = async () => {
+    const text = `Check out this ${car.year} ${car.make} ${car.model} — GH₵ ${Number(car.price).toLocaleString()} on CarMarket Ghana`;
+    const url = `${window.location.origin}/car/${car.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${car.year} ${car.make} ${car.model}`, text, url });
+        return;
+      } catch { /* cancelled — fall through to WhatsApp */ }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, '_blank', 'noopener');
+  };
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -387,15 +402,23 @@ const CarDetails = () => {
                 </div>
 
                 <div className="flex items-center justify-between border-t border-bordercol pt-5">
-                  <button 
-                    onClick={toggleFavorite} 
+                  <button
+                    onClick={toggleFavorite}
                     className={`flex items-center gap-2 text-sm font-medium transition-colors ${isFavorite ? 'text-err' : 'text-textsecondary hover:text-primary'}`}
                   >
                     <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
                     {isFavorite ? 'Saved' : 'Save Car'}
                   </button>
-                  
-                  <button 
+
+                  <button
+                    onClick={shareListing}
+                    className="flex items-center gap-2 text-sm font-medium text-textsecondary hover:text-primary transition-colors"
+                    aria-label="Share this listing"
+                  >
+                    <Share2 size={18} /> Share
+                  </button>
+
+                  <button
                     onClick={() => setShowReportModal(true)} 
                     className="flex items-center gap-2 text-sm font-medium text-textmuted hover:text-textprimary transition-colors"
                   >
@@ -438,6 +461,7 @@ const CarDetails = () => {
         vehicleId={car.id}
         isLoggedIn={Boolean(user)}
         canBuy={car.status === 'AVAILABLE' && (!user || user.id !== car.seller?.userId)}
+        onShare={shareListing}
       />
 
       {/* Report Modal */}

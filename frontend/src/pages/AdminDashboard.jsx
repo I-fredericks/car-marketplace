@@ -5,7 +5,8 @@ import api, { getImageThumbUrl } from '../utils/api';
 import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
   Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera,
-  UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight, Package
+  UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight, Package,
+  Megaphone
 } from 'lucide-react';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
@@ -18,7 +19,7 @@ const AdminDashboard = () => {
   // /admin?tab=<name> (e.g. /admin?tab=pending, ?tab=photos, ?tab=users...).
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTabState] = useState(() => {
-    const VALID = new Set(['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'purchases', 'reports', 'users']);
+    const VALID = new Set(['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'purchases', 'reports', 'users', 'broadcast']);
     const initial = searchParams.get('tab');
     return initial && VALID.has(initial) ? initial : 'overview';
   });
@@ -54,6 +55,8 @@ const AdminDashboard = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [listingsPage, setListingsPage] = useState(1);
   const [takenDownPage, setTakenDownPage] = useState(1);
+  const [broadcastForm, setBroadcastForm] = useState({ title: '', body: '' });
+  const [broadcasting, setBroadcasting] = useState(false);
 
   const toast = (msg) => {
     setActionMsg(msg);
@@ -1164,6 +1167,16 @@ const AdminDashboard = () => {
                           Deactivated
                         </span>
                       )}
+                      {u.id !== user.id && (
+                        <button
+                          onClick={() => navigate(`/messages/${u.id}/general`)}
+                          className="px-2.5 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-md hover:bg-primary hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                          title="Message user"
+                        >
+                          <MessageCircle size={13} />
+                          <span className="hidden md:inline">Message</span>
+                        </button>
+                      )}
                       {u.role === 'SELLER' && !u.verified && (
                         <button 
                           onClick={() => handleVerifySeller(u.id)} 
@@ -1559,6 +1572,64 @@ const AdminDashboard = () => {
     );
   };
 
+  const handleBroadcast = async () => {
+    if (!window.confirm('Send this announcement to every active user? This cannot be undone.')) return;
+    setBroadcasting(true);
+    try {
+      const { data } = await api.post('/admin/broadcast', broadcastForm);
+      toast(data.message || 'Announcement sent.');
+      setBroadcastForm({ title: '', body: '' });
+    } catch (err) {
+      toast(err.response?.data?.message || 'Broadcast failed.');
+    } finally {
+      setBroadcasting(false);
+    }
+  };
+
+  const renderBroadcast = () => (
+    <div className="max-w-2xl space-y-6 animate-fade-in">
+      <div>
+        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Broadcast announcement</h2>
+        <p className="text-sm text-textsecondary">
+          One-way notification to every active user. It lands in their bell feed — it is not a chat and cannot be replied to. To talk to one user directly, use the Message button in Manage Users.
+        </p>
+      </div>
+
+      <div className="bg-surface border border-bordercol rounded-lg shadow-sm p-6 space-y-4">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-textsecondary mb-2">Title</label>
+          <input
+            value={broadcastForm.title}
+            onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+            maxLength={120}
+            placeholder="e.g. Scheduled maintenance this Sunday"
+            className="w-full h-11 px-3 bg-bg border border-bordercol rounded-md text-sm text-textprimary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-textsecondary mb-2">Message</label>
+          <textarea
+            value={broadcastForm.body}
+            onChange={(e) => setBroadcastForm({ ...broadcastForm, body: e.target.value })}
+            maxLength={2000}
+            rows={6}
+            placeholder="What should every user know?"
+            className="w-full p-3 bg-bg border border-bordercol rounded-md text-sm text-textprimary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow resize-y"
+          />
+          <p className="text-xs text-textmuted mt-1">{broadcastForm.body.length}/2000</p>
+        </div>
+        <button
+          onClick={handleBroadcast}
+          disabled={broadcasting || !broadcastForm.title.trim() || !broadcastForm.body.trim()}
+          className="px-4 py-2.5 bg-primary text-white rounded-md text-sm font-bold hover:bg-primarylight transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <Megaphone size={15} />
+          {broadcasting ? 'Sending...' : 'Send to all users'}
+        </button>
+      </div>
+    </div>
+  );
+
   const tabs = [
     { id: 'overview', icon: <LayoutDashboard size={18} />, label: 'Overview' },
     { id: 'pending', icon: <Car size={18} />, label: `Pending ${pendingCars.length > 0 ? `(${pendingCars.length})` : ''}` },
@@ -1570,6 +1641,7 @@ const AdminDashboard = () => {
     { id: 'purchases', icon: <Package size={18} />, label: `Purchases ${purchases.filter(p => p.payoutStatus === 'PENDING').length > 0 ? `(${purchases.filter(p => p.payoutStatus === 'PENDING').length})` : ''}` },
     { id: 'reports', icon: <AlertTriangle size={18} />, label: `Reports ${reports.filter(r => r.status === 'PENDING').length > 0 ? `(${reports.filter(r => r.status === 'PENDING').length})` : ''}` },
     { id: 'users', icon: <Users size={18} />, label: 'Manage Users' },
+    { id: 'broadcast', icon: <Megaphone size={18} />, label: 'Broadcast' },
   ];
 
   return (
@@ -1632,6 +1704,7 @@ const AdminDashboard = () => {
             {tab === 'purchases'   && renderPurchases()}
             {tab === 'reports'     && renderReports()}
             {tab === 'users'       && renderUsers()}
+            {tab === 'broadcast'   && renderBroadcast()}
           </div>
         </div>
       </div>

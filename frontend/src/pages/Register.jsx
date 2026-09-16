@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Car, Search, User, Store, Building2 } from 'lucide-react';
 import GoogleButton from '../components/GoogleButton';
+import { passwordProblem } from '../utils/password';
 
 const SELLER_TYPES = [
   { value: 'PRIVATE', label: 'Private', description: 'Selling my own car', Icon: User },
@@ -31,6 +32,10 @@ const Register = () => {
     setError('');
     if (form.password !== form.confirmPassword) {
       return setError('Passwords do not match.');
+    }
+    const passwordError = passwordProblem(form.password);
+    if (passwordError) {
+      return setError(passwordError);
     }
     setLoading(true);
     try {
@@ -157,7 +162,7 @@ const Register = () => {
                 type="password" 
                 value={form.password} 
                 onChange={(e) => setForm({...form, password: e.target.value})} 
-                placeholder="Min 6 characters" 
+                placeholder="Min 8 characters"
                 required 
                 className="w-full h-11 px-3 border border-bordercol rounded-md bg-surface text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
               />

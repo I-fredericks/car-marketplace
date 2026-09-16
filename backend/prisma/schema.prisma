@@ -24,9 +24,17 @@ model User {
   // Profile photo, moderated like listings: uploads go PENDING until an admin
   // approves or rejects them. `avatar` uses the same storage format as
   // VehicleImage.data (/uploads path, S3 URL or base64 data URI).
-  avatar                String?       
+  avatar                String?
   avatarStatus          AvatarStatus  @default(NONE)
   avatarRejectionReason String?
+
+  // Sessions issued BEFORE this moment are rejected at the auth gate —
+  // changing a password instantly revokes every outstanding JWT.
+  passwordChangedAt     DateTime?
+
+  // FCM registration token for push delivery when no SSE stream is open.
+  // One device per user (the most recent to register wins).
+  deviceToken           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -44,7 +44,10 @@ api.interceptors.response.use(
     if (status === 401 && !isAuthCall && localStorage.getItem('token')) {
       localStorage.removeItem('token');
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+        // A revoked session (password changed elsewhere, 24h expiry) gets a
+        // explaining flag instead of a bare bounce back to the form.
+        const reason = error.response?.data?.passwordChanged ? '?session=changed' : '';
+        window.location.href = `/login${reason}`;
       }
     }
     return Promise.reject(error);
