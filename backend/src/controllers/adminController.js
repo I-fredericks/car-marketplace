@@ -24,6 +24,71 @@ const LISTING_STATUS_NOTIFICATIONS = {
   },
 };
 
+// @desc    Broadcast an announcement to every active user
+// @route   POST /api/admin/broadcast
+// @access  Private (Admin only)
+const BROADCAST_BATCH = 500; // rows per createMany: keeps params under Postgres' 65535 ceiling
+const broadcastNotification = async (req, res) => {
+  try {
+    const { title, body } = req.body;
+
+    // Everyone active except the sender (they wrote it; their own badge
+    // shouldn't count their announcement).
+    let recipients = 0;
+    let cursor;
+    for (;;) {
+      const users = await prisma.user.findMany({
+        where: { isActive: true, id: { not: req.user.id } },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: BROADCAST_BATCH,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+      if (users.length === 0) break;
+      cursor = users[users.length - 1].id;
+
+      // Rows are built here so each one can be pushed over SSE without a
+      // second read: createMany returns no rows. data.path sends clicks to
+      // the home feed — a broadcast is an announcement, not a chat.
+      const rows = users.map((u) => ({
+        userId: u.id,
+        type: 'BROADCAST',
+        title,
+        body,
+        data: { broadcast: true, path: '/' },
+      }));
+      await prisma.notification.createMany({ data: rows });
+
+      // Live toast on any open SSE stream (in-memory fan-out; per-user failure
+      // is non-fatal — the rows are already committed).
+      const { pushToUser } = require('../services/eventBus');
+      for (let i = 0; i < users.length; i++) {
+        try {
+          pushToUser(users[i].id, 'notification:new', rows[i]);
+        } catch (_) {}
+      }
+
+      recipients += rows.length;
+    }
+
+    if (recipients === 0) {
+      return res.json({ message: 'No active users to notify', count: 0 });
+    }
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'ADMIN.BROADCAST',
+      entityType: 'USER',
+      meta: { title, body: body.slice(0, 200), recipients },
+    });
+
+    res.json({ message: `Announcement sent to ${recipients} user${recipients === 1 ? '' : 's'}`, count: recipients });
+  } catch (error) {
+    console.error('Error broadcasting notification:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    List users whose profile photo awaits moderation
 // @route   GET /api/admin/avatars/pending
 // @access  Private (Admin only)
@@ -1027,6 +1092,7 @@ module.exports = {
   verifyPayment,
   rejectPayment,
   getPendingAvatars,
+  broadcastNotification,
   approveAvatar,
   rejectAvatar,
   getPurchases,

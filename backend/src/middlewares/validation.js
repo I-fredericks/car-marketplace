@@ -132,6 +132,12 @@ const updateUserStatusSchema = z.object({
   isActive: z.boolean({ message: 'isActive must be true or false' })
 });
 
+// Admin broadcast announcement: one notification row per active user.
+const broadcastSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(120, 'Title is too long'),
+  body: z.string().trim().min(1, 'Message is required').max(2000, 'Message is too long')
+});
+
 const updateProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').optional(),
   phone: z.string().optional(),
@@ -158,5 +164,6 @@ module.exports = {
   updateVehicleSchema,
   updateListingStatusSchema,
   updateUserStatusSchema,
-  updateProfileSchema
+  updateProfileSchema,
+  broadcastSchema
 };

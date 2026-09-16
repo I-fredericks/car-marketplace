@@ -17,6 +17,7 @@ const {
   verifyPayment,
   rejectPayment,
   getPendingAvatars,
+  broadcastNotification,
   approveAvatar,
   rejectAvatar,
   getPurchases,
@@ -30,6 +31,7 @@ const { validate } = require('../middlewares/validation');
 const {
   updateListingStatusSchema,
   updateUserStatusSchema,
+  broadcastSchema,
 } = require('../middlewares/validation');
 
 router.use(protect, admin);
@@ -51,6 +53,9 @@ router.get('/users', getAllUsers);
 router.get('/avatars/pending', getPendingAvatars);
 router.put('/users/:id/avatar/approve', approveAvatar);
 router.put('/users/:id/avatar/reject', rejectAvatar);
+
+// Announcement to every active user (notification + live SSE toast).
+router.post('/broadcast', validate(broadcastSchema), broadcastNotification);
 
 router.put('/users/:id/verify', verifySeller);
 router.put('/users/:id/status', validate(updateUserStatusSchema), setUserStatus);

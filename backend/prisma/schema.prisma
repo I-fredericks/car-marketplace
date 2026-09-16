@@ -262,8 +262,10 @@ model Message {
   sender     User     @relation("MessageSender", fields: [senderId], references: [id])
   receiverId Int
   receiver   User     @relation("MessageReceiver", fields: [receiverId], references: [id])
-  vehicleId  Int
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  // NULL vehicleId = a listing-less support thread (admin-initiated); every
+  // buyer<->seller chat keeps its vehicle.
+  vehicleId  Int?
+  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id])
   content    String
   createdAt  DateTime @default(now())
 

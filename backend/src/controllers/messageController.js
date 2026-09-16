@@ -2,6 +2,15 @@ const prisma = require('../config/db');
 const { pushToUser } = require('../services/eventBus');
 const { createNotification } = require('./notificationController');
 
+// 'general' is the URL sentinel for the listing-less support thread; the DB
+// stores vehicleId NULL for it. Returns NaN for garbage so callers can 400.
+const GENERAL = 'general';
+const vehicleParamToId = (raw) => {
+  if (raw === GENERAL) return null;
+  const id = parseInt(raw, 10);
+  return Number.isInteger(id) ? id : NaN;
+};
+
 // @desc    Get conversations for current user
 // @route   GET /api/messages/conversations
 // @access  Private
@@ -59,15 +68,21 @@ const getConversations = async (req, res) => {
 
     const conversations = messages.map(msg => {
       const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
+      // Support threads have no vehicle: the notification grouping key is
+      // null there, and reports (vehicle-anchored) can never flag them.
+      const vehicleId = msg.vehicle ? msg.vehicle.id : null;
       const unreadCount = unreadCounts.find(
-        u => u.senderId === otherUser.id && u.vehicleId === msg.vehicle.id
+        u => u.senderId === otherUser.id && u.vehicleId === vehicleId
       )?._count.id || 0;
 
-      const spamCount = spamCounts.find(s => s.vehicleId === msg.vehicle.id)?._count.id || 0;
+      const spamCount = msg.vehicle
+        ? (spamCounts.find(s => s.vehicleId === msg.vehicle.id)?._count.id || 0)
+        : 0;
 
       return {
         otherUser,
         vehicle: msg.vehicle,
+        isSupport: !msg.vehicle,
         lastMessage: msg.content,
         lastMessageAt: msg.createdAt,
         unreadCount,
@@ -90,13 +105,19 @@ const getMessages = async (req, res) => {
     const { userId, vehicleId } = req.params;
     const currentUserId = req.user.id;
 
+    const otherUserId = parseInt(userId, 10);
+    const threadVehicleId = vehicleParamToId(vehicleId);
+    if (!Number.isInteger(otherUserId) || Number.isNaN(threadVehicleId)) {
+      return res.status(400).json({ message: 'Invalid conversation ids' });
+    }
+
     const messages = await prisma.message.findMany({
       where: {
         OR: [
-          { senderId: currentUserId, receiverId: parseInt(userId) },
-          { senderId: parseInt(userId), receiverId: currentUserId }
+          { senderId: currentUserId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: currentUserId }
         ],
-        vehicleId: parseInt(vehicleId)
+        vehicleId: threadVehicleId // null -> IS NULL (support thread)
       },
       include: {
         sender: {
@@ -120,8 +141,8 @@ const sendMessage = async (req, res) => {
   try {
     const { receiverId, vehicleId, content } = req.body;
 
-    if (!receiverId || !vehicleId || !content) {
-      return res.status(400).json({ message: 'Receiver, vehicle, and content are required' });
+    if (!receiverId || !content) {
+      return res.status(400).json({ message: 'Receiver and content are required' });
     }
 
     const trimmed = String(content).trim();
@@ -130,19 +151,50 @@ const sendMessage = async (req, res) => {
     }
 
     const receiverIdNum = parseInt(receiverId, 10);
-    const vehicleIdNum = parseInt(vehicleId, 10);
-    if (!Number.isInteger(receiverIdNum) || !Number.isInteger(vehicleIdNum)) {
-      return res.status(400).json({ message: 'Receiver and vehicle must be valid ids' });
+    if (!Number.isInteger(receiverIdNum)) {
+      return res.status(400).json({ message: 'Receiver must be a valid id' });
+    }
+
+    // Listing-less support threads (vehicleId NULL) are opened by admins; a
+    // regular user may only REPLY inside a thread that already exists, so
+    // user<->user chats stay anchored to a listing (and its report/spam
+    // context). Admins may message anyone about anything.
+    const wantsSupportThread = vehicleId === null || vehicleId === undefined || vehicleId === GENERAL;
+    let vehicleIdNum = null;
+    if (wantsSupportThread) {
+      if (receiverIdNum === req.user.id) {
+        return res.status(400).json({ message: 'You cannot message yourself' });
+      }
+      const existingThread = await prisma.message.findFirst({
+        where: {
+          vehicleId: null,
+          OR: [
+            { senderId: req.user.id, receiverId: receiverIdNum },
+            { senderId: receiverIdNum, receiverId: req.user.id },
+          ],
+        },
+        select: { id: true },
+      });
+      if (req.user.role !== 'ADMIN' && !existingThread) {
+        return res.status(403).json({ message: 'Support conversations are started by our team.' });
+      }
+    } else {
+      vehicleIdNum = parseInt(vehicleId, 10);
+      if (!Number.isInteger(vehicleIdNum)) {
+        return res.status(400).json({ message: 'Vehicle must be a valid id' });
+      }
     }
 
     const [receiver, vehicle] = await Promise.all([
       prisma.user.findUnique({ where: { id: receiverIdNum }, select: { id: true } }),
-      prisma.vehicle.findUnique({
-        where: { id: vehicleIdNum },
-        select: { id: true, make: true, model: true, year: true },
-      }),
+      wantsSupportThread
+        ? Promise.resolve(null)
+        : prisma.vehicle.findUnique({
+            where: { id: vehicleIdNum },
+            select: { id: true, make: true, model: true, year: true },
+          }),
     ]);
-    if (!receiver || !vehicle) {
+    if (!receiver || (!wantsSupportThread && !vehicle)) {
       return res.status(400).json({ message: 'Receiver or vehicle does not exist' });
     }
 
@@ -163,7 +215,9 @@ const sendMessage = async (req, res) => {
     // Real-time delivery: push the message to the receiver's open SSE
     // streams (live chat append) and persist a notification (badge/toast).
     // Never blocks the response on failure — the row already exists.
-    const vehicleTitle = `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim();
+    const vehicleTitle = vehicle
+      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim()
+      : 'CarMarket support';
     try {
       pushToUser(receiverIdNum, 'message:new', {
         ...message,
@@ -181,7 +235,7 @@ const sendMessage = async (req, res) => {
           senderName: req.user.name,
           vehicleId: vehicleIdNum,
           vehicleTitle,
-          path: `/messages/${req.user.id}/${vehicleIdNum}`,
+          path: `/messages/${req.user.id}/${vehicleIdNum ?? GENERAL}`,
         },
       });
     } catch (notifyError) {
@@ -201,8 +255,8 @@ const sendMessage = async (req, res) => {
 const markConversationRead = async (req, res) => {
   try {
     const otherUserId = parseInt(req.params.userId, 10);
-    const vehicleId = parseInt(req.params.vehicleId, 10);
-    if (!Number.isInteger(otherUserId) || !Number.isInteger(vehicleId)) {
+    const vehicleId = vehicleParamToId(req.params.vehicleId);
+    if (!Number.isInteger(otherUserId) || Number.isNaN(vehicleId)) {
       return res.status(400).json({ message: 'Invalid conversation ids' });
     }
 
@@ -237,8 +291,8 @@ const markConversationRead = async (req, res) => {
 const deleteConversation = async (req, res) => {
   try {
     const otherUserId = parseInt(req.params.userId, 10);
-    const vehicleId = parseInt(req.params.vehicleId, 10);
-    if (!Number.isInteger(otherUserId) || !Number.isInteger(vehicleId)) {
+    const vehicleId = vehicleParamToId(req.params.vehicleId);
+    if (!Number.isInteger(otherUserId) || Number.isNaN(vehicleId)) {
       return res.status(400).json({ message: 'Invalid conversation ids' });
     }
 
