@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const prisma = require('../config/db');
-const { makeThumbBuffer, diskThumbName, uploadsDir } = require('../services/storage');
+const { makeThumbBuffer, diskThumbName, uploadsDir, isTrustedImageHost } = require('../services/storage');
 
 // Images are stored in the DB in several legacy formats. List APIs no longer
 // ship the raw data; the browser loads each image from here once and then
@@ -79,15 +79,11 @@ const getImage = async (req, res) => {
       return res.redirect(301, data.startsWith('/') ? data : `/${data}`);
     }
 
-    // External URL -> only redirect to a host we explicitly trust.
+    // External URL -> only redirect to a host we explicitly trust (R2 public
+    // buckets, S3_PUBLIC_URL, EXTERNAL_IMAGE_HOSTS).
     if (data.startsWith('http://') || data.startsWith('https://')) {
       try {
-        const host = new URL(data).hostname;
-        const trustedHosts = (process.env.EXTERNAL_IMAGE_HOSTS || 'images.unsplash.com,res.cloudinary.com')
-          .split(',')
-          .map((h) => h.trim().toLowerCase())
-          .filter(Boolean);
-        if (trustedHosts.includes(host)) {
+        if (isTrustedImageHost(new URL(data).hostname)) {
           return res.redirect(301, data);
         }
       } catch {
@@ -153,19 +149,12 @@ const getImageThumb = async (req, res) => {
       return sendWithCaching(req, res, fs.readFileSync(thumbPath), 'image/webp');
     }
 
-    // External URL (our S3 uploads follow the _thumb.webp convention) ->
+    // External URL (our S3/R2 uploads follow the _thumb.webp convention) ->
     // redirect to the sibling thumbnail on a trusted host, else the original
     if (data.startsWith('http://') || data.startsWith('https://')) {
       try {
         const url = new URL(data);
-        const trustedHosts = (process.env.EXTERNAL_IMAGE_HOSTS || 'images.unsplash.com,res.cloudinary.com')
-          .split(',')
-          .map((h) => h.trim().toLowerCase())
-          .filter(Boolean);
-        if (process.env.S3_PUBLIC_URL) {
-          trustedHosts.push(new URL(process.env.S3_PUBLIC_URL).hostname.toLowerCase());
-        }
-        if (trustedHosts.includes(url.hostname)) {
+        if (isTrustedImageHost(url.hostname)) {
           const ext = path.extname(url.pathname);
           const thumbUrl = `${url.origin}${path.dirname(url.pathname)}/${path.basename(url.pathname, ext)}_thumb.webp`;
           return res.redirect(301, thumbUrl);

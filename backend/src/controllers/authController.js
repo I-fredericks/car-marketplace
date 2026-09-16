@@ -321,11 +321,16 @@ const googleLogin = async (req, res) => {
       .map((id) => (id || '').trim())
       .filter(Boolean);
     if (acceptedAuds.length === 0 || !acceptedAuds.includes(info.aud)) {
-      // Echo the rejected audience in logs (NOT to the caller): the common
-      // production bug is a client ID set on the wrong env var, and a generic
-      // 401 makes that impossible to find.
+      // Echo the rejected audience (the caller's own token field, nothing
+      // sensitive): the almost-always fix is adding that client ID to the
+      // API's GOOGLE_CLIENT_ID / GOOGLE_CLIENT_IDS env — a generic 401 makes
+      // that impossible to discover from the app.
       console.warn(`Google sign-in rejected: aud="${info.aud}" not in accepted list (${acceptedAuds.length} configured)`);
-      return res.status(401).json({ message: 'Google token was not issued for this app' });
+      return res.status(401).json({
+        message: acceptedAuds.length === 0
+          ? 'Google sign-in is not configured on the server (GOOGLE_CLIENT_ID is unset).'
+          : `Google sign-in rejected: client ${info.aud} is not registered on the server. Ask the admin to add it to GOOGLE_CLIENT_IDS.`,
+      });
     }
     if (info.email_verified !== 'true' && info.email_verified !== true) {
       return res.status(401).json({ message: 'Google account email is not verified' });

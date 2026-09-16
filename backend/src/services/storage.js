@@ -72,6 +72,28 @@ const makeThumbBuffer = async (buffer) => {
 
 const randomName = (ext) => `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
 
+// Trusted public-image redirect targets. r2.dev subdomains (Cloudflare R2
+// public buckets) are trusted wholesale: our S3 uploads land there and the
+// account-hash subdomain differs per deployment, so an exact-host env list
+// would silently break image serving on every new bucket.
+const isTrustedImageHost = (hostname) => {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  if (host.endsWith('.r2.dev')) return true;
+  const configured = (process.env.EXTERNAL_IMAGE_HOSTS || 'images.unsplash.com,res.cloudinary.com')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  if (process.env.S3_PUBLIC_URL) {
+    try {
+      configured.push(new URL(process.env.S3_PUBLIC_URL).hostname.toLowerCase());
+    } catch {
+      // malformed S3_PUBLIC_URL: skip rather than crash image serving
+    }
+  }
+  return configured.includes(host);
+};
+
 const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -164,6 +186,7 @@ module.exports = {
   saveUpload,
   makeThumbBuffer,
   isCloudEnabled,
+  isTrustedImageHost,
   diskThumbName,
   uploadsDir,
   THUMB_WIDTH,

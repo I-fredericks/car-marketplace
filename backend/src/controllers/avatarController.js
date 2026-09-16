@@ -118,15 +118,8 @@ const getAvatar = async (req, res) => {
 
     if (data.startsWith('http://') || data.startsWith('https://')) {
       try {
-        const host = new URL(data).hostname;
-        const trustedHosts = (process.env.EXTERNAL_IMAGE_HOSTS || 'images.unsplash.com,res.cloudinary.com')
-          .split(',')
-          .map((h) => h.trim().toLowerCase())
-          .filter(Boolean);
-        if (process.env.S3_PUBLIC_URL) {
-          trustedHosts.push(new URL(process.env.S3_PUBLIC_URL).hostname.toLowerCase());
-        }
-        if (trustedHosts.includes(host)) {
+        const { isTrustedImageHost } = require('../services/storage');
+        if (isTrustedImageHost(new URL(data).hostname)) {
           return res.redirect(301, data);
         }
       } catch {
