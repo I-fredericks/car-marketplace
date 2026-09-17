@@ -18,6 +18,7 @@ const {
   rejectPayment,
   getPendingAvatars,
   broadcastNotification,
+  bulkMessageUsers,
   approveAvatar,
   rejectAvatar,
   getPurchases,
@@ -32,6 +33,7 @@ const {
   updateListingStatusSchema,
   updateUserStatusSchema,
   broadcastSchema,
+  bulkMessageSchema,
 } = require('../middlewares/validation');
 
 router.use(protect, admin);
@@ -54,8 +56,12 @@ router.get('/avatars/pending', getPendingAvatars);
 router.put('/users/:id/avatar/approve', approveAvatar);
 router.put('/users/:id/avatar/reject', rejectAvatar);
 
-// Announcement to every active user (notification + live SSE toast).
+// Announcement to every active user (notification + live SSE toast), or a
+// replyable chat message in every inbox (sendToInbox).
 router.post('/broadcast', validate(broadcastSchema), broadcastNotification);
+
+// Open/continue a support chat with selected users — or all users at once.
+router.post('/messages/bulk', validate(bulkMessageSchema), bulkMessageUsers);
 
 router.put('/users/:id/verify', verifySeller);
 router.put('/users/:id/status', validate(updateUserStatusSchema), setUserStatus);

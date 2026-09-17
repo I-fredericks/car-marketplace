@@ -269,4 +269,95 @@ describe('Admin support threads & broadcast', () => {
       .send({ title: 'hi', body: 'should not go through' });
     expect(notAdmin.statusCode).toEqual(403);
   });
+
+  it('bulk-messages selected users into replyable support threads', async () => {
+    const prisma = require('./_db');
+    const before = await prisma.message.count({ where: { senderId: adminId, vehicleId: null } });
+    const res = await request(app)
+      .post('/api/admin/messages/bulk')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ userIds: [buyer1Id, buyer2Id], content: 'Hello from the CarMarket team!' });
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.count).toEqual(2);
+
+    const after = await prisma.message.count({ where: { senderId: adminId, vehicleId: null } });
+    expect(after - before).toEqual(2);
+
+    const forBuyer2 = await prisma.message.findFirst({
+      where: { senderId: adminId, receiverId: buyer2Id, vehicleId: null },
+    });
+    expect(forBuyer2).not.toBeNull();
+
+    // Each recipient gets a NEW_MESSAGE notification pointing at the thread
+    const notified = await prisma.notification.findFirst({
+      where: { userId: buyer2Id, type: 'NEW_MESSAGE', senderId: adminId, vehicleId: null },
+    });
+    expect(notified).not.toBeNull();
+  });
+
+  it('rejects bulk messaging from non-admins', async () => {
+    const res = await request(app)
+      .post('/api/admin/messages/bulk')
+      .set('Authorization', `Bearer ${buyer1Token}`)
+      .send({ userIds: [buyer2Id], content: 'spam' });
+    expect(res.statusCode).toEqual(403);
+  });
+
+  it('validates bulk message input', async () => {
+    const emptyList = await request(app)
+      .post('/api/admin/messages/bulk')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ userIds: [], content: 'hi' });
+    expect(emptyList.statusCode).toEqual(400);
+
+    const blankContent = await request(app)
+      .post('/api/admin/messages/bulk')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ userIds: [buyer1Id], content: '   ' });
+    expect(blankContent.statusCode).toEqual(400);
+  });
+
+  it('skips inactive and admin accounts from the bulk send', async () => {
+    const prisma = require('./_db');
+    await prisma.user.update({ where: { id: buyer2Id }, data: { isActive: false } });
+    try {
+      const res = await request(app)
+        .post('/api/admin/messages/bulk')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ userIds: [buyer1Id, buyer2Id, adminId], content: 'Only active users get this' });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.count).toEqual(1); // buyer2 inactive, adminId is the sender/admin
+    } finally {
+      await prisma.user.update({ where: { id: buyer2Id }, data: { isActive: true } });
+    }
+  });
+
+  it('inbox broadcast delivers a replyable chat message to every active user', async () => {
+    const prisma = require('./_db');
+    const beforeMessages = await prisma.message.count();
+    const res = await request(app)
+      .post('/api/admin/broadcast')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ title: 'New feature launch', body: 'Check out escrow checkout!', sendToInbox: true });
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.count).toBeGreaterThanOrEqual(3); // buyer1, buyer2, seller (+ other DB users)
+
+    const afterMessages = await prisma.message.count();
+    expect(afterMessages - beforeMessages).toBeGreaterThanOrEqual(3);
+
+    const inInbox = await prisma.message.findFirst({
+      where: { senderId: adminId, receiverId: buyer1Id, vehicleId: null, content: 'Check out escrow checkout!' },
+    });
+    expect(inInbox).not.toBeNull();
+
+    // Inbox delivery rides NEW_MESSAGE notifications, never BROADCAST rows
+    const chatNotification = await prisma.notification.findFirst({
+      where: { userId: buyer1Id, type: 'NEW_MESSAGE', senderId: adminId, vehicleId: null },
+    });
+    expect(chatNotification).not.toBeNull();
+    const bellRow = await prisma.notification.findFirst({
+      where: { userId: buyer1Id, type: 'BROADCAST', title: 'New feature launch' },
+    });
+    expect(bellRow).toBeNull();
+  });
 });

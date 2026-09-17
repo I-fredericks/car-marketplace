@@ -24,17 +24,131 @@ const LISTING_STATUS_NOTIFICATIONS = {
   },
 };
 
-// @desc    Broadcast an announcement to every active user
+// Deliver an admin chat message into each recipient's Messages inbox
+// (listing-less support thread, vehicleId NULL): one message row per user,
+// an SSE push for open streams, and a NEW_MESSAGE notification whose FCM
+// fallback covers closed apps. Shared by bulk direct messages and
+// inbox-mode broadcasts. Per-recipient failures are non-fatal — the rows
+// are already committed.
+const ADMIN_MESSAGE_BATCH = 500; // createMany batch size, mirrors BROADCAST_BATCH
+const sendAdminMessageToUsers = async (adminUser, recipientIds, content) => {
+  const { createNotification } = require('./notificationController');
+  const { pushToUser } = require('../services/eventBus');
+  const trimmed = String(content).trim();
+  let delivered = 0;
+
+  for (let i = 0; i < recipientIds.length; i += ADMIN_MESSAGE_BATCH) {
+    const batch = recipientIds.slice(i, i + ADMIN_MESSAGE_BATCH);
+
+    // createMany returns no rows: bound the read-back window to rows whose
+    // id exceeds the current maximum so only this batch is re-fetched.
+    const last = await prisma.message.findFirst({ select: { id: true }, orderBy: { id: 'desc' } });
+    const maxIdBefore = last?.id ?? 0;
+
+    await prisma.message.createMany({
+      data: batch.map((receiverId) => ({
+        senderId: adminUser.id,
+        receiverId,
+        vehicleId: null,
+        content: trimmed,
+      })),
+    });
+
+    const messages = await prisma.message.findMany({
+      where: {
+        id: { gt: maxIdBefore },
+        senderId: adminUser.id,
+        receiverId: { in: batch },
+        vehicleId: null,
+      },
+      include: { sender: { select: { id: true, name: true } } },
+      orderBy: { id: 'asc' },
+    });
+
+    for (const message of messages) {
+      delivered += 1;
+      try {
+        pushToUser(message.receiverId, 'message:new', {
+          ...message,
+          vehicleTitle: 'CarMarket support',
+        });
+      } catch (_) {}
+      try {
+        await createNotification({
+          userId: message.receiverId,
+          type: 'NEW_MESSAGE',
+          title: `New message from ${adminUser.name}`,
+          body: trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed,
+          senderId: adminUser.id,
+          vehicleId: null,
+          data: {
+            senderId: adminUser.id,
+            senderName: adminUser.name,
+            vehicleId: null,
+            vehicleTitle: 'CarMarket support',
+            path: `/messages/${adminUser.id}/general`,
+          },
+        });
+      } catch (_) {}
+    }
+  }
+
+  return delivered;
+};
+
+// @desc    Start (or continue) a support chat with selected users — or every
+//          active user — in one shot. Each recipient gets one message in
+//          their Messages inbox, replyable like any support thread.
+// @route   POST /api/admin/messages/bulk
+// @access  Private (Admin only)
+const bulkMessageUsers = async (req, res) => {
+  try {
+    const { userIds, content } = req.body;
+    const trimmed = String(content || '').trim();
+    if (trimmed.length === 0) {
+      return res.status(400).json({ message: 'Message content is required' });
+    }
+
+    // Admins are never bulk-messageable and inactive users can't log in to
+    // read the reply; the acting admin is excluded either way.
+    const where = userIds === 'all'
+      ? { isActive: true, role: { not: 'ADMIN' }, id: { not: req.user.id } }
+      : { isActive: true, role: { not: 'ADMIN' }, id: { in: userIds, not: req.user.id } };
+
+    const recipients = await prisma.user.findMany({ where, select: { id: true } });
+    if (recipients.length === 0) {
+      return res.json({ message: 'No eligible users to message', count: 0 });
+    }
+
+    const delivered = await sendAdminMessageToUsers(req.user, recipients.map((r) => r.id), trimmed);
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'ADMIN.BULK_MESSAGE',
+      entityType: 'USER',
+      meta: { recipients: delivered, body: trimmed.slice(0, 200) },
+    });
+
+    res.json({ message: `Message sent to ${delivered} user${delivered === 1 ? '' : 's'}`, count: delivered });
+  } catch (error) {
+    console.error('Error bulk messaging users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Broadcast an announcement to every active user — as a one-way
+//          bell notification (default) or as a replyable chat message in
+//          every user's Messages inbox (sendToInbox).
 // @route   POST /api/admin/broadcast
 // @access  Private (Admin only)
 const BROADCAST_BATCH = 500; // rows per createMany: keeps params under Postgres' 65535 ceiling
 const broadcastNotification = async (req, res) => {
   try {
-    const { title, body } = req.body;
+    const { title, body, sendToInbox } = req.body;
 
     // Everyone active except the sender (they wrote it; their own badge
     // shouldn't count their announcement).
-    let recipients = 0;
+    const recipientIds = [];
     let cursor;
     for (;;) {
       const users = await prisma.user.findMany({
@@ -46,12 +160,44 @@ const broadcastNotification = async (req, res) => {
       });
       if (users.length === 0) break;
       cursor = users[users.length - 1].id;
+      recipientIds.push(...users.map((u) => u.id));
+    }
 
-      // Rows are built here so each one can be pushed over SSE without a
-      // second read: createMany returns no rows. data.path sends clicks to
-      // the home feed — a broadcast is an announcement, not a chat.
-      const rows = users.map((u) => ({
-        userId: u.id,
+    if (recipientIds.length === 0) {
+      return res.json({ message: 'No active users to notify', count: 0 });
+    }
+
+    if (sendToInbox) {
+      // Chat delivery: the announcement lands in each user's Messages inbox
+      // as a support thread they can reply to. The per-user NEW_MESSAGE
+      // notification (SSE toast + FCM fallback) is the delivery receipt, so
+      // no separate BROADCAST rows are created.
+      const delivered = await sendAdminMessageToUsers(req.user, recipientIds, body);
+
+      audit.logAction({
+        ...actorFrom(req),
+        action: 'ADMIN.BROADCAST',
+        entityType: 'USER',
+        meta: { title, body: body.slice(0, 200), recipients: delivered, channel: 'inbox' },
+      });
+
+      return res.json({
+        message: `Announcement delivered to ${delivered} inbox${delivered === 1 ? '' : 'es'}`,
+        count: delivered,
+        channel: 'inbox',
+      });
+    }
+
+    // Rows are built per batch so each one can be pushed over SSE without a
+    // second read: createMany returns no rows. data.path sends clicks to
+    // the home feed — a notification broadcast is an announcement, not a chat.
+    let recipients = 0;
+    const { pushToUser } = require('../services/eventBus');
+    const { pushToDevices } = require('../services/fcm');
+    for (let i = 0; i < recipientIds.length; i += BROADCAST_BATCH) {
+      const batch = recipientIds.slice(i, i + BROADCAST_BATCH);
+      const rows = batch.map((userId) => ({
+        userId,
         type: 'BROADCAST',
         title,
         body,
@@ -62,22 +208,16 @@ const broadcastNotification = async (req, res) => {
       // Live toast on any open SSE stream (in-memory fan-out; per-user failure
       // is non-fatal — the rows are already committed). Users with no open
       // stream get an FCM push instead.
-      const { pushToUser } = require('../services/eventBus');
-      const { pushToDevices } = require('../services/fcm');
-      for (let i = 0; i < users.length; i++) {
+      for (let j = 0; j < batch.length; j++) {
         try {
-          const deliveredLive = pushToUser(users[i].id, 'notification:new', rows[i]);
+          const deliveredLive = pushToUser(batch[j], 'notification:new', rows[j]);
           if (!deliveredLive) {
-            pushToDevices(users[i].id, { title, body, data: { type: 'BROADCAST', path: '/' } }).catch(() => {});
+            pushToDevices(batch[j], { title, body, data: { type: 'BROADCAST', path: '/' } }).catch(() => {});
           }
         } catch (_) {}
       }
 
       recipients += rows.length;
-    }
-
-    if (recipients === 0) {
-      return res.json({ message: 'No active users to notify', count: 0 });
     }
 
     audit.logAction({
@@ -1098,6 +1238,7 @@ module.exports = {
   rejectPayment,
   getPendingAvatars,
   broadcastNotification,
+  bulkMessageUsers,
   approveAvatar,
   rejectAvatar,
   getPurchases,

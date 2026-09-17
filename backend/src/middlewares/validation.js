@@ -142,10 +142,22 @@ const updateUserStatusSchema = z.object({
   isActive: z.boolean({ message: 'isActive must be true or false' })
 });
 
-// Admin broadcast announcement: one notification row per active user.
+// Admin broadcast announcement: one notification row per active user, or —
+// with sendToInbox — one replyable chat message per active user.
 const broadcastSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(120, 'Title is too long'),
-  body: z.string().trim().min(1, 'Message is required').max(2000, 'Message is too long')
+  body: z.string().trim().min(1, 'Message is required').max(2000, 'Message is too long'),
+  sendToInbox: z.boolean().optional()
+});
+
+// Admin bulk direct message: an explicit recipient list, or the literal
+// 'all' for every active non-admin user.
+const bulkMessageSchema = z.object({
+  userIds: z.union([
+    z.literal('all'),
+    z.array(z.number().int()).min(1, 'Select at least one user')
+  ], { message: 'Recipients must be a list of user ids or "all"' }),
+  content: z.string().trim().min(1, 'Message is required').max(2000, 'Message is too long')
 });
 
 const updateProfileSchema = z.object({
@@ -175,5 +187,6 @@ module.exports = {
   updateListingStatusSchema,
   updateUserStatusSchema,
   updateProfileSchema,
-  broadcastSchema
+  broadcastSchema,
+  bulkMessageSchema
 };

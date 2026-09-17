@@ -6,7 +6,7 @@ import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
   Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera,
   UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight, Package,
-  Megaphone
+  Megaphone, Send, Bell, XCircle
 } from 'lucide-react';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
@@ -55,12 +55,30 @@ const AdminDashboard = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [listingsPage, setListingsPage] = useState(1);
   const [takenDownPage, setTakenDownPage] = useState(1);
-  const [broadcastForm, setBroadcastForm] = useState({ title: '', body: '' });
+  const [broadcastForm, setBroadcastForm] = useState({ title: '', body: '', sendToInbox: false });
   const [broadcasting, setBroadcasting] = useState(false);
+
+  // Bulk chat: which users are checked in Manage Users, plus the compose
+  // dialog state. target is 'selected' (checked rows) or 'all' (every
+  // active non-admin user).
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set());
+  const [bulkMessage, setBulkMessage] = useState({ open: false, target: null, content: '' });
+  const [sendingBulk, setSendingBulk] = useState(false);
 
   const toast = (msg) => {
     setActionMsg(msg);
     setTimeout(() => setActionMsg(''), 3000);
+  };
+
+  // Broken listing thumbnails swap to a Car icon instead of an endless
+  // browser retry loop (keyed per table: bare id, 'all-', 'taken-').
+  const handleImageError = (key) => {
+    setBrokenImages((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
   };
 
   const fetchAuditLogs = useCallback(async () => {
@@ -1104,13 +1122,43 @@ const AdminDashboard = () => {
   const visibleUsers = users.filter(u => !/^deleted-\d+@deleted\./.test(u.email)); // scrubbed accounts stay in the DB for audit but don't belong in the management UI
   const renderUsers = () => (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Users ({visibleUsers.length})</h2>
-        <p className="text-sm text-textsecondary">
-          Manage accounts, verify sellers, remove bad actors.
-          {users.length - visibleUsers.length > 0 && ` ${users.length - visibleUsers.length} deleted account(s) hidden.`}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Users ({visibleUsers.length})</h2>
+          <p className="text-sm text-textsecondary">
+            Manage accounts, verify sellers, remove bad actors.
+            {users.length - visibleUsers.length > 0 && ` ${users.length - visibleUsers.length} deleted account(s) hidden.`}
+          </p>
+        </div>
+        <button
+          onClick={() => openBulkMessage('all')}
+          className="px-3 py-2 bg-primary/10 text-primary border border-primary/20 rounded-md hover:bg-primary hover:text-white transition-colors text-xs font-bold flex items-center gap-1.5 self-start"
+          title="Open a support chat with every active user"
+        >
+          <MessageCircle size={14} />
+          Message all users
+        </button>
       </div>
+
+      {selectedUserIds.size > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-textprimary">
+            {selectedUserIds.size} user{selectedUserIds.size === 1 ? '' : 's'} selected
+          </span>
+          <button
+            onClick={() => openBulkMessage('selected')}
+            className="px-3 py-1.5 bg-primary text-white rounded-md text-xs font-bold hover:bg-primarylight transition-colors flex items-center gap-1.5"
+          >
+            <Send size={13} /> Message selected
+          </button>
+          <button
+            onClick={() => setSelectedUserIds(new Set())}
+            className="px-3 py-1.5 bg-surface text-textsecondary border border-bordercol rounded-md text-xs font-bold hover:bg-bg transition-colors flex items-center gap-1.5"
+          >
+            <XCircle size={13} /> Clear
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20 text-textmuted">
@@ -1121,6 +1169,16 @@ const AdminDashboard = () => {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-bg border-b border-bordercol text-textsecondary uppercase tracking-wider font-semibold text-xs">
               <tr>
+                <th className="px-4 py-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allUsersSelected}
+                    onChange={toggleSelectAllUsers}
+                    disabled={selectableUsers.length === 0}
+                    title="Select all messageable users (active, non-admin)"
+                    className="w-4 h-4 accent-primary cursor-pointer disabled:opacity-40"
+                  />
+                </th>
                 <th className="px-6 py-4">User</th>
                 <th className="px-6 py-4">Role</th>
                 <th className="px-6 py-4">Verified</th>
@@ -1129,8 +1187,20 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-bordercol">
-              {visibleUsers.map(u => (
-                <tr key={u.id} className="hover:bg-bg/50 transition-colors">
+              {visibleUsers.map(u => {
+                const selectable = u.role !== 'ADMIN' && u.isActive;
+                return (
+                <tr key={u.id} className={`transition-colors ${selectedUserIds.has(u.id) ? 'bg-primary/5' : 'hover:bg-bg/50'}`}>
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.has(u.id)}
+                      onChange={() => toggleUserSelection(u.id)}
+                      disabled={!selectable}
+                      title={selectable ? 'Select for bulk message' : 'Admin and deactivated accounts cannot be bulk messaged'}
+                      className="w-4 h-4 accent-primary cursor-pointer disabled:opacity-40"
+                    />
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <Avatar userId={u.id} name={u.name} size={36} />
@@ -1209,16 +1279,17 @@ const AdminDashboard = () => {
                           <span className="hidden md:inline">Delete</span>
                         </button>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+                     </div>
+                   </td>
+                 </tr>
+                );
+              })}
+             </tbody>
+           </table>
+         </div>
+        )}
+      </div>
+    );
 
   const renderPayments = () => {
     const pending = payments.filter(p => p.status === 'PENDING');
@@ -1572,13 +1643,104 @@ const AdminDashboard = () => {
     );
   };
 
+  // ── Bulk chat initiation ────────────────────────────────────────────
+  // Admins can open a support thread with every checked user (or all users
+  // at once); each recipient gets one replyable message in their inbox.
+  const selectableUsers = visibleUsers.filter((u) => u.role !== 'ADMIN' && u.isActive);
+  const allUsersSelected = selectableUsers.length > 0
+    && selectableUsers.every((u) => selectedUserIds.has(u.id));
+
+  const toggleUserSelection = (id) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllUsers = () => {
+    setSelectedUserIds(allUsersSelected ? new Set() : new Set(selectableUsers.map((u) => u.id)));
+  };
+
+  const openBulkMessage = (target) => setBulkMessage({ open: true, target, content: '' });
+  const closeBulkMessage = () => setBulkMessage((prev) => ({ ...prev, open: false }));
+
+  const handleSendBulkMessage = async () => {
+    const content = bulkMessage.content.trim();
+    if (!content) return;
+    const userIds = bulkMessage.target === 'all' ? 'all' : [...selectedUserIds];
+    if (userIds !== 'all' && userIds.length === 0) return;
+    setSendingBulk(true);
+    try {
+      const { data } = await api.post('/admin/messages/bulk', { userIds, content });
+      toast(data.message || 'Message sent.');
+      closeBulkMessage();
+      setSelectedUserIds(new Set());
+    } catch (err) {
+      toast(err.response?.data?.message || 'Bulk message failed.');
+    } finally {
+      setSendingBulk(false);
+    }
+  };
+
+  const renderBulkMessageModal = () => {
+    const count = bulkMessage.target === 'all'
+      ? 'every active user'
+      : `${selectedUserIds.size} user${selectedUserIds.size === 1 ? '' : 's'}`;
+    return (
+      <div
+        className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+        onClick={closeBulkMessage}
+      >
+        <div
+          className="bg-surface border border-bordercol rounded-xl shadow-xl max-w-lg w-full p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="font-display font-bold text-lg text-textprimary mb-1">
+            Start a chat with {count}
+          </h3>
+          <p className="text-xs text-textsecondary mb-4">
+            Opens (or continues) a support thread in each recipient's Messages inbox —
+            they can reply to you directly.
+          </p>
+          <textarea
+            value={bulkMessage.content}
+            onChange={(e) => setBulkMessage((prev) => ({ ...prev, content: e.target.value }))}
+            maxLength={2000}
+            rows={6}
+            placeholder="Type the first message..."
+            autoFocus
+            className="w-full p-3 bg-bg border border-bordercol rounded-md text-sm text-textprimary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow resize-y"
+          />
+          <p className="text-xs text-textmuted mt-1 mb-4">{bulkMessage.content.length}/2000</p>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={closeBulkMessage}
+              className="px-4 py-2 border border-bordercol rounded-md text-sm font-medium text-textsecondary hover:bg-bg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSendBulkMessage}
+              disabled={sendingBulk || !bulkMessage.content.trim()}
+              className="px-4 py-2 bg-primary text-white rounded-md text-sm font-bold hover:bg-primarylight transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <Send size={14} />
+              {sendingBulk ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const handleBroadcast = async () => {
     if (!window.confirm('Send this announcement to every active user? This cannot be undone.')) return;
     setBroadcasting(true);
     try {
       const { data } = await api.post('/admin/broadcast', broadcastForm);
       toast(data.message || 'Announcement sent.');
-      setBroadcastForm({ title: '', body: '' });
+      setBroadcastForm({ title: '', body: '', sendToInbox: broadcastForm.sendToInbox });
     } catch (err) {
       toast(err.response?.data?.message || 'Broadcast failed.');
     } finally {
@@ -1591,13 +1753,49 @@ const AdminDashboard = () => {
       <div>
         <h2 className="font-display font-bold text-2xl text-textprimary mb-1">Broadcast announcement</h2>
         <p className="text-sm text-textsecondary">
-          One-way notification to every active user. It lands in their bell feed — it is not a chat and cannot be replied to. To talk to one user directly, use the Message button in Manage Users.
+          Send to every active user. Choose a bell-feed announcement (one-way) or an inbox
+          message that lands in each user's Chats, where they can reply to you directly.
         </p>
       </div>
 
       <div className="bg-surface border border-bordercol rounded-lg shadow-sm p-6 space-y-4">
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-textsecondary mb-2">Title</label>
+          <label className="block text-xs font-bold uppercase tracking-wider text-textsecondary mb-2">Delivery</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setBroadcastForm({ ...broadcastForm, sendToInbox: false })}
+              className={`p-3 rounded-md border text-left transition-colors ${
+                !broadcastForm.sendToInbox
+                  ? 'bg-primary/5 border-primary text-textprimary'
+                  : 'bg-bg border-bordercol text-textsecondary hover:border-primary/40'
+              }`}
+            >
+              <span className="flex items-center gap-2 text-sm font-bold mb-0.5">
+                <Bell size={15} className={!broadcastForm.sendToInbox ? 'text-primary' : ''} /> Notification
+              </span>
+              <span className="text-xs">Bell feed toast — one-way, cannot be replied to</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBroadcastForm({ ...broadcastForm, sendToInbox: true })}
+              className={`p-3 rounded-md border text-left transition-colors ${
+                broadcastForm.sendToInbox
+                  ? 'bg-primary/5 border-primary text-textprimary'
+                  : 'bg-bg border-bordercol text-textsecondary hover:border-primary/40'
+              }`}
+            >
+              <span className="flex items-center gap-2 text-sm font-bold mb-0.5">
+                <MessageCircle size={15} className={broadcastForm.sendToInbox ? 'text-primary' : ''} /> Messages inbox
+              </span>
+              <span className="text-xs">Chat message from admin — users can reply</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-textsecondary mb-2">
+            Title {broadcastForm.sendToInbox && <span className="normal-case font-medium text-textmuted">(kept for the audit log)</span>}
+          </label>
           <input
             value={broadcastForm.title}
             onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
@@ -1613,7 +1811,7 @@ const AdminDashboard = () => {
             onChange={(e) => setBroadcastForm({ ...broadcastForm, body: e.target.value })}
             maxLength={2000}
             rows={6}
-            placeholder="What should every user know?"
+            placeholder={broadcastForm.sendToInbox ? "This exact text arrives in every user's inbox..." : 'What should every user know?'}
             className="w-full p-3 bg-bg border border-bordercol rounded-md text-sm text-textprimary focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow resize-y"
           />
           <p className="text-xs text-textmuted mt-1">{broadcastForm.body.length}/2000</p>
@@ -1624,7 +1822,7 @@ const AdminDashboard = () => {
           className="px-4 py-2.5 bg-primary text-white rounded-md text-sm font-bold hover:bg-primarylight transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           <Megaphone size={15} />
-          {broadcasting ? 'Sending...' : 'Send to all users'}
+          {broadcasting ? 'Sending...' : broadcastForm.sendToInbox ? 'Send to all inboxes' : 'Send to all users'}
         </button>
       </div>
     </div>
@@ -1653,6 +1851,9 @@ const AdminDashboard = () => {
           <Check size={16} /> {actionMsg}
         </div>
       )}
+
+      {/* Bulk chat compose dialog */}
+      {bulkMessage.open && renderBulkMessageModal()}
 
       <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
         
