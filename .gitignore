@@ -7,10 +7,11 @@ node_modules/
 
 # Plaintext credential scratch files (never commit secrets)
 supabaseDatabsePass
-*password*
+password*.txt
 *secret*
 *credential*
 !.env.example
+!frontend/src/utils/password.js
 
 # User content & build output
 backend/uploads/
