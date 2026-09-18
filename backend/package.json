@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "seed": "node prisma/seed.js",
+    "seed:listings": "node scripts/seed-listings.js",
     "postinstall": "prisma skills sync || exit 0"
   },
   "prisma": {
