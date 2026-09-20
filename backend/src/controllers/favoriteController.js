@@ -43,8 +43,12 @@ const addFavorite = async (req, res) => {
         userId: ownerId,
         type: 'LISTING_SAVED',
         title: `${req.user.name} saved your listing`,
-        body: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
-        data: { vehicleId, actorId: req.user.id, actorName: req.user.name },
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} — they may be interested. Say hi!`.trim(),
+        senderId: req.user.id,
+        vehicleId,
+        // senderId + vehicleId make the notification open a chat with the
+        // saver so the seller can make the first move.
+        data: { vehicleId, actorId: req.user.id, actorName: req.user.name, senderId: req.user.id, senderName: req.user.name, vehicleTitle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim() },
       }).catch(() => {});
     }
 

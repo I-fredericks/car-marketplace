@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api, { getImageUrl } from '../utils/api';
-import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt, Landmark, Smartphone, Scale } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, ShieldCheck, MapPin, Truck, CreditCard, Banknote, Handshake, Receipt, Landmark, Smartphone, Scale, Trophy, UserCheck, MessageCircle } from 'lucide-react';
 import OrderProgress from '../components/OrderProgress';
 import SlideToConfirm from '../components/SlideToConfirm';
 import ReviewForm from '../components/ReviewForm';
@@ -364,8 +364,21 @@ const PurchaseDetail = () => {
             <div className="mb-6 flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-lg p-4">
               <Handshake size={22} className="text-primary flex-shrink-0" />
               <p className="text-sm text-textprimary">
-                <span className="font-medium">Car reserved for you.</span> {sellerName} has been notified. Arrange the
-                handover and pay cash when you collect the car.
+                <span className="font-medium">Order placed.</span> {sellerName} has been notified and will choose who to
+                sell to. Arrange the handover and pay cash when you collect the car.
+              </p>
+            </div>
+          )}
+
+          {/* Multi-buyer: the seller picked this buyer */}
+          {purchase.selectedBuyerAt && ['AWAITING_PAYMENT', 'HANDOVER_PENDING'].includes(purchase.status) && isBuyer && (
+            <div className="mb-6 flex items-center gap-3 bg-success/10 border border-success/25 rounded-lg p-4">
+              <Trophy size={20} className="text-success flex-shrink-0" />
+              <p className="text-sm text-textprimary">
+                <span className="font-medium">The seller chose you!</span>{' '}
+                {purchase.method === 'CASH'
+                  ? 'Arrange the handover with the seller.'
+                  : 'Complete your payment to secure the car.'}
               </p>
             </div>
           )}
@@ -471,6 +484,40 @@ const PurchaseDetail = () => {
               An open dispute freezes all of them (backend enforces too). */}
           {purchase.disputeStatus !== 'OPEN' && (
           <div className="space-y-3">
+            {/* Multi-buyer: the seller commits to this buyer. Other interested
+                buyers stay queued until admin confirms a payment. */}
+            {isSeller && ['AWAITING_PAYMENT', 'HANDOVER_PENDING'].includes(purchase.status) && (
+              purchase.selectedBuyerAt ? (
+                <div className="flex items-center gap-3 bg-success/10 border border-success/25 rounded-lg p-4">
+                  <CheckCircle2 size={20} className="text-success flex-shrink-0" />
+                  <p className="text-sm text-textprimary">
+                    <span className="font-medium">Your chosen buyer.</span> They've been asked to complete their
+                    payment. You can still pick someone else until a payment is confirmed.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <button
+                    onClick={() => act('select-buyer')}
+                    disabled={acting}
+                    className="w-full py-3 bg-primary text-white rounded-md font-bold flex items-center justify-center gap-2 hover:bg-primarylight transition-colors disabled:opacity-60"
+                  >
+                    <UserCheck size={18} /> Choose this buyer
+                  </button>
+                  <p className="mt-2 text-xs text-textmuted leading-relaxed">
+                    The car stays listed while buyers are interested — choosing tells {buyerName} they can complete
+                    their payment. The listing only comes off once CarMarket confirms their money.
+                  </p>
+                  <Link
+                    to={`/messages/${purchase.buyerId}/${purchase.vehicleId}`}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primarylight"
+                  >
+                    <MessageCircle size={14} /> Message {buyerName}
+                  </Link>
+                </div>
+              )
+            )}
+
             {/* Escrow orders: seller marks the physical handover first… */}
             {isSeller && purchase.method !== 'CASH' && purchase.status === 'PAID_HELD' && !purchase.sellerHandoverAt && (
               <div>

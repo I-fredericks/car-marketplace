@@ -74,6 +74,11 @@ async function applyVerifiedPurchase(purchase, { channel } = {}) {
       },
     });
     if (claim.count === 0) return null;
+    // Money confirmed: the listing finally comes off the market.
+    await tx.vehicle.updateMany({
+      where: { id: purchase.vehicleId, status: 'AVAILABLE' },
+      data: { status: 'RESERVED' },
+    }).catch((e) => console.warn('Vehicle lock on escrow skipped:', e.message));
     return tx.purchase.findUnique({ where: { id: purchase.id } });
   }, { timeout: 15000 });
 }
@@ -177,6 +182,15 @@ async function markEscrowFunded(purchaseId, { channel, paymentRef, verifiedBy } 
       },
     });
     if (claim.count === 0) return null;
+    // Admin confirmed the money: the listing comes off the market now —
+    // other interested buyers can no longer order it.
+    const locked = await tx.purchase.findUnique({ where: { id: purchaseId }, select: { vehicleId: true } });
+    if (locked) {
+      await tx.vehicle.updateMany({
+        where: { id: locked.vehicleId, status: 'AVAILABLE' },
+        data: { status: 'RESERVED' },
+      }).catch((e) => console.warn('Vehicle lock on escrow skipped:', e.message));
+    }
     return tx.purchase.findUnique({ where: { id: purchaseId } });
   }, { maxWait: 15000, timeout: 15000 });
   if (updated) onEscrowFunded(updated, { actorId: verifiedBy });
@@ -244,13 +258,20 @@ const initiatePurchase = async (req, res) => {
     }
 
     const purchase = await prisma.$transaction(async (tx) => {
-      // Reserve the vehicle: only succeeds if still AVAILABLE
-      const reserve = await tx.vehicle.updateMany({
-        where: { id: vehicle.id, status: 'AVAILABLE' },
-        data: { status: 'RESERVED' },
+      // Multi-buyer model: placing an order does NOT take the car off the
+      // market. The listing stays AVAILABLE with a growing interested count;
+      // it only comes off when admin confirms a buyer's payment (escrow) or
+      // a cash handover is confirmed.
+      const dup = await tx.purchase.findFirst({
+        where: {
+          vehicleId: vehicle.id,
+          buyerId: req.user.id,
+          status: { in: ['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'] },
+        },
+        select: { id: true },
       });
-      if (reserve.count === 0) {
-        throw new Error('This vehicle is no longer available.');
+      if (dup) {
+        throw new Error('You already have an open order on this car.');
       }
 
       // Negotiated price wins: an accepted offer freezes THIS buyer's price.
@@ -293,11 +314,17 @@ const initiatePurchase = async (req, res) => {
     }, { maxWait: 15000, timeout: 15000 }); // pooler: maxWait covers pool-queue acquisition too
 
     // Tell the seller someone is buying their car (fire-and-forget)
+    const openOrders = await prisma.purchase.count({
+      where: {
+        vehicleId: vehicle.id,
+        status: { in: ['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'] },
+      },
+    });
     notifyUser({
       userId: vehicle.seller.user.id,
       type: 'PURCHASE_NEW_ORDER',
-      title: method === 'CASH' ? 'Your car is reserved' : 'A buyer is paying for your car',
-      body: `${vehicle.year} ${vehicle.make} ${vehicle.model} · ${GHS(amount)}${method === 'CASH' ? ' · Cash at handover' : ''}`,
+      title: openOrders > 1 ? `${openOrders} buyers are interested in your car` : 'A buyer is interested in your car',
+      body: `${vehicle.year} ${vehicle.make} ${vehicle.model} · ${GHS(amount)}${method === 'CASH' ? ' · Cash at handover' : ''} — review your orders and choose who to sell to.`,
       data: { path: `/purchases/${purchase.id}`, purchaseId: purchase.id },
     });
 
@@ -310,7 +337,7 @@ const initiatePurchase = async (req, res) => {
     // platform account and be matched on the statement.
     res.status(201).json({ purchase, escrow: true, paymentInstructions: instructionsFor(purchase) });
   } catch (error) {
-    if (error.message === 'This vehicle is no longer available.') {
+    if (error.message === 'This vehicle is no longer available.' || error.message === 'You already have an open order on this car.') {
       return res.status(409).json({ message: error.message });
     }
     console.error('Error initiating purchase:', error);
@@ -659,10 +686,21 @@ const confirmHandover = async (req, res) => {
       return res.status(400).json({ message: `Cannot confirm handover from status ${purchase.status}.` });
     }
 
-    const updated = await prisma.purchase.update({
-      where: { id: purchaseId },
-      data: { status: 'DELIVERED', completedAt: new Date() }, // handed over; cash collection still pending
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const claim = await tx.purchase.updateMany({
+        where: { id: purchaseId, status: 'HANDOVER_PENDING' },
+        data: { status: 'DELIVERED', completedAt: new Date() }, // handed over; cash collection still pending
+      });
+      if (claim.count === 0) return null;
+      // The car physically changed hands: this cash sale is committed, so
+      // the listing comes off the market for everyone else.
+      await tx.vehicle.updateMany({
+        where: { id: purchase.vehicleId, status: 'AVAILABLE' },
+        data: { status: 'RESERVED' },
+      }).catch((e) => console.warn('Vehicle lock on cash handover skipped:', e.message));
+      return tx.purchase.findUnique({ where: { id: purchaseId } });
+    }, { maxWait: 15000, timeout: 15000 });
+    if (!updated) return res.json({ status: 'already-completed', purchase });
     res.json({ status: 'success', purchase: updated });
   } catch (error) {
     console.error('Error confirming handover:', error);
@@ -734,11 +772,24 @@ const cancelPurchase = async (req, res) => {
       });
       if (claim.count === 0) return null;
 
-      // Free the vehicle for other buyers again
-      await tx.vehicle.update({
-        where: { id: purchase.vehicleId },
-        data: { status: 'AVAILABLE' },
-      }).catch((e) => console.warn('Purchase cancel: vehicle free skipped:', e.message));
+      // The listing only came off the market when money was confirmed. If
+      // THIS order had locked it and no other confirmed order holds it, put
+      // it back. Pre-payment cancels never touched the vehicle status.
+      if (purchase.status === 'PAID_HELD' || purchase.status === 'DELIVERED') {
+        const otherConfirmed = await tx.purchase.count({
+          where: {
+            vehicleId: purchase.vehicleId,
+            id: { not: purchase.id },
+            status: { in: ['PAID_HELD', 'DELIVERED'] },
+          },
+        });
+        if (otherConfirmed === 0) {
+          await tx.vehicle.updateMany({
+            where: { id: purchase.vehicleId, status: 'RESERVED' },
+            data: { status: 'AVAILABLE' },
+          }).catch((e) => console.warn('Purchase cancel: vehicle free skipped:', e.message));
+        }
+      }
 
       return tx.purchase.findUnique({ where: { id: purchase.id } });
   }, { maxWait: 15000, timeout: 15000 }); // pooler: maxWait covers pool-queue acquisition too
@@ -750,6 +801,61 @@ const cancelPurchase = async (req, res) => {
   } catch (error) {
     console.error('Error cancelling purchase:', error);
     res.status(500).json({ message: 'Server error cancelling purchase' });
+  }
+};
+
+// @desc    Seller picks which interested buyer gets the car (multi-buyer
+//          model: orders queue up as "interested" until this choice)
+// @route   POST /api/purchases/:id/select-buyer
+// @access  Private (Seller of the order)
+const selectBuyer = async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: { vehicle: { select: { id: true, year: true, make: true, model: true } } },
+    });
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found.' });
+
+    const seller = await resolveSellerProfile(req.user.id);
+    if (!seller || purchase.sellerId !== seller.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+    if (!['AWAITING_PAYMENT', 'HANDOVER_PENDING'].includes(purchase.status)) {
+      return res.status(400).json({ message: `Cannot choose a buyer from status ${purchase.status}.` });
+    }
+
+    // One chosen buyer per listing: selecting here clears the flag on the
+    // seller's other open orders for the same vehicle.
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.purchase.updateMany({
+        where: {
+          vehicleId: purchase.vehicleId,
+          id: { not: purchase.id },
+          selectedBuyerAt: { not: null },
+          status: { in: ['AWAITING_PAYMENT', 'HANDOVER_PENDING'] },
+        },
+        data: { selectedBuyerAt: null },
+      });
+      return tx.purchase.update({
+        where: { id: purchaseId },
+        data: { selectedBuyerAt: new Date() },
+      });
+    }, { maxWait: 15000, timeout: 15000 });
+
+    // Nudge the chosen buyer to finish their payment/handover.
+    notifyUser({
+      userId: purchase.buyerId,
+      type: 'PURCHASE_SELECTED',
+      title: 'The seller chose you 🎉',
+      body: `You were selected for the ${purchase.vehicle.year} ${purchase.vehicle.make} ${purchase.vehicle.model}. ${purchase.method === 'CASH' ? 'Arrange the handover with the seller.' : 'Complete your payment to lock the car in.'}`,
+      data: { path: `/purchases/${purchase.id}`, purchaseId: purchase.id },
+    });
+
+    res.json({ status: 'success', purchase: updated });
+  } catch (error) {
+    console.error('Error selecting buyer:', error);
+    res.status(500).json({ message: 'Server error choosing buyer' });
   }
 };
 
@@ -808,6 +914,7 @@ module.exports = {
   sellerHandover,
   openDispute,
   cancelPurchase,
+  selectBuyer,
   listPurchases,
   getPurchase,
 

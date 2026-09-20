@@ -13,6 +13,7 @@ const {
   sellerHandover,
   openDispute,
   cancelPurchase,
+  selectBuyer,
   listPurchases,
   getPurchase,
 } = require('../controllers/purchaseController');
@@ -33,5 +34,7 @@ router.post('/:id/seller-collected', sellerCollected);
 router.post('/:id/seller-handover', sellerHandover);
 router.post('/:id/open-dispute', openDispute);
 router.post('/:id/cancel', cancelPurchase);
+// Multi-buyer model: seller picks which interested buyer gets the car.
+router.post('/:id/select-buyer', selectBuyer);
 
 module.exports = router;

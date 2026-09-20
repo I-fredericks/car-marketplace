@@ -200,7 +200,7 @@ const Checkout = () => {
                 <span className="font-medium text-textprimary">Pay cash at handover</span>
               </div>
               <p className="text-xs text-textsecondary leading-relaxed">
-                We reserve the car for you; you pay the seller in person.
+                Order now, pay the seller in person at handover. The seller chooses who to sell to.
               </p>
             </button>
           </div>
@@ -252,14 +252,14 @@ const Checkout = () => {
             {payMode === 'PAYSTACK'
               ? `Pay GH₵${Number(payableGhs ?? car.price).toLocaleString()} securely`
               : payMode === 'CASH'
-                ? 'Reserve this car (cash)'
+                ? 'Order this car (cash)'
                 : `Continue — pay GH₵${Number(payableGhs ?? car.price).toLocaleString()} by ${payMode === 'MOMO' ? 'MoMo' : 'transfer'}`}
           </button>
 
           <p className="mt-4 text-xs text-textsecondary flex items-start gap-2">
             <ShieldCheck size={14} className="text-success flex-shrink-0 mt-0.5" />
             {payMode === 'CASH'
-              ? 'Cash reservation: the car is held for you, but the handover deal is between you and the seller — no platform protection.'
+              ? 'Cash order: the seller chooses who to sell to and the handover deal is between you two — no platform protection.'
               : <>Escrow protected: CarMarket holds your payment and only releases it to the seller after you confirm you have the car. Card gateways would cost ~2% — bank and MoMo transfers keep that in your pocket. Read the <Link to="/buyer-protection" className="text-primary font-semibold underline">Buyer Protection Guarantee</Link>.</>}
           </p>
         </div>

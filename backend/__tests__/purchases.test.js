@@ -153,19 +153,55 @@ describe('Vehicle purchase (escrow checkout)', () => {
 
     const prisma = require('./_db');
     try {
+      // Multi-buyer model: an open order does NOT take the listing off the
+      // market — it only counts as interest until the seller picks a buyer
+      // and admin confirms that buyer's payment.
       const v = await prisma.vehicle.findUnique({ where: { id: ids.vehicleCash } });
-      expect(v.status).toEqual('RESERVED');
+      expect(v.status).toEqual('AVAILABLE');
     } finally {
-      
+
     }
   });
 
-  it('blocks second checkout on a reserved vehicle', async () => {
+  it('lets a second buyer order the same car (multi-buyer interest)', async () => {
+    const res = await request(app)
+      .post('/api/purchases')
+      .set('Authorization', `Bearer ${tokens.stranger}`)
+      .send({ vehicleId: ids.vehicleCash, method: 'CASH', deliveryMode: 'PICKUP' });
+    expect(res.statusCode).toEqual(201);
+    ids.strangerCashPurchase = res.body.purchase.id;
+  });
+
+  it('blocks the same buyer from double-ordering one car', async () => {
     const res = await request(app)
       .post('/api/purchases')
       .set('Authorization', `Bearer ${tokens.stranger}`)
       .send({ vehicleId: ids.vehicleCash, method: 'CASH', deliveryMode: 'PICKUP' });
     expect(res.statusCode).toEqual(409);
+  });
+
+  it('seller chooses one buyer; the chosen buyer is notified', async () => {
+    const prisma = require('./_db');
+    // Seller picks the stranger's order; selection is exclusive per listing.
+    const res = await request(app)
+      .post(`/api/purchases/${ids.strangerCashPurchase}/select-buyer`)
+      .set('Authorization', `Bearer ${tokens.sellerCash}`);
+    expect(res.statusCode).toEqual(200);
+
+    const chosen = await prisma.purchase.findUnique({ where: { id: ids.strangerCashPurchase } });
+    expect(chosen.selectedBuyerAt).not.toBeNull();
+    const other = await prisma.purchase.findUnique({ where: { id: ids.cashPurchase } });
+    expect(other.selectedBuyerAt).toBeNull();
+
+    let selectedNote = false;
+    for (let attempt = 0; attempt < 5 && !selectedNote; attempt += 1) {
+      const notes = await request(app)
+        .get('/api/notifications')
+        .set('Authorization', `Bearer ${tokens.stranger}`);
+      selectedNote = notes.body.notifications.some((n) => n.type === 'PURCHASE_SELECTED');
+      if (!selectedNote) await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(selectedNote).toBe(true);
   });
 
   it('rejects invalid input and self-purchases', async () => {
@@ -415,11 +451,12 @@ describe('Vehicle purchase (escrow checkout)', () => {
   });
 
   it('cancelling frees the vehicle for other buyers', async () => {
-    // Hook: stranger tries to steal mid-flow and still gets 409
+    // Multi-buyer model: a second buyer CAN also order mid-flow (201) — the
+    // listing stays on the market as interest until money is confirmed.
     expect((await request(app)
       .post('/api/purchases')
       .set('Authorization', `Bearer ${tokens.stranger}`)
-      .send({ vehicleId: ids.vehicleCancel, method: 'CASH', deliveryMode: 'PICKUP' })).statusCode).toEqual(409);
+      .send({ vehicleId: ids.vehicleCancel, method: 'CASH', deliveryMode: 'PICKUP' })).statusCode).toEqual(201);
 
     const list = await request(app)
       .get('/api/purchases')
@@ -440,7 +477,7 @@ describe('Vehicle purchase (escrow checkout)', () => {
     // A fresh checkout now succeeds
     const retry = await request(app)
       .post('/api/purchases')
-      .set('Authorization', `Bearer ${tokens.stranger}`)
+      .set('Authorization', `Bearer ${tokens.buyer}`)
       .send({ vehicleId: ids.vehicleCancel, method: 'CASH', deliveryMode: 'PICKUP' });
     expect(retry.statusCode).toEqual(201);
     expect(retry.body.purchase.status).toEqual('HANDOVER_PENDING');
@@ -503,8 +540,11 @@ describe('Vehicle purchase (escrow checkout)', () => {
       .set('Authorization', `Bearer ${tokens.sellerCash}`);
     expect(sales.statusCode).toEqual(200);
     expect(sales.body.purchases.length).toEqual(0); // never bought anything
-    expect(sales.body.sales.length).toEqual(1);
-    expect(sales.body.sales[0].status).toEqual('COMPLETED');
+    // Multi-buyer: this seller's cash car collected the buyer's completed
+    // order plus the stranger's still-open interest order.
+    const completedSale = sales.body.sales.find((s) => s.status === 'COMPLETED');
+    expect(completedSale).toBeDefined();
+    expect(sales.body.sales.length).toEqual(2);
 
     const buyerList = await request(app)
       .get('/api/purchases')

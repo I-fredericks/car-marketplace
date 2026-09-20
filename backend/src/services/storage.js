@@ -72,6 +72,51 @@ const makeThumbBuffer = async (buffer) => {
 
 const randomName = (ext) => `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
 
+// ── Jiji-style provenance watermark ──────────────────────────────────
+// Burned into every listing photo at upload: scraped or re-shared images
+// keep advertising where the car was listed. Disable with
+// WATERMARK_IMAGES=false (e.g. for fixtures).
+const WATERMARK_LABEL = 'Posted on CarMarket Ghana';
+
+/** SVG overlay sized for the target image: a translucent pill bottom-right. */
+const watermarkSvg = (width, height) => {
+  const fontSize = Math.max(12, Math.round(width * 0.026));
+  const pad = Math.max(4, Math.round(fontSize * 0.45));
+  const labelWidth = Math.round(WATERMARK_LABEL.length * fontSize * 0.55);
+  const barWidth = labelWidth + pad * 2;
+  const barHeight = fontSize + pad * 2;
+  // Skip tiny images where the pill would swallow the photo.
+  if (barWidth + pad * 2 > width || barHeight * 2 > height) return null;
+  const x = width - barWidth - pad;
+  const y = height - barHeight - pad;
+  const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${Math.round(barHeight / 2)}" fill="rgba(10,16,32,0.55)"/>
+    <text x="${Math.round(x + barWidth / 2)}" y="${Math.round(y + barHeight / 2 + fontSize * 0.35)}" text-anchor="middle"
+      font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-weight="bold"
+      font-size="${fontSize}" fill="#ffffff" letter-spacing="${Math.max(0.3, fontSize * 0.02).toFixed(1)}">${WATERMARK_LABEL}</text>
+  </svg>`;
+  return Buffer.from(svg);
+};
+
+/** EXIF-rotate + watermark a raster buffer; resolves to a sharp pipeline.
+ *  The SVG is rasterized to PNG first: this sharp build silently drops
+ *  raw SVG buffers as composite inputs. */
+const stampedImage = async (buffer) => {
+  const image = sharp(buffer).rotate();
+  if (String(process.env.WATERMARK_IMAGES || '').toLowerCase() === 'false') return image;
+  try {
+    const meta = await image.metadata();
+    const overlay = meta.width && meta.height ? watermarkSvg(meta.width, meta.height) : null;
+    if (overlay) {
+      const overlayPng = await sharp(overlay).png().toBuffer();
+      return image.composite([{ input: overlayPng }]);
+    }
+  } catch {
+    // Unreadable dimensions: store unstamped rather than failing the upload.
+  }
+  return image;
+};
+
 // Trusted public-image redirect targets. r2.dev subdomains (Cloudflare R2
 // public buckets) are trusted wholesale: our S3 uploads land there and the
 // account-hash subdomain differs per deployment, so an exact-host env list
@@ -123,7 +168,7 @@ const saveUpload = async (buffer, originalName, mimetype) => {
   // other code path changes.
   if (driver() === 'db') {
     if (isRaster) {
-      const normalized = await sharp(buffer).rotate().webp({ quality: 80 }).toBuffer();
+      const normalized = await (await stampedImage(buffer)).webp({ quality: 80 }).toBuffer();
       return { url: `data:image/webp;base64,${normalized.toString('base64')}`, thumbUrl: null };
     }
     return {
@@ -148,7 +193,7 @@ const saveUpload = async (buffer, originalName, mimetype) => {
 
     if (isRaster) {
       // Normalize originals to WebP as well: phones upload 5-15MB HEIC/JPEGs
-      const normalized = await sharp(buffer).rotate().webp({ quality: 82 }).toBuffer();
+      const normalized = await (await stampedImage(buffer)).webp({ quality: 82 }).toBuffer();
       const thumb = await makeThumbBuffer(normalized);
       const thumbKey = `uploads/${path.basename(base, '.webp')}_thumb.webp`;
       await Promise.all([
@@ -168,11 +213,12 @@ const saveUpload = async (buffer, originalName, mimetype) => {
   // Disk fallback
   const filename = randomName(ext);
   const original = path.join(uploadsDir, filename);
-  fs.writeFileSync(original, buffer);
+  const originalBytes = isRaster ? await (await stampedImage(buffer)).webp({ quality: 82 }).toBuffer() : buffer;
+  fs.writeFileSync(original, originalBytes);
 
   let thumbUrl = null;
   if (isRaster) {
-    const thumb = await makeThumbBuffer(buffer);
+    const thumb = await makeThumbBuffer(originalBytes);
     if (thumb) {
       const thumbName = diskThumbName(filename);
       fs.writeFileSync(path.join(uploadsDir, thumbName), thumb);
@@ -184,6 +230,8 @@ const saveUpload = async (buffer, originalName, mimetype) => {
 
 module.exports = {
   saveUpload,
+  stampedImage,
+  watermarkSvg,
   makeThumbBuffer,
   isCloudEnabled,
   isTrustedImageHost,

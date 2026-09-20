@@ -167,6 +167,9 @@ const CarDetails = () => {
               </p>
               <div className="flex items-center gap-3 text-sm">
                 <Badge type="neutral">{formatLabel(car.condition)}</Badge>
+                {car.interestedCount > 0 && (
+                  <Badge type="accent">{car.interestedCount} interested</Badge>
+                )}
                 <span className="flex items-center gap-1 text-textsecondary">
                   <MapPin size={16} /> {car.location}
                 </span>
@@ -235,6 +238,9 @@ const CarDetails = () => {
                 </p>
                 <div className="flex items-center gap-3">
                   <Badge type="neutral">{formatLabel(car.condition)}</Badge>
+                  {car.interestedCount > 0 && (
+                    <Badge type="accent">{car.interestedCount} interested</Badge>
+                  )}
                   <span className="flex items-center gap-1 text-textsecondary text-sm">
                     <MapPin size={16} /> {car.location}
                   </span>

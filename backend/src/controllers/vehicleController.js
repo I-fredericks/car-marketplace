@@ -54,6 +54,14 @@ const listingCardSelect = {
   noKnownFaults: true, firstOwner: true, registered: true, exchangePossible: true,
   seller: sellerInclude.seller,
   images: imageIdSelect,
+  // Multi-buyer interest: open orders queue up while the listing stays live.
+  _count: { select: { purchases: { where: { status: { in: ['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'] } } } } },
+};
+
+/** Flatten Prisma's filtered _count into a client-friendly integer. */
+const withInterestedCount = (vehicle) => {
+  if (!vehicle || typeof vehicle !== 'object') return vehicle;
+  return { ...vehicle, interestedCount: vehicle._count?.purchases ?? 0 };
 };
 
 // Fetch listing card rows for an ordered list of ids, preserving the given order
@@ -63,7 +71,7 @@ const hydrateVehiclesByIds = async (ids) => {
     where: { id: { in: ids } },
     select: listingCardSelect,
   });
-  const byId = new Map(rows.map((v) => [v.id, v]));
+  const byId = new Map(rows.map((v) => [v.id, withInterestedCount(v)]));
   return ids.map((id) => byId.get(id)).filter(Boolean);
 };
 
@@ -302,7 +310,7 @@ const getVehicles = async (req, res) => {
         prisma.vehicle.count({ where }),
       ]);
       const fastResponse = {
-        vehicles,
+        vehicles: vehicles.map(withInterestedCount),
         pagination: { total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / limit) },
       };
       await cache.setJSON(cacheKey, fastResponse, 30);
@@ -474,6 +482,15 @@ const getVehicleById = async (req, res) => {
       return res.status(404).json({ message: 'Vehicle not found' });
     }
 
+    // Multi-buyer interest: open orders while the listing stays live.
+    const interestedCount = await prisma.purchase.count({
+      where: {
+        vehicleId: vehicle.id,
+        status: { in: ['AWAITING_PAYMENT', 'HANDOVER_PENDING', 'PAID_HELD', 'DELIVERED'] },
+      },
+    });
+    const withCount = { ...vehicle, interestedCount };
+
     const isOwner = req.user && vehicle.seller.userId === req.user.id;
     const isAdmin = req.user && req.user.role === 'ADMIN';
     const isExpired = vehicle.expiresAt && vehicle.expiresAt <= new Date();
@@ -499,13 +516,13 @@ const getVehicleById = async (req, res) => {
             select: { id: true },
           });
           if (participant) {
-            return res.json({ ...vehicle, images: withoutImageData(vehicle.images), documents: [] });
+            return res.json({ ...withCount, images: withoutImageData(vehicle.images), documents: [] });
           }
         }
         return res.status(404).json({ message: 'Vehicle not found' });
       }
       // Never ship registration documents or raw image blobs to the public
-      return res.json({ ...vehicle, images: withoutImageData(vehicle.images) });
+      return res.json({ ...withCount, images: withoutImageData(vehicle.images) });
     }
 
     // Owner/admin view: include document metadata (never the raw blobs)
@@ -513,7 +530,7 @@ const getVehicleById = async (req, res) => {
       where: { vehicleId: vehicle.id },
       select: { id: true, documentType: true },
     });
-    res.json({ ...vehicle, documents: withDocs });
+    res.json({ ...withCount, documents: withDocs });
   } catch (error) {
     console.error('Error fetching vehicle:', error);
     res.status(500).json({ message: 'Server error fetching vehicle' });

@@ -418,6 +418,11 @@ model Purchase {
   // buyer takes the car; the buyer's receipt-confirmation closes the sale.
   sellerHandoverAt DateTime?
 
+  // Multi-buyer model: orders no longer lock the listing. When several
+  // buyers are interested, this is the moment the seller picked the one
+  // they'll sell to (that buyer is nudged to complete payment).
+  selectedBuyerAt DateTime?
+
   deliveryMode String // PICKUP (buyer collects) | DELIVERY (seller ships)
   address      String?
   phone        String?

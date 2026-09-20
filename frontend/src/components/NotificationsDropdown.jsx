@@ -50,9 +50,10 @@ const NotificationsDropdown = () => {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)));
     }
     if (n.data?.path) navigate(n.data.path);
-    else if (n.type === 'NEW_MESSAGE' && n.data?.senderId != null) {
-      // Support threads carry no vehicleId — the 'general' sentinel routes
-      // them to the listing-less conversation.
+    else if (n.data?.senderId != null && (n.type === 'NEW_MESSAGE' || n.type === 'LISTING_SAVED')) {
+      // Chat-opening notifications: messages, and saves (the seller can make
+      // the first move on an interested buyer). Support threads carry no
+      // vehicleId — the 'general' sentinel routes them.
       navigate(`/messages/${n.data.senderId}/${n.data.vehicleId ?? 'general'}`);
     }
     setOpen(false);
