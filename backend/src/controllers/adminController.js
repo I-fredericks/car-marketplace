@@ -70,7 +70,7 @@ const sendAdminMessageToUsers = async (adminUser, recipientIds, content) => {
       try {
         pushToUser(message.receiverId, 'message:new', {
           ...message,
-          vehicleTitle: 'CarMarket support',
+          vehicleTitle: 'AutolockCars support',
         });
       } catch (_) {}
       try {
@@ -85,7 +85,7 @@ const sendAdminMessageToUsers = async (adminUser, recipientIds, content) => {
             senderId: adminUser.id,
             senderName: adminUser.name,
             vehicleId: null,
-            vehicleTitle: 'CarMarket support',
+            vehicleTitle: 'AutolockCars support',
             path: `/messages/${adminUser.id}/general`,
           },
         });

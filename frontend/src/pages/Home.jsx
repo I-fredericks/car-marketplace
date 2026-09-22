@@ -190,6 +190,7 @@ const Home = () => {
                   sellerName={car.seller?.user?.name || 'Private Seller'}
                   verified={Boolean(car.seller?.verified)}
                   sellerRating={car.seller?.rating || 0}
+                  interestedCount={car.interestedCount || 0}
                   badge="Featured"
                   sellerPlanBadge={getSellerPlanBadge(car)}
                   imageUrl={imageUrl}
@@ -211,7 +212,7 @@ const Home = () => {
       <section className="hidden md:block bg-surface border-t border-bordercol py-16 mt-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="font-display font-bold text-3xl text-primary mb-4">Why Buy From CarMarket?</h2>
+            <h2 className="font-display font-bold text-3xl text-primary mb-4">Why Buy From AutolockCars?</h2>
             <p className="text-textsecondary">Experience a secure and seamless car buying journey.</p>
           </div>
 

@@ -211,12 +211,12 @@ const PurchaseDetail = () => {
   // Freeze the escrow: dispute blocks confirm/cancel until admin mediates
   const openDisputePrompt = async () => {
     const reason = window.prompt(
-      'Describe the problem in detail (at least 10 characters).\n\nThis freezes the funds on this order until CarMarket mediates.',
+      'Describe the problem in detail (at least 10 characters).\n\nThis freezes the funds on this order until AutolockCars mediates.',
       ''
     );
     if (reason === null) return; // cancelled
     if (reason.trim().length < 10) {
-      setError('Describe the problem in at least 10 characters so CarMarket can mediate.');
+      setError('Describe the problem in at least 10 characters so AutolockCars can mediate.');
       return;
     }
     setActing(true);
@@ -246,7 +246,7 @@ const PurchaseDetail = () => {
                 <Landmark size={18} className="text-primary" /> Pay {ghs(instructions.amountPesewas)} to escrow
               </h3>
               <p className="text-xs text-textsecondary mb-4">
-                Send exactly this amount to the CarMarket account below — the money is held in escrow until you confirm you have the car.
+                Send exactly this amount to the AutolockCars account below — the money is held in escrow until you confirm you have the car.
               </p>
 
               <div className="bg-surface border border-bordercol rounded-md p-4 space-y-2 text-sm mb-4">
@@ -305,7 +305,7 @@ const PurchaseDetail = () => {
                 <div className="flex items-center gap-3 bg-surface border border-success/25 rounded-md p-3">
                   <Loader2 size={16} className="animate-spin text-success" />
                   <p className="text-sm text-textprimary">
-                    Payment reported (ref <span className="font-medium">{purchase.paymentRef}</span>) — CarMarket is confirming it against the account. You'll be notified shortly.
+                    Payment reported (ref <span className="font-medium">{purchase.paymentRef}</span>) — AutolockCars is confirming it against the account. You'll be notified shortly.
                   </p>
                 </div>
               )}
@@ -335,7 +335,7 @@ const PurchaseDetail = () => {
                 {purchase.method === 'CASH'
                   ? 'Cash at handover'
                   : purchase.method === 'MOMO'
-                    ? 'MoMo to CarMarket (escrow)'
+                    ? 'MoMo to AutolockCars (escrow)'
                     : purchase.method === 'PAYSTACK'
                       ? 'Online (escrow)'
                       : 'Bank transfer (escrow)'}
@@ -406,7 +406,7 @@ const PurchaseDetail = () => {
                 {purchase.disputeReason}
               </p>
               <p className="text-xs text-textsecondary mt-2">
-                CarMarket is mediating. Nothing moves on this order until the dispute is resolved. Opened {new Date(purchase.disputeOpenedAt).toLocaleString()}.
+                AutolockCars is mediating. Nothing moves on this order until the dispute is resolved. Opened {new Date(purchase.disputeOpenedAt).toLocaleString()}.
               </p>
             </div>
           )}
@@ -467,7 +467,7 @@ const PurchaseDetail = () => {
                 <span className="font-medium text-textprimary">GH₵{(purchase.amount / 100).toLocaleString()}</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-textsecondary">CarMarket service fee ({(purchase.commissionBps || 0) / 100}%)</span>
+                <span className="text-textsecondary">AutolockCars service fee ({(purchase.commissionBps || 0) / 100}%)</span>
                 <span className="text-textsecondary">− GH₵{(Math.round(purchase.amount * (purchase.commissionBps || 0) / 10000) / 100).toLocaleString()}</span>
               </div>
               <div className="flex justify-between py-1 border-t border-bordercol mt-1 pt-2">
@@ -506,7 +506,7 @@ const PurchaseDetail = () => {
                   </button>
                   <p className="mt-2 text-xs text-textmuted leading-relaxed">
                     The car stays listed while buyers are interested — choosing tells {buyerName} they can complete
-                    their payment. The listing only comes off once CarMarket confirms their money.
+                    their payment. The listing only comes off once AutolockCars confirms their money.
                   </p>
                   <Link
                     to={`/messages/${purchase.buyerId}/${purchase.vehicleId}`}

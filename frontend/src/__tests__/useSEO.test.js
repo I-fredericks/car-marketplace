@@ -15,13 +15,13 @@ describe('useSEO', () => {
 
   it('sets the document title with the site suffix', () => {
     renderHook(() => useSEO({ title: 'Test Page' }));
-    expect(document.title).toBe('Test Page | CarMarket Ghana');
+    expect(document.title).toBe('Test Page | AutolockCars');
   });
 
   it('writes description and Open Graph tags', () => {
     renderHook(() => useSEO({ title: 'A Car', description: 'A nice car', image: 'http://x/car.jpg' }));
     expect(metaContent('name="description"')).toBe('A nice car');
-    expect(metaContent('property="og:title"')).toBe('A Car | CarMarket Ghana');
+    expect(metaContent('property="og:title"')).toBe('A Car | AutolockCars');
     expect(metaContent('property="og:description"')).toBe('A nice car');
     expect(metaContent('property="og:image"')).toBe('http://x/car.jpg');
     expect(metaContent('name="twitter:card"')).toBe('summary_large_image');

@@ -176,6 +176,7 @@ const SearchResults = () => {
                         sellerName={car.seller?.user?.name || 'Private Seller'}
                         verified={Boolean(car.seller?.verified)}
                         sellerRating={car.seller?.rating || 0}
+                        interestedCount={car.interestedCount || 0}
                         sellerPlanBadge={getSellerPlanBadge(car)}
                         imageUrl={imageUrl}
                       />

@@ -30,7 +30,7 @@ async function main() {
   // 1. Create Admin User
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@carmarket.com',
+      email: 'admin@autolockcars.com',
       password: await bcrypt.hash(adminPassword, 10),
       name: 'System Admin',
       phone: '+233201234567',
@@ -38,12 +38,12 @@ async function main() {
       verified: true,
     },
   });
-  console.log('✅ Admin user created: admin@carmarket.com');
+  console.log('✅ Admin user created: admin@autolockcars.com');
 
   // 2. Create Seller User 1 (Dealer)
   const sellerUser1 = await prisma.user.create({
     data: {
-      email: 'kwame.dealer@carmarket.com',
+      email: 'kwame.dealer@autolockcars.com',
       password: hashedPassword,
       name: 'Kwame Mensah (Ghana Motors)',
       phone: '+233244112233',
@@ -61,12 +61,12 @@ async function main() {
       rating: 4.8,
     },
   });
-  console.log('✅ Seller 1 created: kwame.dealer@carmarket.com');
+  console.log('✅ Seller 1 created: kwame.dealer@autolockcars.com');
 
   // 3. Create Seller User 2 (Private)
   const sellerUser2 = await prisma.user.create({
     data: {
-      email: 'kofi.private@carmarket.com',
+      email: 'kofi.private@autolockcars.com',
       password: hashedPassword,
       name: 'Kofi Owusu',
       phone: '+233509876543',
@@ -84,12 +84,12 @@ async function main() {
       rating: 4.5,
     },
   });
-  console.log('✅ Seller 2 created: kofi.private@carmarket.com');
+  console.log('✅ Seller 2 created: kofi.private@autolockcars.com');
 
   // 4. Create Buyer User
   const buyerUser = await prisma.user.create({
     data: {
-      email: 'abena.buyer@carmarket.com',
+      email: 'abena.buyer@autolockcars.com',
       password: hashedPassword,
       name: 'Abena Appiah',
       phone: '+233277665544',
@@ -97,7 +97,7 @@ async function main() {
       verified: true,
     },
   });
-  console.log('✅ Buyer created: abena.buyer@carmarket.com');
+  console.log('✅ Buyer created: abena.buyer@autolockcars.com');
 
   // SVG Data URI fallback for images
   const sampleCarSvg = (make, model, color) => 
@@ -298,9 +298,9 @@ async function main() {
 
   console.log('\n🎉 Database Seeding Complete!');
   console.log('\n🔑 Demo Credentials:');
-  console.log(`   Admin:  admin@carmarket.com      / ${adminPassword}`);
-  console.log(`   Seller: kwame.dealer@carmarket.com / ${demoPassword}`);
-  console.log(`   Buyer:  abena.buyer@carmarket.com  / ${demoPassword}`);
+  console.log(`   Admin:  admin@autolockcars.com      / ${adminPassword}`);
+  console.log(`   Seller: kwame.dealer@autolockcars.com / ${demoPassword}`);
+  console.log(`   Buyer:  abena.buyer@autolockcars.com  / ${demoPassword}`);
 }
 
 main()

@@ -1,4 +1,4 @@
-# Production go-live checklist (CarMarket Ghana)
+# Production go-live checklist (AutolockCars)
 
 Deployment mechanics live in [DEPLOY.md](DEPLOY.md). This is the ordered list
 of gates to clear **before** and **after** the first public deploy. Decisions
@@ -35,7 +35,7 @@ public. Rotation is a dashboard/CLI task only you can do:
 - [ ] Seed **manually, not with the dev seed's demo users**: create the real
       admin with `ADMIN_PASSWORD=<strong>` and skip `Password123!` demo
       sellers/buyers — or run the seed then immediately delete demo accounts
-- [ ] Verify: `SELECT email FROM user;` shows no `@carmarket.com` demo rows
+- [ ] Verify: `SELECT email FROM user;` shows no `@autolockcars.com` demo rows
 - [ ] Backups: `scripts/backup-db.sh` exists — schedule it:
       `crontab -e` → `15 3 * * * /path/to/scripts/backup-db.sh >> /var/log/cm-backup.log 2>&1`
       and copy/ship the dump off-box (rclone to S3/R2 free tier)

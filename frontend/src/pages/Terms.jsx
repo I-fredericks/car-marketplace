@@ -11,7 +11,7 @@ const Section = ({ title, children }) => (
 const Terms = () => {
   useSEO({
     title: 'Terms of Service',
-    description: 'The rules for buying, selling and using the CarMarket Ghana marketplace.',
+    description: 'The rules for buying, selling and using the AutolockCars marketplace.',
   });
 
   return (
@@ -22,9 +22,9 @@ const Terms = () => {
 
         <Section title="1. Agreement">
           <p>
-            By using CarMarket Ghana ("CarMarket", the "platform"), you agree to these terms.
-            CarMarket is a marketplace that connects private sellers, dealers and buyers of
-            vehicles in Ghana. CarMarket is not a party to any sale between users.
+            By using AutolockCars ("AutolockCars", the "platform"), you agree to these terms.
+            AutolockCars is a marketplace that connects private sellers, dealers and buyers of
+            vehicles in Ghana. AutolockCars is not a party to any sale between users.
           </p>
         </Section>
 
@@ -42,7 +42,7 @@ const Terms = () => {
             listing details (price, mileage, condition, year, photos) are accurate and not
             misleading. Prohibited content includes stolen vehicles, vehicles with tampered
             identifiers, duplicate listings, and misrepresentation of condition or ownership.
-            CarMarket reviews, approves, rejects or removes listings at its discretion.
+            AutolockCars reviews, approves, rejects or removes listings at its discretion.
           </p>
         </Section>
 
@@ -55,10 +55,10 @@ const Terms = () => {
           </p>
         </Section>
 
-        <Section title="5. Buying and communicating on CarMarket">
+        <Section title="5. Buying and communicating on AutolockCars">
           <p>
-            CarMarket facilitates contact between buyers and sellers but does not verify
-            ownership, condition or roadworthiness unless a listing carries a CarMarket
+            AutolockCars facilitates contact between buyers and sellers but does not verify
+            ownership, condition or roadworthiness unless a listing carries a AutolockCars
             "Verified" badge, which indicates document review only and is not a warranty.
             Buyers are solely responsible for inspecting vehicles and conducting due
             diligence before paying any seller. Never transfer money for a vehicle you have
@@ -77,7 +77,7 @@ const Terms = () => {
         <Section title="7. Liability">
           <p>
             The platform is provided "as is". To the fullest extent permitted by law,
-            CarMarket is not liable for losses arising from transactions between users,
+            AutolockCars is not liable for losses arising from transactions between users,
             inaccurate listing content, or service interruptions.
           </p>
         </Section>
@@ -92,7 +92,7 @@ const Terms = () => {
         <Section title="9. Contact">
           <p>
             Questions about these terms:{' '}
-            <a href="mailto:support@carmarket.com.gh" className="text-primary hover:underline">support@carmarket.com.gh</a>.
+            <a href="mailto:support@autolockcars.com" className="text-primary hover:underline">support@autolockcars.com</a>.
           </p>
         </Section>
       </div>

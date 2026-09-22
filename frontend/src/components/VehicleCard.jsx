@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, ShieldCheck, SlidersHorizontal, Fuel, Gauge } from 'lucide-react';
+import { MapPin, ShieldCheck, SlidersHorizontal, Fuel, Gauge, Users } from 'lucide-react';
 import Badge from './Badge';
 import Avatar from './Avatar';
 import StarRating from './StarRating';
@@ -27,6 +27,7 @@ const VehicleCard = ({
   sellerPlanBadge,
   imageUrl,
   sellerRating = 0,
+  interestedCount = 0,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
   return (
@@ -71,6 +72,11 @@ const VehicleCard = ({
         {/* Condition chip floats above the gradient; honest-facts chips
             (No faults / 1st owner / Trade-in) sit beside it when true */}
         <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-1 sm:gap-1.5 flex-wrap max-w-[92%]">
+          {interestedCount > 0 && (
+            <span className="px-1.5 py-0.5 sm:px-2 sm:py-0.5 bg-black/55 text-white text-[8px] sm:text-[10px] font-bold rounded-md shadow-sm flex items-center gap-1">
+              <Users size={9} className="sm:w-3 sm:h-3" /> {interestedCount} interested
+            </span>
+          )}
           {condition && (
             <span className="px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-white/90 text-[#1B2A4A] text-[9px] sm:text-[11px] font-bold rounded-md shadow-sm backdrop-blur-sm">
               {condition}

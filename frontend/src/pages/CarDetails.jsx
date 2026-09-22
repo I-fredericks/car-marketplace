@@ -60,7 +60,7 @@ const CarDetails = () => {
 
   useSEO(car ? {
     title: `${car.year} ${car.make} ${car.model} for Sale`,
-    description: `${car.year} ${car.make} ${car.model} — GH₵${Number(car.price).toLocaleString()} in ${car.location}, Ghana. ${car.condition?.replace('_', ' ')} · ${car.mileage ? `${car.mileage.toLocaleString()} km` : 'low mileage'} · ${car.transmission}. Contact the seller on CarMarket Ghana.`,
+    description: `${car.year} ${car.make} ${car.model} — GH₵${Number(car.price).toLocaleString()} in ${car.location}, Ghana. ${car.condition?.replace('_', ' ')} · ${car.mileage ? `${car.mileage.toLocaleString()} km` : 'low mileage'} · ${car.transmission}. Contact the seller on AutolockCars.`,
     image: car.images?.length > 0 ? getImageUrl(car.images[0]) : undefined,
     type: 'product',
   } : { title: 'Car Details' });
@@ -69,7 +69,7 @@ const CarDetails = () => {
   // how most buying decisions move. Falls back to wa.me when the browser has
   // no native share sheet.
   const shareListing = async () => {
-    const text = `Check out this ${car.year} ${car.make} ${car.model} — GH₵ ${Number(car.price).toLocaleString()} on CarMarket Ghana`;
+    const text = `Check out this ${car.year} ${car.make} ${car.model} — GH₵ ${Number(car.price).toLocaleString()} on AutolockCars`;
     const url = `${window.location.origin}/car/${car.id}`;
     if (navigator.share) {
       try {
@@ -132,7 +132,7 @@ const CarDetails = () => {
   const seller = car.seller;
   const sellerName = seller?.user?.name || 'Seller';
   const sellerPhone = seller?.user?.phone || '';
-  // "Verified" means CarMarket reviewed the seller's documents — never just
+  // "Verified" means AutolockCars reviewed the seller's documents — never just
   // their account role
   const isVerified = Boolean(seller?.verified);
 
@@ -339,7 +339,7 @@ const CarDetails = () => {
                 </div>
                 <p className="text-xs text-textmuted mt-3 flex items-center gap-1.5">
                   <ShieldCheck size={13} className="text-success" />
-                  Every review is from a buyer who completed an escrowed purchase on CarMarket.
+                  Every review is from a buyer who completed an escrowed purchase on AutolockCars.
                 </p>
               </div>
             )}

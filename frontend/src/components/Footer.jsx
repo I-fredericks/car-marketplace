@@ -18,7 +18,7 @@ const Footer = () => {
             <Link to="/" className="flex items-center gap-2 mb-1 sm:mb-2">
               <Car size={28} className="text-accent" />
               <span className="font-display font-bold text-xl text-white tracking-tight">
-                CarMarket<span className="text-accent">Ghana</span>
+                Autolock<span className="text-accent">Cars</span>
               </span>
             </Link>
             <p className="text-white/70 text-sm leading-relaxed">
@@ -54,10 +54,10 @@ const Footer = () => {
           <div className="col-span-2 lg:col-span-1">
             <h4 className={heading}>Support & Legal</h4>
             <ul className="space-y-2 sm:space-y-3">
-              <li><a href="mailto:support@carmarket.com.gh" className={link}>Help Center</a></li>
+              <li><a href="mailto:support@autolockcars.com" className={link}>Help Center</a></li>
               <li><Link to="/privacy" className={link}>Privacy Policy</Link></li>
               <li><Link to="/terms" className={link}>Terms of Service</Link></li>
-              <li><a href="mailto:support@carmarket.com.gh" className={link}>Contact Us</a></li>
+              <li><a href="mailto:support@autolockcars.com" className={link}>Contact Us</a></li>
             </ul>
           </div>
         </div>
@@ -65,7 +65,7 @@ const Footer = () => {
         {/* Copyright */}
         <div className="pt-6 sm:pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4">
           <p className="text-white/60 text-sm text-center md:text-left">
-            © {new Date().getFullYear()} CarMarket Ghana. All rights reserved.
+            © {new Date().getFullYear()} AutolockCars. All rights reserved.
           </p>
           <div className="text-white/60 text-sm">
             Buying and selling vehicles made simple.
