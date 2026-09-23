@@ -52,7 +52,7 @@ const issueVerificationToken = async (user, origin) => {
 // browser is on the phone; there is no app deep-link requirement).
 const verifyPage = (title, message, ok) => `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} — AutolockCars</title></head>
+<title>${title} — DriveHubCars</title></head>
 <body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#F4F6F9;display:flex;justify-content:center;padding:40px 16px;">
   <div style="max-width:440px;background:#fff;border-radius:16px;padding:32px 28px;text-align:center;box-shadow:0 2px 12px rgba(27,42,74,.08);">
     <div style="font-size:44px;margin-bottom:8px;">${ok ? '&#10004;' : '&#10006;'}</div>
@@ -61,7 +61,7 @@ const verifyPage = (title, message, ok) => `<!doctype html>
     ${ok ? `<p style="margin:0 0 20px;">
       <a href="${appUrl()}/login" style="background:#1B2A4A;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Continue to sign in</a>
     </p>` : '<p style="color:#9CA3AF;font-size:12px;">Open the app and use "Resend verification email" to get a new link.</p>'}
-    <p style="color:#1B2A4A;font-weight:bold;font-size:13px;margin-top:24px;">AutolockCars</p>
+    <p style="color:#1B2A4A;font-weight:bold;font-size:13px;margin-top:24px;">DriveHubCars</p>
   </div>
 </body></html>`;
 
@@ -442,11 +442,11 @@ const resetPasswordPage = async (req, res) => {
   }
   res.send(`<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reset password — AutolockCars</title></head>
+<title>Reset password — DriveHubCars</title></head>
 <body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#F4F6F9;display:flex;justify-content:center;padding:40px 16px;">
   <div style="max-width:440px;width:100%;background:#fff;border-radius:16px;padding:32px 28px;box-shadow:0 2px 12px rgba(27,42,74,.08);">
     <h2 style="color:#1B2A4A;margin:0 0 6px;">Choose a new password</h2>
-    <p style="color:#4B5563;line-height:1.6;margin:0 0 20px;font-size:14px;">AutolockCars — this link expires in 1 hour.</p>
+    <p style="color:#4B5563;line-height:1.6;margin:0 0 20px;font-size:14px;">DriveHubCars — this link expires in 1 hour.</p>
     <div id="form">
       <input id="pw1" type="password" placeholder="New password (min 8 characters)"
         style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #D1D5DB;border-radius:8px;font-size:15px;margin-bottom:12px;">
@@ -536,7 +536,7 @@ const verifyEmail = async (req, res) => {
         prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } }),
         prisma.authToken.deleteMany({ where: { userId: record.userId, type: 'EMAIL_VERIFICATION' } }),
       ]);
-      return res.send(verifyPage('Email confirmed', 'Your AutolockCars account is now active. Welcome aboard!', true));
+      return res.send(verifyPage('Email confirmed', 'Your DriveHubCars account is now active. Welcome aboard!', true));
     }
 
     // An already-verified account clicking a stale link is a success, not an
@@ -728,7 +728,7 @@ const adminLogin = async (req, res) => {
 
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
-        <h2 style="color:#1B2A4A;margin-bottom:16px;">AutolockCars — Staff Portal</h2>
+        <h2 style="color:#1B2A4A;margin-bottom:16px;">DriveHubCars — Staff Portal</h2>
         <p style="color:#4B5563;line-height:1.6;">Your sign-in security code (valid for ${ADMIN_OTP_MINUTES} minutes):</p>
         <div style="font-size:34px;font-weight:bold;letter-spacing:10px;color:#1B2A4A;margin:24px 0;">${code}</div>
         <p style="color:#9CA3AF;font-size:12px;">Never share this code. If you didn't try to sign in, someone knows your password — change it immediately.</p>
@@ -739,7 +739,7 @@ const adminLogin = async (req, res) => {
     await sendMail({
       to: user.email,
       subject: `Your staff sign-in code: ${code}`,
-      text: `Your AutolockCars staff sign-in code is ${code} (valid ${ADMIN_OTP_MINUTES} minutes).`,
+      text: `Your DriveHubCars staff sign-in code is ${code} (valid ${ADMIN_OTP_MINUTES} minutes).`,
       html,
     });
 

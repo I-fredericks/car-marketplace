@@ -5,7 +5,7 @@ const { notifyAdmins } = require('./notificationController');
 const { sendMail, appUrl } = require('../services/mailer');
 
 // Purchase workflow (escrow over flat-fee rails):
-//   BANK_TRANSFER / MOMO: buyer pays into AutolockCars's collection account ->
+//   BANK_TRANSFER / MOMO: buyer pays into DriveHubCars's collection account ->
 //   claims with their reference -> admin confirms against the statement ->
 //   PAID_HELD (escrow) -> buyer confirms receipt -> COMPLETED (payout).
 //   PAYSTACK: legacy orders settled via webhook/verify (card % fees made
@@ -106,11 +106,11 @@ const sendReceiptEmail = (purchase, vehicle, buyer) => {
   ).join('');
   return sendMail({
     to: buyer.email,
-    subject: `Payment confirmed — ${purchase.reference} (AutolockCars)`,
+    subject: `Payment confirmed — ${purchase.reference} (DriveHubCars)`,
     text: `Hi ${buyer.name}, your payment of ${GHS(purchase.amount)} for the ${vehicle.year} ${vehicle.make} ${vehicle.model} was received and is held safely in escrow. Only confirm receipt once you have the car in hand. Receipt: ${receiptUrl}`,
     html: `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
-        <h2 style="color:#1B2A4A;margin-bottom:8px;">AutolockCars</h2>
+        <h2 style="color:#1B2A4A;margin-bottom:8px;">DriveHubCars</h2>
         <h3 style="color:#2F9E62;margin-top:0;">Payment confirmed</h3>
         <p style="color:#4B5563;line-height:1.6;">Hi ${buyer.name}, we received your payment. It's held safely in escrow and only goes to the seller after you confirm you have the car.</p>
         <table style="border-collapse:collapse;margin:16px 0;">${rows}</table>
@@ -131,7 +131,7 @@ const instructionsFor = (purchase) => ({
   reference: purchase.reference, // REQUIRED as the transfer narration/reason
   bank: PLATFORM_ACCOUNTS.bank,
   momo: PLATFORM_ACCOUNTS.momo,
-  note: 'Send exactly this amount and put the reference as the transfer reason, then tap "I have paid". AutolockCars confirms against the account statement before your money counts as escrowed.',
+  note: 'Send exactly this amount and put the reference as the transfer reason, then tap "I have paid". DriveHubCars confirms against the account statement before your money counts as escrowed.',
 });
 
 /**
@@ -584,7 +584,7 @@ const openDispute = async (req, res) => {
       return res.status(400).json({ message: 'This dispute was already resolved.' });
     }
     if (!reason || String(reason).trim().length < 10) {
-      return res.status(400).json({ message: 'Describe the problem in at least 10 characters so AutolockCars can mediate.' });
+      return res.status(400).json({ message: 'Describe the problem in at least 10 characters so DriveHubCars can mediate.' });
     }
 
     const updated = await prisma.purchase.update({
@@ -602,7 +602,7 @@ const openDispute = async (req, res) => {
       userId: counterpartId,
       type: 'PURCHASE_DISPUTE_OPENED',
       title: 'Dispute opened on your order',
-      body: `Order ${updated.reference}: ${isBuyer ? 'the buyer' : 'the seller'} reported a problem. Funds stay frozen until AutolockCars mediates.`,
+      body: `Order ${updated.reference}: ${isBuyer ? 'the buyer' : 'the seller'} reported a problem. Funds stay frozen until DriveHubCars mediates.`,
       data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
     });
     notifyAdmins({
@@ -641,7 +641,7 @@ const confirmReceived = async (req, res) => {
       return res.status(400).json({ message: `Cannot confirm receipt from status ${purchase.status}.` });
     }
     if (purchase.disputeStatus === 'OPEN') {
-      return res.status(400).json({ message: 'A dispute is open on this order — AutolockCars resolves it before funds move.' });
+      return res.status(400).json({ message: 'A dispute is open on this order — DriveHubCars resolves it before funds move.' });
     }
 
     const updated = await prisma.$transaction((tx) => completePurchase(tx, purchase, { vehicle: purchase.vehicle }));
@@ -762,7 +762,7 @@ const cancelPurchase = async (req, res) => {
       return res.status(400).json({ message: `Cannot cancel from status ${purchase.status}.` });
     }
     if (purchase.disputeStatus === 'OPEN') {
-      return res.status(400).json({ message: 'A dispute is open on this order — AutolockCars resolves it before anything changes.' });
+      return res.status(400).json({ message: 'A dispute is open on this order — DriveHubCars resolves it before anything changes.' });
     }
 
     const updated = await prisma.$transaction(async (tx) => {

@@ -33,7 +33,7 @@ if (smtpConfigured) {
   });
 }
 
-const from = () => process.env.EMAIL_FROM || 'AutolockCars <no-reply@autolockcars.com>';
+const from = () => process.env.EMAIL_FROM || 'DriveHubCars <no-reply@drivehubcars.com>';
 
 // Preferred transports, in order:
 // 1. Resend HTTP API      (RESEND_API_KEY)
@@ -69,7 +69,7 @@ const sendViaBrevoApi = async ({ to, subject, html, text }) => {
       Accept: 'application/json',
     },
     body: JSON.stringify({
-      sender: { email: (from().match(/<(.+)>/) || [])[1] || from(), name: 'AutolockCars' },
+      sender: { email: (from().match(/<(.+)>/) || [])[1] || from(), name: 'DriveHubCars' },
       to: [{ email: to }],
       subject,
       htmlContent: html,
@@ -132,7 +132,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.PUBLIC_API_URL) {
 
 const emailTemplate = (heading, bodyHtml, ctaLabel, ctaUrl) => `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
-    <h2 style="color:#1B2A4A;margin-bottom:16px;">AutolockCars</h2>
+    <h2 style="color:#1B2A4A;margin-bottom:16px;">DriveHubCars</h2>
     <h3 style="color:#1B2A4A;">${heading}</h3>
     <p style="color:#4B5563;line-height:1.6;">${bodyHtml}</p>
     <p style="margin:28px 0;">
@@ -149,7 +149,7 @@ const sendPasswordResetEmail = async (user, rawToken, origin) => {
   // API-hosted reset page (same pattern as verify-email): the link works from
   // any device's browser without the web frontend being reachable.
   const url = `${apiUrl(origin)}/api/auth/reset-password?token=${rawToken}`;
-  const subject = 'Reset your AutolockCars password';
+  const subject = 'Reset your DriveHubCars password';
   const body = `Hi ${user.name}, we received a request to reset your password. This link is valid for 1 hour.`;
   return sendMail({
     to: user.email,
@@ -161,8 +161,8 @@ const sendPasswordResetEmail = async (user, rawToken, origin) => {
 
 const sendVerificationEmail = async (user, rawToken, origin) => {
   const url = `${apiUrl(origin)}/api/auth/verify-email?token=${rawToken}`;
-  const subject = 'Confirm your AutolockCars email';
-  const body = `Hi ${user.name}, welcome to AutolockCars! Confirm this email address to activate your account. This link is valid for 24 hours.`;
+  const subject = 'Confirm your DriveHubCars email';
+  const body = `Hi ${user.name}, welcome to DriveHubCars! Confirm this email address to activate your account. This link is valid for 24 hours.`;
   return sendMail({
     to: user.email,
     subject,

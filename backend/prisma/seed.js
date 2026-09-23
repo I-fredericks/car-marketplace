@@ -30,7 +30,7 @@ async function main() {
   // 1. Create Admin User
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@autolockcars.com',
+      email: 'admin@drivehubcars.com',
       password: await bcrypt.hash(adminPassword, 10),
       name: 'System Admin',
       phone: '+233201234567',
@@ -38,12 +38,12 @@ async function main() {
       verified: true,
     },
   });
-  console.log('✅ Admin user created: admin@autolockcars.com');
+  console.log('✅ Admin user created: admin@drivehubcars.com');
 
   // 2. Create Seller User 1 (Dealer)
   const sellerUser1 = await prisma.user.create({
     data: {
-      email: 'kwame.dealer@autolockcars.com',
+      email: 'kwame.dealer@drivehubcars.com',
       password: hashedPassword,
       name: 'Kwame Mensah (Ghana Motors)',
       phone: '+233244112233',
@@ -61,12 +61,12 @@ async function main() {
       rating: 4.8,
     },
   });
-  console.log('✅ Seller 1 created: kwame.dealer@autolockcars.com');
+  console.log('✅ Seller 1 created: kwame.dealer@drivehubcars.com');
 
   // 3. Create Seller User 2 (Private)
   const sellerUser2 = await prisma.user.create({
     data: {
-      email: 'kofi.private@autolockcars.com',
+      email: 'kofi.private@drivehubcars.com',
       password: hashedPassword,
       name: 'Kofi Owusu',
       phone: '+233509876543',
@@ -84,12 +84,12 @@ async function main() {
       rating: 4.5,
     },
   });
-  console.log('✅ Seller 2 created: kofi.private@autolockcars.com');
+  console.log('✅ Seller 2 created: kofi.private@drivehubcars.com');
 
   // 4. Create Buyer User
   const buyerUser = await prisma.user.create({
     data: {
-      email: 'abena.buyer@autolockcars.com',
+      email: 'abena.buyer@drivehubcars.com',
       password: hashedPassword,
       name: 'Abena Appiah',
       phone: '+233277665544',
@@ -97,7 +97,7 @@ async function main() {
       verified: true,
     },
   });
-  console.log('✅ Buyer created: abena.buyer@autolockcars.com');
+  console.log('✅ Buyer created: abena.buyer@drivehubcars.com');
 
   // SVG Data URI fallback for images
   const sampleCarSvg = (make, model, color) => 
@@ -298,9 +298,9 @@ async function main() {
 
   console.log('\n🎉 Database Seeding Complete!');
   console.log('\n🔑 Demo Credentials:');
-  console.log(`   Admin:  admin@autolockcars.com      / ${adminPassword}`);
-  console.log(`   Seller: kwame.dealer@autolockcars.com / ${demoPassword}`);
-  console.log(`   Buyer:  abena.buyer@autolockcars.com  / ${demoPassword}`);
+  console.log(`   Admin:  admin@drivehubcars.com      / ${adminPassword}`);
+  console.log(`   Seller: kwame.dealer@drivehubcars.com / ${demoPassword}`);
+  console.log(`   Buyer:  abena.buyer@drivehubcars.com  / ${demoPassword}`);
 }
 
 main()

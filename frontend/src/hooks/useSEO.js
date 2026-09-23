@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-const SITE_NAME = 'AutolockCars';
+const SITE_NAME = 'DriveHubCars';
 const DEFAULT_DESCRIPTION =
   'Buy and sell verified new and used cars in Ghana. Browse thousands of listings from trusted dealers and private sellers in Accra, Kumasi and beyond.';
 

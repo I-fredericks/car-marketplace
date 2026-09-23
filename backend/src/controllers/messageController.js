@@ -217,7 +217,7 @@ const sendMessage = async (req, res) => {
     // Never blocks the response on failure — the row already exists.
     const vehicleTitle = vehicle
       ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim()
-      : 'AutolockCars support';
+      : 'DriveHubCars support';
     try {
       pushToUser(receiverIdNum, 'message:new', {
         ...message,

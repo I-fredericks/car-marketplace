@@ -8,20 +8,20 @@ import {
 
 /**
  * Public Buyer Protection Guarantee page: the trust pitch that separates
- * AutolockCars from classifieds. Every claim below is backed by shipped
+ * DriveHubCars from classifieds. Every claim below is backed by shipped
  * mechanics — escrow hold, 1% fee, dispute mediation, condition facts.
  */
 const BuyerProtection = () => {
   useSEO({
     title: 'Buyer Protection Guarantee',
-    description: 'Your money is held in escrow until you confirm you have the car. If anything goes wrong, AutolockCars mediates and refunds.',
+    description: 'Your money is held in escrow until you confirm you have the car. If anything goes wrong, DriveHubCars mediates and refunds.',
   });
 
   const steps = [
     {
       icon: Lock,
       title: '1 · You pay into escrow',
-      body: 'Your money goes to AutolockCars\'s account — never directly to the seller. Bank transfer and MoMo keep it flat-fee; we take just 1% when the sale completes.',
+      body: 'Your money goes to DriveHubCars\'s account — never directly to the seller. Bank transfer and MoMo keep it flat-fee; we take just 1% when the sale completes.',
     },
     {
       icon: Search,
@@ -47,13 +47,13 @@ const BuyerProtection = () => {
         {/* Hero */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 bg-success/10 text-success px-4 py-1.5 rounded-full text-sm font-bold mb-4">
-            <ShieldCheck size={16} /> The AutolockCars Guarantee
+            <ShieldCheck size={16} /> The DriveHubCars Guarantee
           </div>
           <h1 className="font-display font-bold text-3xl sm:text-4xl text-textprimary leading-tight mb-3">
             Buying a car shouldn't mean handing <span className="text-primary">GH₵100,000 to a stranger</span>
           </h1>
           <p className="text-textsecondary text-lg max-w-2xl mx-auto leading-relaxed">
-            On every other site you meet a seller, pay cash, and pray. On AutolockCars your money is held
+            On every other site you meet a seller, pay cash, and pray. On DriveHubCars your money is held
             in escrow until the car is in your hands — and if anything goes wrong, we step in.
           </p>
         </div>
@@ -81,7 +81,7 @@ const BuyerProtection = () => {
               <li className="flex gap-2"><CheckCircle size={15} className="text-success flex-shrink-0 mt-0.5" /> Car not matching the listing or declared condition facts</li>
               <li className="flex gap-2"><CheckCircle size={15} className="text-success flex-shrink-0 mt-0.5" /> Seller never hands over the car after payment</li>
               <li className="flex gap-2"><CheckCircle size={15} className="text-success flex-shrink-0 mt-0.5" /> Funds frozen the moment a dispute opens — seller can't get paid past it</li>
-              <li className="flex gap-2"><CheckCircle size={15} className="text-success flex-shrink-0 mt-0.5" /> Full refund resolved by AutolockCars when the claim holds</li>
+              <li className="flex gap-2"><CheckCircle size={15} className="text-success flex-shrink-0 mt-0.5" /> Full refund resolved by DriveHubCars when the claim holds</li>
             </ul>
           </div>
           <div className="bg-surface border border-warn/30 rounded-xl p-6">
@@ -115,7 +115,7 @@ const BuyerProtection = () => {
             Browse protected cars
           </Link>
           <p className="text-xs text-textmuted mt-4">
-            Guarantee applies to orders paid through AutolockCars escrow (bank transfer / Mobile Money).
+            Guarantee applies to orders paid through DriveHubCars escrow (bank transfer / Mobile Money).
           </p>
         </div>
       </div>

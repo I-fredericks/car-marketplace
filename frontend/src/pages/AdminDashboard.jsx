@@ -308,7 +308,7 @@ const AdminDashboard = () => {
   const handleVerifyPurchasePayment = async (id) => {
     const p = purchases.find((x) => x.id === id);
     const ok = window.confirm(
-      `Confirm ${p ? `GH₵${(p.amount / 100).toLocaleString()}` : 'the payment'} landed in the AutolockCars account for ${p?.reference || 'this order'}?` +
+      `Confirm ${p ? `GH₵${(p.amount / 100).toLocaleString()}` : 'the payment'} landed in the DriveHubCars account for ${p?.reference || 'this order'}?` +
       (p?.paymentRef ? `\n\nBuyer's reference: ${p.paymentRef}` : '')
     );
     if (!ok) return;

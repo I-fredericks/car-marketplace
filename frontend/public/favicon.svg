@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <!-- AutolockCars tab mark: navy tile, white car silhouette (lucide
+  <!-- DriveHubCars tab mark: navy tile, white car silhouette (lucide
        "car", scaled 1.5x), accent wheels + road stripe. Same palette as
        the navbar wordmark (primary #1B2A4A / accent #E8A33D). -->
   <rect width="64" height="64" rx="14" fill="#1B2A4A"/>

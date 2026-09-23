@@ -17,7 +17,7 @@ const Checkout = () => {
   const navigate = useNavigate();
 
   const [deliveryMode, setDeliveryMode] = useState('PICKUP');
-  // Car payments ride FLAT-FEE rails into AutolockCars's own collection
+  // Car payments ride FLAT-FEE rails into DriveHubCars's own collection
   // account (bank transfer / MoMo) — card gateways charge ~1.95%, which is
   // GH₵1,950 on a GH₵100,000 car. Paystack stays for listing plans only.
   const [payMode, setPayMode] = useState('BANK_TRANSFER');
@@ -154,7 +154,7 @@ const Checkout = () => {
             />
           </div>
 
-          {/* Payment — flat-fee rails into AutolockCars's escrow account */}
+          {/* Payment — flat-fee rails into DriveHubCars's escrow account */}
           <h3 className="font-semibold text-textprimary mb-3">Payment</h3>
           <div className="grid grid-cols-1 gap-3 mb-4">
             <button
@@ -166,7 +166,7 @@ const Checkout = () => {
             >
               <div className="flex items-center gap-2 mb-1">
                 <Landmark size={20} className={payMode === 'BANK_TRANSFER' ? 'text-primary' : 'text-textmuted'} />
-                <span className="font-medium text-textprimary">Bank transfer to AutolockCars</span>
+                <span className="font-medium text-textprimary">Bank transfer to DriveHubCars</span>
                 <span className="ml-auto px-2 py-0.5 bg-success/10 text-success rounded-full text-[10px] font-bold">Flat fee · Recommended</span>
               </div>
               <p className="text-xs text-textsecondary leading-relaxed">
@@ -182,7 +182,7 @@ const Checkout = () => {
             >
               <div className="flex items-center gap-2 mb-1">
                 <Smartphone size={20} className={payMode === 'MOMO' ? 'text-primary' : 'text-textmuted'} />
-                <span className="font-medium text-textprimary">Mobile Money to AutolockCars</span>
+                <span className="font-medium text-textprimary">Mobile Money to DriveHubCars</span>
               </div>
               <p className="text-xs text-textsecondary leading-relaxed">
                 Send to our platform MoMo wallet, then submit your transaction reference. Escrowed once we confirm it.
@@ -211,7 +211,7 @@ const Checkout = () => {
                 <AlertTriangle size={16} className="text-warn" /> No platform protection for cash deals
               </h4>
               <ul className="text-xs text-textsecondary leading-relaxed space-y-1.5 list-disc list-inside">
-                <li>Cash payments happen <span className="font-semibold">outside</span> AutolockCars.</li>
+                <li>Cash payments happen <span className="font-semibold">outside</span> DriveHubCars.</li>
                 <li>If anything goes wrong — fraud, a bad car, a fake seller — <span className="font-semibold">we cannot refund or recover your money.</span> You take full responsibility for the deal.</li>
                 <li>Meet in a public place, inspect the car and its documents thoroughly, and count the cash yourself.</li>
               </ul>
@@ -260,7 +260,7 @@ const Checkout = () => {
             <ShieldCheck size={14} className="text-success flex-shrink-0 mt-0.5" />
             {payMode === 'CASH'
               ? 'Cash order: the seller chooses who to sell to and the handover deal is between you two — no platform protection.'
-              : <>Escrow protected: AutolockCars holds your payment and only releases it to the seller after you confirm you have the car. Card gateways would cost ~2% — bank and MoMo transfers keep that in your pocket. Read the <Link to="/buyer-protection" className="text-primary font-semibold underline">Buyer Protection Guarantee</Link>.</>}
+              : <>Escrow protected: DriveHubCars holds your payment and only releases it to the seller after you confirm you have the car. Card gateways would cost ~2% — bank and MoMo transfers keep that in your pocket. Read the <Link to="/buyer-protection" className="text-primary font-semibold underline">Buyer Protection Guarantee</Link>.</>}
           </p>
         </div>
 
