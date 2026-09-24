@@ -11,7 +11,7 @@ const Section = ({ title, children }) => (
 const Terms = () => {
   useSEO({
     title: 'Terms of Service',
-    description: 'The rules for buying, selling and using the DriveHubCars marketplace.',
+    description: 'The rules for buying, selling and using the AutoTrustGhana marketplace.',
   });
 
   return (
@@ -22,9 +22,9 @@ const Terms = () => {
 
         <Section title="1. Agreement">
           <p>
-            By using DriveHubCars ("DriveHubCars", the "platform"), you agree to these terms.
-            DriveHubCars is a marketplace that connects private sellers, dealers and buyers of
-            vehicles in Ghana. DriveHubCars is not a party to any sale between users.
+            By using AutoTrustGhana ("AutoTrustGhana", the "platform"), you agree to these terms.
+            AutoTrustGhana is a marketplace that connects private sellers, dealers and buyers of
+            vehicles in Ghana. AutoTrustGhana is not a party to any sale between users.
           </p>
         </Section>
 
@@ -42,7 +42,7 @@ const Terms = () => {
             listing details (price, mileage, condition, year, photos) are accurate and not
             misleading. Prohibited content includes stolen vehicles, vehicles with tampered
             identifiers, duplicate listings, and misrepresentation of condition or ownership.
-            DriveHubCars reviews, approves, rejects or removes listings at its discretion.
+            AutoTrustGhana reviews, approves, rejects or removes listings at its discretion.
           </p>
         </Section>
 
@@ -55,10 +55,10 @@ const Terms = () => {
           </p>
         </Section>
 
-        <Section title="5. Buying and communicating on DriveHubCars">
+        <Section title="5. Buying and communicating on AutoTrustGhana">
           <p>
-            DriveHubCars facilitates contact between buyers and sellers but does not verify
-            ownership, condition or roadworthiness unless a listing carries a DriveHubCars
+            AutoTrustGhana facilitates contact between buyers and sellers but does not verify
+            ownership, condition or roadworthiness unless a listing carries an AutoTrustGhana
             "Verified" badge, which indicates document review only and is not a warranty.
             Buyers are solely responsible for inspecting vehicles and conducting due
             diligence before paying any seller. Never transfer money for a vehicle you have
@@ -77,7 +77,7 @@ const Terms = () => {
         <Section title="7. Liability">
           <p>
             The platform is provided "as is". To the fullest extent permitted by law,
-            DriveHubCars is not liable for losses arising from transactions between users,
+            AutoTrustGhana is not liable for losses arising from transactions between users,
             inaccurate listing content, or service interruptions.
           </p>
         </Section>
@@ -92,7 +92,7 @@ const Terms = () => {
         <Section title="9. Contact">
           <p>
             Questions about these terms:{' '}
-            <a href="mailto:support@drivehubcars.com" className="text-primary hover:underline">support@drivehubcars.com</a>.
+            <a href="mailto:support@autotrustghana.com" className="text-primary hover:underline">support@autotrustghana.com</a>.
           </p>
         </Section>
       </div>

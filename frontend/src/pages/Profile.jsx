@@ -403,7 +403,7 @@ const Profile = () => {
                   <Wallet size={18} className="text-primary" /> Payout Account
                 </h2>
                 <p className="text-sm text-textsecondary mb-5">
-                  When a buyer pays through the site, DriveHubCars holds the money and sends your sale proceeds here after delivery is confirmed (minus the platform fee).
+                  When a buyer pays through the site, AutoTrustGhana holds the money and sends your sale proceeds here after delivery is confirmed (minus the platform fee).
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 sm:col-span-2">

@@ -276,7 +276,7 @@ describe('Admin support threads & broadcast', () => {
     const res = await request(app)
       .post('/api/admin/messages/bulk')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ userIds: [buyer1Id, buyer2Id], content: 'Hello from the DriveHubCars team!' });
+      .send({ userIds: [buyer1Id, buyer2Id], content: 'Hello from the AutoTrustGhana team!' });
     expect(res.statusCode).toEqual(200);
     expect(res.body.count).toEqual(2);
 

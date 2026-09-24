@@ -68,7 +68,7 @@ const Login = () => {
             <Car size={24} className="text-primary" />
           </div>
           <h2 className="font-display font-bold text-3xl text-textprimary mb-2">Welcome Back</h2>
-          <p className="text-textsecondary text-center">Sign in to your DriveHubCars account</p>
+          <p className="text-textsecondary text-center">Sign in to your AutoTrustGhana account</p>
         </div>
 
         {registeredEmail && !unverifiedEmail && !resendMsg && (

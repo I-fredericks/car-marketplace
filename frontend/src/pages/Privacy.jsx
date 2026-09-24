@@ -11,7 +11,7 @@ const Section = ({ title, children }) => (
 const Privacy = () => {
   useSEO({
     title: 'Privacy Policy',
-    description: 'How DriveHubCars collects, uses and protects your personal data.',
+    description: 'How AutoTrustGhana collects, uses and protects your personal data.',
   });
 
   return (
@@ -22,7 +22,7 @@ const Privacy = () => {
 
         <Section title="1. Who we are">
           <p>
-            DriveHubCars ("DriveHubCars", "we", "us") is an online marketplace that connects
+            AutoTrustGhana ("AutoTrustGhana", "we", "us") is an online marketplace that connects
             car buyers and sellers in Ghana. This policy explains what personal data we
             collect, why we collect it, and the choices you have.
           </p>
@@ -75,7 +75,7 @@ const Privacy = () => {
         <Section title="8. Contact us">
           <p>
             For privacy questions, data access or deletion requests, email{' '}
-            <a href="mailto:support@drivehubcars.com" className="text-primary hover:underline">support@drivehubcars.com</a>.
+            <a href="mailto:support@autotrustghana.com" className="text-primary hover:underline">support@autotrustghana.com</a>.
             We respond to requests within 30 days.
           </p>
         </Section>
