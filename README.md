@@ -1,10 +1,10 @@
-# AutoTrustGhana
+# SikaRide
 
-Live: **https://autotrustghana.com** (domain to be purchased and attached in Vercel; currently served at https://car-marketplace-five-ruby.vercel.app) · API: **https://carmarket-api-uk2b.onrender.com**
+Live: **https://sikaride.com** (domain to be purchased and attached in Vercel; currently served at https://car-marketplace-five-ruby.vercel.app) · API: **https://carmarket-api-uk2b.onrender.com**
 
 When the custom domain is attached in Vercel, also update (no code changes needed):
-1. Render `FRONTEND_URL` → `https://autotrustghana.com,https://car-marketplace-five-ruby.vercel.app` (CORS allowlist — comma-separated, keep both origins)
-2. Google Cloud Console → OAuth client → Authorized JavaScript origins: add `https://autotrustghana.com`
+1. Render `FRONTEND_URL` → `https://sikaride.com,https://car-marketplace-five-ruby.vercel.app` (CORS allowlist — comma-separated, keep both origins)
+2. Google Cloud Console → OAuth client → Authorized JavaScript origins: add `https://sikaride.com`
 3. Paystack dashboard → callback URL, if one is set explicitly
 
 A transaction platform for buying and selling cars in Ghana — escrow-protected payments,

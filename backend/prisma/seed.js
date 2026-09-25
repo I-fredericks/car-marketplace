@@ -30,7 +30,7 @@ async function main() {
   // 1. Create Admin User
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@autotrustghana.com',
+      email: 'admin@sikaride.com',
       password: await bcrypt.hash(adminPassword, 10),
       name: 'System Admin',
       phone: '+233201234567',
@@ -38,12 +38,12 @@ async function main() {
       verified: true,
     },
   });
-  console.log('✅ Admin user created: admin@autotrustghana.com');
+  console.log('✅ Admin user created: admin@sikaride.com');
 
   // 2. Create Seller User 1 (Dealer)
   const sellerUser1 = await prisma.user.create({
     data: {
-      email: 'kwame.dealer@autotrustghana.com',
+      email: 'kwame.dealer@sikaride.com',
       password: hashedPassword,
       name: 'Kwame Mensah (Ghana Motors)',
       phone: '+233244112233',
@@ -61,12 +61,12 @@ async function main() {
       rating: 4.8,
     },
   });
-  console.log('✅ Seller 1 created: kwame.dealer@autotrustghana.com');
+  console.log('✅ Seller 1 created: kwame.dealer@sikaride.com');
 
   // 3. Create Seller User 2 (Private)
   const sellerUser2 = await prisma.user.create({
     data: {
-      email: 'kofi.private@autotrustghana.com',
+      email: 'kofi.private@sikaride.com',
       password: hashedPassword,
       name: 'Kofi Owusu',
       phone: '+233509876543',
@@ -84,12 +84,12 @@ async function main() {
       rating: 4.5,
     },
   });
-  console.log('✅ Seller 2 created: kofi.private@autotrustghana.com');
+  console.log('✅ Seller 2 created: kofi.private@sikaride.com');
 
   // 4. Create Buyer User
   const buyerUser = await prisma.user.create({
     data: {
-      email: 'abena.buyer@autotrustghana.com',
+      email: 'abena.buyer@sikaride.com',
       password: hashedPassword,
       name: 'Abena Appiah',
       phone: '+233277665544',
@@ -97,7 +97,7 @@ async function main() {
       verified: true,
     },
   });
-  console.log('✅ Buyer created: abena.buyer@autotrustghana.com');
+  console.log('✅ Buyer created: abena.buyer@sikaride.com');
 
   // SVG Data URI fallback for images
   const sampleCarSvg = (make, model, color) => 
@@ -298,9 +298,9 @@ async function main() {
 
   console.log('\n🎉 Database Seeding Complete!');
   console.log('\n🔑 Demo Credentials:');
-  console.log(`   Admin:  admin@autotrustghana.com      / ${adminPassword}`);
-  console.log(`   Seller: kwame.dealer@autotrustghana.com / ${demoPassword}`);
-  console.log(`   Buyer:  abena.buyer@autotrustghana.com  / ${demoPassword}`);
+  console.log(`   Admin:  admin@sikaride.com      / ${adminPassword}`);
+  console.log(`   Seller: kwame.dealer@sikaride.com / ${demoPassword}`);
+  console.log(`   Buyer:  abena.buyer@sikaride.com  / ${demoPassword}`);
 }
 
 main()

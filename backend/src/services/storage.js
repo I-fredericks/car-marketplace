@@ -76,7 +76,7 @@ const randomName = (ext) => `${Date.now()}-${crypto.randomBytes(6).toString('hex
 // Burned into every listing photo at upload: scraped or re-shared images
 // keep advertising where the car was listed. Disable with
 // WATERMARK_IMAGES=false (e.g. for fixtures).
-const WATERMARK_LABEL = 'Posted on AutoTrustGhana';
+const WATERMARK_LABEL = 'Posted on SikaRide';
 
 /** SVG overlay sized for the target image: a translucent pill bottom-right. */
 const watermarkSvg = (width, height) => {

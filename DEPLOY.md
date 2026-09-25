@@ -1,4 +1,4 @@
-# Deploying AutoTrustGhana
+# Deploying SikaRide
 
 Two supported paths: **Docker Compose** (recommended for a single VM) or
 **PM2** on a bare Node host. Both serve the built frontend through the
@@ -7,7 +7,7 @@ Express backend (`backend/src/index.js` serves `frontend/dist` when present).
 ## 0. Prerequisites
 
 - A Linux server (2 vCPU / 4GB is plenty to start), Docker or Node 22+
-- A domain pointed at the server (e.g. `autotrustghana.com`)
+- A domain pointed at the server (e.g. `sikaride.com`)
 - Secrets ready: `JWT_SECRET` (`openssl rand -hex 32`), MySQL passwords,
   Paystack + Google OAuth keys. **All secrets that were ever committed to
   the old repo must be rotated before going live.**
@@ -26,7 +26,7 @@ cat > .env <<'EOF'
 MYSQL_ROOT_PASSWORD=<strong password>
 MYSQL_PASSWORD=<strong password>
 JWT_SECRET=<openssl rand -hex 32>
-FRONTEND_URL=https://autotrustghana.com
+FRONTEND_URL=https://sikaride.com
 PAYSTACK_SECRET_KEY=sk_live_...
 GOOGLE_CLIENT_ID=...
 EOF
@@ -68,7 +68,7 @@ Simplest: Caddy (automatic Let's Encrypt):
 
 ```
 # /etc/caddy/Caddyfile
-autotrustghana.com {
+sikaride.com {
     reverse_proxy 127.0.0.1:5000
 }
 ```

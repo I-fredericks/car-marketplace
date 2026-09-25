@@ -55,7 +55,7 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-2">
             <Car size={28} className="text-primary" />
             <span className="font-display font-bold text-xl text-textprimary tracking-tight">
-              AutoTrust<span className="text-accent">Ghana</span>
+              Sika<span className="text-accent">Ride</span>
             </span>
           </Link>
 

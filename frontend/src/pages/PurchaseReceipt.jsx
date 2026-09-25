@@ -97,7 +97,7 @@ const PurchaseReceipt = () => {
         {/* Letterhead */}
         <div className="flex items-start justify-between border-b-2 border-primary pb-5 mb-6">
           <div>
-            <h1 className="font-display font-bold text-2xl text-primary">AutoTrustGhana</h1>
+            <h1 className="font-display font-bold text-2xl text-primary">SikaRide</h1>
             <p className="text-sm text-textsecondary mt-1">Purchase receipt — order {purchase.reference}</p>
           </div>
           <div className="text-right">
@@ -143,7 +143,7 @@ const PurchaseReceipt = () => {
           {purchase.method === 'PAYSTACK' && (
             <>
               <div className="flex justify-between py-1.5">
-                <span className="text-textsecondary">AutoTrustGhana service fee ({(purchase.commissionBps || 0) / 100}%)</span>
+                <span className="text-textsecondary">SikaRide service fee ({(purchase.commissionBps || 0) / 100}%)</span>
                 <span className="text-textprimary">{ghs(commission)}</span>
               </div>
               <div className="flex justify-between py-1.5 border-t border-bordercol mt-1.5 pt-3">
@@ -159,13 +159,13 @@ const PurchaseReceipt = () => {
           <ShieldCheck size={18} className="text-primary flex-shrink-0 mt-0.5" />
           <p className="text-xs text-textsecondary leading-relaxed">
             {purchase.method === 'PAYSTACK'
-              ? 'Escrow protected by AutoTrustGhana: the buyer’s payment is held until receipt is confirmed, then released to the seller minus the service fee.'
-              : 'Cash order: payment happens directly between buyer and seller at handover. AutoTrustGhana reserved this vehicle for the order.'}
+              ? 'Escrow protected by SikaRide: the buyer’s payment is held until receipt is confirmed, then released to the seller minus the service fee.'
+              : 'Cash order: payment happens directly between buyer and seller at handover. SikaRide reserved this vehicle for the order.'}
           </p>
         </div>
 
         <p className="text-center text-xs text-textmuted mt-6">
-          autotrustghana.com · Generated {fmt(new Date())}
+          sikaride.com · Generated {fmt(new Date())}
         </p>
       </div>
     </div>

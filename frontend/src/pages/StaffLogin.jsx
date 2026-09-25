@@ -60,7 +60,7 @@ const StaffLogin = () => {
           </div>
           <div className="leading-tight">
             <div className="font-display font-bold text-lg text-white tracking-tight">
-              AutoTrust<span className="text-accent">Ghana</span>
+              Sika<span className="text-accent">Ride</span>
             </div>
             <div className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Staff Portal</div>
           </div>
@@ -100,7 +100,7 @@ const StaffLogin = () => {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="admin@autotrustghana.com"
+                  placeholder="admin@sikaride.com"
                   required
                   autoComplete="username"
                   className="w-full h-11 px-3 border border-white/15 rounded-md bg-white/5 text-white text-sm placeholder-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
