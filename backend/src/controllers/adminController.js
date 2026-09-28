@@ -1273,6 +1273,59 @@ const createStaff = async (req, res) => {
   }
 };
 
+const changeUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    const validRoles = ['BUYER', 'SELLER', 'ADMIN', 'MANAGER', 'ACCOUNTANT', 'STAFF'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: parseInt(req.params.id) },
+      data: { role },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
+    });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'USER.ROLE_CHANGE',
+      entityType: 'USER',
+      entityId: user.id,
+      meta: { newRole: role },
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error changing user role:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const updateUser = async (req, res) => {
+  try {
+    const { name, email, role } = req.body;
+
+    const user = await prisma.user.update({
+      where: { id: parseInt(req.params.id) },
+      data: { name, email, role },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
+    });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'USER.UPDATE',
+      entityType: 'USER',
+      entityId: user.id,
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getPendingVehicles,
   getAllVehicles,
@@ -1300,4 +1353,6 @@ module.exports = {
   rejectPurchasePayment,
   resolveDispute,
   createStaff,
+  changeUserRole,
+  updateUser,
 };

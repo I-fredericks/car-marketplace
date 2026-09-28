@@ -27,6 +27,8 @@ const {
   rejectPurchasePayment,
   resolveDispute,
   createStaff,
+  changeUserRole,
+  updateUser,
 } = require('../controllers/adminController');
 const { protect, requirePermission, requireRole } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
@@ -36,6 +38,7 @@ const {
   broadcastSchema,
   bulkMessageSchema,
   createStaffSchema,
+  updateUserSchema,
 } = require('../middlewares/validation');
 
 router.use(protect);
@@ -75,5 +78,8 @@ router.put('/purchases/:id/resolve-dispute', requirePermission('disputes:write')
 router.put('/purchases/:id/release-payout', requirePermission('payouts:write'), releasePayout);
 
 router.post('/staff', requireRole('ADMIN'), validate(createStaffSchema), createStaff);
+
+router.put('/users/:id/role', requirePermission('users:moderate'), validate(updateUserSchema), changeUserRole);
+router.put('/users/:id', requirePermission('users:write'), validate(updateUserSchema), updateUser);
 
 module.exports = router;

@@ -6,7 +6,7 @@ import {
   ShieldAlert, LayoutDashboard, Car, List, AlertTriangle, Users,
   Check, X, Eye, Star, ShieldCheck, Trash2, CreditCard, FileText, Camera,
   UserX, UserCheck, RefreshCw, Heart, MessageCircle, ArrowRight, Package,
-  Megaphone, Send, Bell, XCircle
+  Megaphone, Send, Bell, XCircle, Edit
 } from 'lucide-react';
 import Badge from '../components/Badge';
 import Avatar from '../components/Avatar';
@@ -105,6 +105,11 @@ const AdminDashboard = () => {
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
   const [bulkMessage, setBulkMessage] = useState({ open: false, target: null, content: '' });
   const [sendingBulk, setSendingBulk] = useState(false);
+
+  // Staff management modals
+  const [changeRoleModal, setChangeRoleModal] = useState({ open: false, user: null, newRole: '' });
+  const [editStaffModal, setEditStaffModal] = useState({ open: false, user: null, form: {} });
+  const [savingStaff, setSavingStaff] = useState(false);
 
   const toast = (msg) => {
     setActionMsg(msg);
@@ -1344,8 +1349,13 @@ const AdminDashboard = () => {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${
-                      u.role === 'ADMIN' ? 'bg-err/10 text-err' : u.role === 'SELLER' ? 'bg-primary/10 text-primary' : 'bg-bg border border-bordercol text-textsecondary'
-                    }`}>
+                        u.role === 'ADMIN' ? 'bg-err/10 text-err' :
+                        u.role === 'SELLER' ? 'bg-primary/10 text-primary' :
+                        u.role === 'MANAGER' ? 'bg-blue/10 text-blue' :
+                        u.role === 'ACCOUNTANT' ? 'bg-green/10 text-green' :
+                        u.role === 'STAFF' ? 'bg-purple/10 text-purple' :
+                        'bg-bg border border-bordercol text-textsecondary'
+                      }`}>
                       {u.role}
                     </span>
                     {u.role === 'SELLER' && u.sellerProfile && (
@@ -1409,6 +1419,30 @@ const AdminDashboard = () => {
                         >
                           <Trash2 size={13} />
                           <span className="hidden md:inline">Delete</span>
+                        </button>
+                      )}
+
+                      {/* Change Role for Staff users (ADMIN only) */}
+                      {user?.role === 'ADMIN' && ['MANAGER', 'ACCOUNTANT', 'STAFF'].includes(u.role) && (
+                        <button
+                          onClick={() => openChangeRoleModal(u)}
+                          className="px-2.5 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-md hover:bg-primary hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                          title="Change Role"
+                        >
+                          <UserCheck size={13} />
+                          <span className="hidden md:inline">Change Role</span>
+                        </button>
+                      )}
+
+                      {/* Edit Staff Details (ADMIN only) */}
+                      {user?.role === 'ADMIN' && ['MANAGER', 'ACCOUNTANT', 'STAFF'].includes(u.role) && (
+                        <button
+                          onClick={() => openEditStaffModal(u)}
+                          className="px-2.5 py-1.5 bg-blue/10 text-blue border border-blue/20 rounded-md hover:bg-blue hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
+                          title="Edit Staff"
+                        >
+                          <Edit size={13} />
+                          <span className="hidden md:inline">Edit</span>
                         </button>
                       )}
                      </div>
@@ -1815,6 +1849,44 @@ const AdminDashboard = () => {
     }
   };
 
+  // Staff management handlers
+  const openChangeRoleModal = (user) => setChangeRoleModal({ open: true, user, newRole: user.role });
+  const closeChangeRoleModal = () => setChangeRoleModal({ open: false, user: null, newRole: '' });
+
+  const openEditStaffModal = (user) => setEditStaffModal({ 
+    open: true, 
+    user, 
+    form: { name: user.name, email: user.email, role: user.role } 
+  });
+  const closeEditStaffModal = () => setEditStaffModal({ open: false, user: null, form: {} });
+
+  const handleChangeRole = async () => {
+    if (!changeRoleModal.user || !changeRoleModal.newRole) return;
+    try {
+      await api.put(`/admin/users/${changeRoleModal.user.id}/role`, { role: changeRoleModal.newRole });
+      toast(`Role changed to ${changeRoleModal.newRole}`);
+      closeChangeRoleModal();
+      fetchUsers();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to change role');
+    }
+  };
+
+  const handleEditStaff = async () => {
+    if (!editStaffModal.user) return;
+    setSavingStaff(true);
+    try {
+      await api.put(`/admin/users/${editStaffModal.user.id}`, editStaffModal.form);
+      toast('Staff details updated');
+      closeEditStaffModal();
+      fetchUsers();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to update staff');
+    } finally {
+      setSavingStaff(false);
+    }
+  };
+
   const renderBulkMessageModal = () => {
     const count = bulkMessage.target === 'all'
       ? 'every active user'
@@ -2004,6 +2076,119 @@ const AdminDashboard = () => {
 
       {/* Bulk chat compose dialog */}
       {bulkMessage.open && renderBulkMessageModal()}
+
+      {/* Change Role Modal */}
+      {changeRoleModal.open && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={closeChangeRoleModal}
+        >
+          <div
+            className="bg-surface border border-bordercol rounded-xl shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-display font-bold text-lg text-textprimary mb-1">
+              Change Role for {changeRoleModal.user?.name}
+            </h3>
+            <p className="text-xs text-textsecondary mb-4">
+              Current role: <span className="font-medium text-primary">{changeRoleModal.user?.role}</span>
+            </p>
+            <div className="space-y-1.5 mb-4">
+              <label className="block text-xs font-medium text-textsecondary">New Role</label>
+              <select
+                value={changeRoleModal.newRole}
+                onChange={(e) => setChangeRoleModal(prev => ({ ...prev, newRole: e.target.value }))}
+                className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              >
+                <option value="MANAGER">Manager — vehicles, users, reports, broadcast</option>
+                <option value="ACCOUNTANT">Accountant — payments, purchases, payouts, disputes</option>
+                <option value="STAFF">Staff — read-only vehicles, users, reports</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={closeChangeRoleModal}
+                className="px-4 py-2 border border-bordercol rounded-md text-sm font-medium text-textsecondary hover:bg-bg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangeRole}
+                className="px-4 py-2 bg-primary text-white rounded-md text-sm font-bold hover:bg-primarylight transition-colors"
+              >
+                Change Role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Modal */}
+      {editStaffModal.open && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={closeEditStaffModal}
+        >
+          <div
+            className="bg-surface border border-bordercol rounded-xl shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-display font-bold text-lg text-textprimary mb-1">
+              Edit Staff: {editStaffModal.user?.name}
+            </h3>
+            <p className="text-xs text-textsecondary mb-4">
+              Current role: <span className="font-medium text-primary">{editStaffModal.user?.role}</span>
+            </p>
+            <div className="space-y-4 mb-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Name</label>
+                <input
+                  type="text"
+                  value={editStaffModal.form.name}
+                  onChange={(e) => setEditStaffModal(prev => ({ ...prev, form: { ...prev.form, name: e.target.value } }))}
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Email</label>
+                <input
+                  type="email"
+                  value={editStaffModal.form.email}
+                  onChange={(e) => setEditStaffModal(prev => ({ ...prev, form: { ...prev.form, email: e.target.value } }))}
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Role</label>
+                <select
+                  value={editStaffModal.form.role}
+                  onChange={(e) => setEditStaffModal(prev => ({ ...prev, form: { ...prev.form, role: e.target.value } }))}
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <option value="MANAGER">Manager</option>
+                  <option value="ACCOUNTANT">Accountant</option>
+                  <option value="STAFF">Staff</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={closeEditStaffModal}
+                className="px-4 py-2 border border-bordercol rounded-md text-sm font-medium text-textsecondary hover:bg-bg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditStaff}
+                disabled={savingStaff}
+                className="px-4 py-2 bg-primary text-white rounded-md text-sm font-bold hover:bg-primarylight transition-colors disabled:opacity-50"
+              >
+                {savingStaff ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
         
