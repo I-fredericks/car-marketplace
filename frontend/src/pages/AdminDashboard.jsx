@@ -94,6 +94,11 @@ const AdminDashboard = () => {
   const [broadcastForm, setBroadcastForm] = useState({ title: '', body: '', sendToInbox: false });
   const [broadcasting, setBroadcasting] = useState(false);
 
+  // Staff creation (ADMIN only)
+  const [staffForm, setStaffForm] = useState({ email: '', name: '', role: 'STAFF', password: '' });
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [showStaffForm, setShowStaffForm] = useState(false);
+
   // Bulk chat: which users are checked in Manage Users, plus the compose
   // dialog state. target is 'selected' (checked rows) or 'all' (every
   // active non-admin user).
@@ -1158,6 +1163,97 @@ const AdminDashboard = () => {
   const visibleUsers = users.filter(u => !/^deleted-\d+@deleted\./.test(u.email)); // scrubbed accounts stay in the DB for audit but don't belong in the management UI
   const renderUsers = () => (
     <div className="space-y-6 animate-fade-in">
+      {/* Staff Creation Form (ADMIN only) */}
+      {user?.role === 'ADMIN' && (
+        <div className={`bg-primary/5 border border-primary/10 rounded-lg p-4 transition-all overflow-hidden ${showStaffForm ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-primary flex items-center gap-2">
+              <UserCheck size={20} /> Create Staff Account
+            </h3>
+            <button
+              onClick={() => setShowStaffForm(!showStaffForm)}
+              className="text-sm text-primary hover:underline flex items-center gap-1"
+            >
+              {showStaffForm ? 'Hide' : 'Show'} Form
+            </button>
+          </div>
+
+          {showStaffForm && (
+            <form onSubmit={handleCreateStaff} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Email</label>
+                <input
+                  type="email"
+                  value={staffForm.email}
+                  onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                  placeholder="manager@company.com"
+                  required
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm placeholder:text-textmuted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Full Name</label>
+                <input
+                  type="text"
+                  value={staffForm.name}
+                  onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
+                  placeholder="John Doe"
+                  required
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm placeholder:text-textmuted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Role</label>
+                <select
+                  value={staffForm.role}
+                  onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <option value="MANAGER">Manager — vehicles, users, reports, broadcast</option>
+                  <option value="ACCOUNTANT">Accountant — payments, purchases, payouts, disputes</option>
+                  <option value="STAFF">Staff — read-only vehicles, users, reports</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-textsecondary">Password (optional)</label>
+                <input
+                  type="password"
+                  value={staffForm.password}
+                  onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                  placeholder="Auto-generated if empty"
+                  className="w-full h-10 px-3 border border-bordercol rounded-md bg-bg text-textprimary text-sm placeholder:text-textmuted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="lg:col-span-4 flex items-end gap-3">
+                <button
+                  type="submit"
+                  disabled={creatingStaff}
+                  className="px-4 py-2 bg-primary text-white rounded-md text-sm font-bold hover:bg-primarylight transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {creatingStaff ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck size={14} /> Create Staff Account
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStaffForm({ email: '', name: '', role: 'STAFF', password: '' }); setShowStaffForm(false); }}
+                  className="px-4 py-2 bg-surface text-textsecondary border border-bordercol rounded-md text-sm font-bold hover:bg-bg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="font-display font-bold text-2xl text-textprimary mb-1">All Users ({visibleUsers.length})</h2>
@@ -1768,6 +1864,22 @@ const AdminDashboard = () => {
         </div>
       </div>
     );
+  };
+
+  const handleCreateStaff = async (e) => {
+    e.preventDefault();
+    setCreatingStaff(true);
+    try {
+      const { data } = await api.post('/admin/staff', staffForm);
+      toast(data.message || 'Staff account created successfully');
+      setStaffForm({ email: '', name: '', role: 'STAFF', password: '' });
+      setShowStaffForm(false);
+      fetchUsers();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to create staff account');
+    } finally {
+      setCreatingStaff(false);
+    }
   };
 
   const handleBroadcast = async () => {
