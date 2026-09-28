@@ -90,6 +90,9 @@ enum Role {
   BUYER
   SELLER
   ADMIN
+  MANAGER
+  ACCOUNTANT
+  STAFF
 }
 
 // Moderation state of a user's profile photo.

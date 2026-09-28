@@ -26,64 +26,54 @@ const {
   verifyPurchasePayment,
   rejectPurchasePayment,
   resolveDispute,
+  createStaff,
 } = require('../controllers/adminController');
-const { protect, admin } = require('../middlewares/authMiddleware');
+const { protect, requirePermission, requireRole } = require('../middlewares/authMiddleware');
 const { validate } = require('../middlewares/validation');
 const {
   updateListingStatusSchema,
   updateUserStatusSchema,
   broadcastSchema,
   bulkMessageSchema,
+  createStaffSchema,
 } = require('../middlewares/validation');
 
-router.use(protect, admin);
+router.use(protect);
 
-// Stats
-router.get('/stats', getStats);
+router.get('/stats', requirePermission('stats:read'), getStats);
 
-// Vehicle management
-router.get('/vehicles/pending', getPendingVehicles);
-router.get('/vehicles/all', getAllVehicles);
-router.put('/vehicles/:id/status', validate(updateListingStatusSchema), updateListingStatus);
-router.put('/vehicles/:id/featured', toggleFeatured);
+router.get('/vehicles/pending', requirePermission('vehicles:read'), getPendingVehicles);
+router.get('/vehicles/all', requirePermission('vehicles:read'), getAllVehicles);
+router.put('/vehicles/:id/status', requirePermission('vehicles:write'), validate(updateListingStatusSchema), updateListingStatus);
+router.put('/vehicles/:id/featured', requirePermission('vehicles:write'), toggleFeatured);
 
-// User management
-router.get('/users', getAllUsers);
+router.get('/users', requirePermission('users:read'), getAllUsers);
+router.get('/avatars/pending', requirePermission('avatars:read'), getPendingAvatars);
+router.put('/users/:id/avatar/approve', requirePermission('avatars:moderate'), approveAvatar);
+router.put('/users/:id/avatar/reject', requirePermission('avatars:moderate'), rejectAvatar);
 
-// Profile photo moderation (registered before /users/:id/* so the 3-segment
-// path never collides with status/verify handlers).
-router.get('/avatars/pending', getPendingAvatars);
-router.put('/users/:id/avatar/approve', approveAvatar);
-router.put('/users/:id/avatar/reject', rejectAvatar);
+router.post('/broadcast', requirePermission('broadcast:write'), validate(broadcastSchema), broadcastNotification);
+router.post('/messages/bulk', requirePermission('broadcast:write'), validate(bulkMessageSchema), bulkMessageUsers);
 
-// Announcement to every active user (notification + live SSE toast), or a
-// replyable chat message in every inbox (sendToInbox).
-router.post('/broadcast', validate(broadcastSchema), broadcastNotification);
+router.put('/users/:id/verify', requirePermission('users:moderate'), verifySeller);
+router.put('/users/:id/status', requirePermission('users:write'), validate(updateUserStatusSchema), setUserStatus);
+router.delete('/users/:id', requirePermission('users:write'), deleteUser);
 
-// Open/continue a support chat with selected users — or all users at once.
-router.post('/messages/bulk', validate(bulkMessageSchema), bulkMessageUsers);
+router.get('/audit-logs', requireRole('ADMIN'), getAuditLogs);
 
-router.put('/users/:id/verify', verifySeller);
-router.put('/users/:id/status', validate(updateUserStatusSchema), setUserStatus);
-router.delete('/users/:id', deleteUser);
+router.get('/reports', requirePermission('reports:read'), getReports);
+router.put('/reports/:id/resolve', requirePermission('reports:write'), resolveReport);
 
-// Audit trail
-router.get('/audit-logs', getAuditLogs);
+router.get('/payments', requirePermission('payments:read'), getPayments);
+router.put('/payments/:id/verify', requirePermission('payments:write'), verifyPayment);
+router.put('/payments/:id/reject', requirePermission('payments:write'), rejectPayment);
 
-// Reports
-router.get('/reports', getReports);
-router.put('/reports/:id/resolve', resolveReport);
+router.get('/purchases', requirePermission('purchases:read'), getPurchases);
+router.put('/purchases/:id/verify-payment', requirePermission('purchases:write'), verifyPurchasePayment);
+router.put('/purchases/:id/reject-payment', requirePermission('purchases:write'), rejectPurchasePayment);
+router.put('/purchases/:id/resolve-dispute', requirePermission('disputes:write'), resolveDispute);
+router.put('/purchases/:id/release-payout', requirePermission('payouts:write'), releasePayout);
 
-// Payments (billing verification)
-router.get('/payments', getPayments);
-router.put('/payments/:id/verify', verifyPayment);
-router.put('/payments/:id/reject', rejectPayment);
-
-// Purchases (escrow orders + transfer confirmation + payout release)
-router.get('/purchases', getPurchases);
-router.put('/purchases/:id/verify-payment', verifyPurchasePayment);
-router.put('/purchases/:id/reject-payment', rejectPurchasePayment);
-router.put('/purchases/:id/resolve-dispute', resolveDispute);
-router.put('/purchases/:id/release-payout', releasePayout);
+router.post('/staff', requireRole('ADMIN'), validate(createStaffSchema), createStaff);
 
 module.exports = router;

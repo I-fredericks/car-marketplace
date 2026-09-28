@@ -18,10 +18,46 @@ const AdminDashboard = () => {
   // Deep links: notifications route admins to the exact moderation tab via
   // /admin?tab=<name> (e.g. /admin?tab=pending, ?tab=photos, ?tab=users...).
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Role-based tab access control
+  const getTabsForRole = (role) => {
+    const allTabs = [
+      { id: 'overview', permissions: ['stats:read'] },
+      { id: 'pending', permissions: ['vehicles:read'] },
+      { id: 'allListings', permissions: ['vehicles:read'] },
+      { id: 'takenDown', permissions: ['vehicles:read'] },
+      { id: 'audit', permissions: ['*'], roles: ['ADMIN'] }, // ADMIN only
+      { id: 'photos', permissions: ['avatars:read'] },
+      { id: 'payments', permissions: ['payments:read'] },
+      { id: 'purchases', permissions: ['purchases:read'] },
+      { id: 'reports', permissions: ['reports:read'] },
+      { id: 'users', permissions: ['users:read'] },
+      { id: 'broadcast', permissions: ['broadcast:write'] },
+    ];
+
+    const rolePermissions = {
+      ADMIN: ['*'],
+      MANAGER: ['vehicles:read', 'vehicles:write', 'vehicles:moderate', 'users:read', 'users:write', 'users:moderate', 'reports:read', 'reports:write', 'avatars:read', 'avatars:moderate', 'broadcast:write', 'stats:read'],
+      ACCOUNTANT: ['payments:read', 'payments:write', 'purchases:read', 'purchases:write', 'payouts:write', 'disputes:read', 'disputes:write', 'stats:read', 'stats:financial'],
+      STAFF: ['vehicles:read', 'users:read', 'reports:read', 'stats:read'],
+    };
+
+    const userPermissions = rolePermissions[role] || [];
+    const hasPermission = (permission) => userPermissions.includes('*') || userPermissions.includes(permission);
+
+    return allTabs
+      .filter((tab) => {
+        if (tab.roles && !tab.roles.includes(role)) return false;
+        return tab.permissions.some((p) => hasPermission(p));
+      })
+      .map((tab) => tab.id);
+  };
+
+  const allowedTabIds = user ? getTabsForRole(user.role) : [];
+  const VALID = new Set(allowedTabIds.length > 0 ? allowedTabIds : ['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'purchases', 'reports', 'users', 'broadcast']);
   const [tab, setTabState] = useState(() => {
-    const VALID = new Set(['overview', 'pending', 'allListings', 'takenDown', 'audit', 'photos', 'payments', 'purchases', 'reports', 'users', 'broadcast']);
     const initial = searchParams.get('tab');
-    return initial && VALID.has(initial) ? initial : 'overview';
+    return initial && VALID.has(initial) ? initial : (allowedTabIds[0] || 'overview');
   });
   const setTab = (next) => {
     setTabState(next);
@@ -1828,7 +1864,7 @@ const AdminDashboard = () => {
     </div>
   );
 
-  const tabs = [
+  const allTabs = [
     { id: 'overview', icon: <LayoutDashboard size={18} />, label: 'Overview' },
     { id: 'pending', icon: <Car size={18} />, label: `Pending ${pendingCars.length > 0 ? `(${pendingCars.length})` : ''}` },
     { id: 'allListings', icon: <List size={18} />, label: 'All Listings' },
@@ -1841,6 +1877,8 @@ const AdminDashboard = () => {
     { id: 'users', icon: <Users size={18} />, label: 'Manage Users' },
     { id: 'broadcast', icon: <Megaphone size={18} />, label: 'Broadcast' },
   ];
+
+  const tabs = allTabs.filter((t) => VALID.has(t.id));
 
   return (
     <div className="bg-bg min-h-screen pt-16">

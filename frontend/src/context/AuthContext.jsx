@@ -60,6 +60,17 @@ export const AuthProvider = ({ children }) => {
     return profile.data;
   };
 
+  // Staff portal Google sign-in: no role/sellerType — account must already exist
+  // with a staff role (ADMIN, MANAGER, ACCOUNTANT, STAFF).
+  const staffLoginWithGoogle = async (credential) => {
+    const { data } = await api.post('/auth/google', { credential });
+    localStorage.setItem('token', data.token);
+    setUser(data.user);
+    const profile = await api.get('/auth/me');
+    setUser(profile.data);
+    return profile.data;
+  };
+
   // Upgrade the logged-in buyer to a seller account; the backend returns a
   // fresh token carrying the new role
   const upgradeToSeller = async (details) => {
@@ -99,7 +110,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, register, upgradeToSeller, updateProfile, logout, loading, adminLogin, verifyAdminCode }}>
+    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, staffLoginWithGoogle, register, upgradeToSeller, updateProfile, logout, loading, adminLogin, verifyAdminCode }}>
       {/* Render children immediately: gating on `loading` blanks the whole
           app for every visitor until /auth/me resolves. Protected pages
           consume `loading` themselves to avoid flashing login prompts. */}

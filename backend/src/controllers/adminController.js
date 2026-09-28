@@ -1220,6 +1220,59 @@ const resolveDispute = async (req, res) => {
   }
 };
 
+const createStaff = async (req, res) => {
+  try {
+    const { email, name, role, password } = req.body;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    const bcrypt = require('bcrypt');
+    const crypto = require('crypto');
+    const hashedPassword = password
+      ? await bcrypt.hash(password, 10)
+      : await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name,
+        password: hashedPassword,
+        role,
+        emailVerified: true,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    audit.logAction({
+      ...actorFrom(req),
+      action: 'STAFF.CREATE',
+      entityType: 'USER',
+      entityId: user.id,
+      meta: { email: user.email, role: user.role },
+    });
+
+    res.status(201).json({
+      message: `Staff account created with role ${role}`,
+      user,
+      ...(password ? {} : { temporaryPassword: 'Auto-generated (check email or admin portal)' }),
+    });
+  } catch (error) {
+    console.error('Error creating staff:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getPendingVehicles,
   getAllVehicles,
@@ -1246,4 +1299,5 @@ module.exports = {
   verifyPurchasePayment,
   rejectPurchasePayment,
   resolveDispute,
+  createStaff,
 };

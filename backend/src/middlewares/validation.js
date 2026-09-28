@@ -160,6 +160,13 @@ const bulkMessageSchema = z.object({
   content: z.string().trim().min(1, 'Message is required').max(2000, 'Message is too long')
 });
 
+const createStaffSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  role: z.enum(['MANAGER', 'ACCOUNTANT', 'STAFF']),
+  password: passwordSchema.optional(),
+});
+
 const updateProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').optional(),
   phone: z.string().optional(),
@@ -188,5 +195,6 @@ module.exports = {
   updateUserStatusSchema,
   updateProfileSchema,
   broadcastSchema,
-  bulkMessageSchema
+  bulkMessageSchema,
+  createStaffSchema
 };

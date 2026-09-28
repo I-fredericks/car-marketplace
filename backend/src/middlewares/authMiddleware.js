@@ -9,13 +9,10 @@ const protect = async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     try {
-      // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token (index.js hard-fails at boot if JWT_SECRET is missing)
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Get user from token
       const user = await prisma.user.findUnique({
         where: { id: decoded.id },
         select: {
@@ -28,9 +25,6 @@ const protect = async (req, res, next) => {
         },
       });
 
-      // Token is valid but the account is gone or deactivated: refuse.
-      // (req.user is reloaded from the DB on every request, so a deactivation
-      // takes effect immediately without waiting for the JWT to expire.)
       if (!user) {
         return res.status(401).json({ message: 'Not authorized' });
       }
@@ -41,8 +35,6 @@ const protect = async (req, res, next) => {
         });
       }
 
-      // Password-change revocation: any session minted before the last
-      // password change dies instantly (stolen-token containment).
       if (user.passwordChangedAt && decoded.iat) {
         const changedAtSec = Math.floor(user.passwordChangedAt.getTime() / 1000);
         if (decoded.iat < changedAtSec) {
@@ -72,11 +64,96 @@ const protect = async (req, res, next) => {
   }
 };
 
+const PERMISSIONS = {
+  ADMIN: ['*'],
+  MANAGER: [
+    'vehicles:read',
+    'vehicles:write',
+    'vehicles:moderate',
+    'users:read',
+    'users:write',
+    'users:moderate',
+    'reports:read',
+    'reports:write',
+    'avatars:read',
+    'avatars:moderate',
+    'broadcast:write',
+    'stats:read',
+  ],
+  ACCOUNTANT: [
+    'payments:read',
+    'payments:write',
+    'purchases:read',
+    'purchases:write',
+    'payouts:write',
+    'disputes:read',
+    'disputes:write',
+    'stats:read',
+    'stats:financial',
+  ],
+  STAFF: [
+    'vehicles:read',
+    'users:read',
+    'reports:read',
+    'stats:read',
+  ],
+};
+
+const ROLE_PERMISSIONS = {
+  ADMIN: PERMISSIONS.ADMIN,
+  MANAGER: PERMISSIONS.MANAGER,
+  ACCOUNTANT: PERMISSIONS.ACCOUNTANT,
+  STAFF: PERMISSIONS.STAFF,
+};
+
+const hasPermission = (userRole, permission) => {
+  const permissions = ROLE_PERMISSIONS[userRole] || [];
+  return permissions.includes('*') || permissions.includes(permission);
+};
+
+const requirePermission = (permission) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Not authorized' });
+  }
+  if (hasPermission(req.user.role, permission)) {
+    next();
+  } else {
+    res.status(403).json({ message: `Not authorized. Required permission: ${permission}` });
+  }
+};
+
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Not authorized' });
+  }
+  if (roles.includes(req.user.role)) {
+    next();
+  } else {
+    res.status(403).json({ message: `Not authorized. Required role: ${roles.join(' or ')}` });
+  }
+};
+
 const admin = (req, res, next) => {
   if (req.user && req.user.role === 'ADMIN') {
     next();
   } else {
     res.status(403).json({ message: 'Not authorized as an admin' });
+  }
+};
+
+const manager = (req, res, next) => {
+  if (req.user && (req.user.role === 'MANAGER' || req.user.role === 'ADMIN')) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized. Manager role required.' });
+  }
+};
+
+const accountant = (req, res, next) => {
+  if (req.user && (req.user.role === 'ACCOUNTANT' || req.user.role === 'ADMIN')) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized. Accountant role required.' });
   }
 };
 
@@ -88,11 +165,6 @@ const seller = (req, res, next) => {
   }
 };
 
-// Attaches req.user when a valid token is present; anonymous requests pass
-// through untouched. For public endpoints with owner-only extras.
-// Token sources, in priority: Authorization header > httpOnly cookie.
-// (The cookie lets <img> avatar requests authenticate without exposing the
-// JWT in a URL query param, which leaks into logs and browser history.)
 const optionalAuth = async (req, res, next) => {
   const bearer = req.headers.authorization?.startsWith('Bearer ')
     ? req.headers.authorization.split(' ')[1]
@@ -108,12 +180,21 @@ const optionalAuth = async (req, res, next) => {
       where: { id: decoded.id },
       select: { id: true, name: true, email: true, role: true, isActive: true },
     });
-    // Deactivated accounts get the anonymous view, never owner-only extras.
     if (user && user.isActive) req.user = user;
   } catch (_) {
-    // Invalid/expired token on a public route: treat as anonymous
   }
   next();
 };
 
-module.exports = { protect, admin, seller, optionalAuth };
+module.exports = {
+  protect,
+  admin,
+  manager,
+  accountant,
+  seller,
+  optionalAuth,
+  requirePermission,
+  requireRole,
+  hasPermission,
+  ROLE_PERMISSIONS,
+};

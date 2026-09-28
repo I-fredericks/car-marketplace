@@ -1,16 +1,16 @@
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { AuthContext } from '../context/AuthContext';
 import { ShieldCheck, MailCheck, ArrowLeft, Car } from 'lucide-react';
 
 /**
- * Staff portal — the ONLY sign-in surface for ADMIN accounts.
- * Two steps: email + password -> 6-digit code emailed -> code verifies into
- * a full admin session. Public /login rejects admin accounts outright, and
- * this URL is intentionally unlinked from the public site.
+ * Staff portal — the ONLY sign-in surface for staff accounts (ADMIN, MANAGER, ACCOUNTANT, STAFF).
+ * Supports both email/password + 6-digit code (2FA) and Google OAuth.
+ * Public /login rejects staff accounts outright, and this URL is intentionally unlinked from the public site.
  */
 const StaffLogin = () => {
-  const { adminLogin, verifyAdminCode } = useContext(AuthContext);
+  const { adminLogin, verifyAdminCode, staffLoginWithGoogle } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -19,6 +19,7 @@ const StaffLogin = () => {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleCredentials = async (e) => {
     e.preventDefault();
@@ -48,6 +49,33 @@ const StaffLogin = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    if (!credentialResponse?.credential) {
+      setError('Google sign-in did not return a credential. Please try again.');
+      return;
+    }
+    setGoogleLoading(true);
+    setError('');
+    try {
+      const profile = await staffLoginWithGoogle(credentialResponse.credential);
+      if (['ADMIN', 'MANAGER', 'ACCOUNTANT', 'STAFF'].includes(profile?.role)) {
+        navigate('/admin', { replace: true });
+      } else {
+        setError('Access denied. This portal is for authorised staff only.');
+        // The session is already set, user will be redirected on next page load
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Google sign-in failed. Please try again.';
+      setError(msg);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError('Google sign-in was cancelled or failed.');
   };
 
   return (
@@ -93,39 +121,71 @@ const StaffLogin = () => {
           )}
 
           {step === 1 ? (
-            <form onSubmit={handleCredentials} className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-white/70">Staff Email</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="admin@sikaride.com"
-                  required
-                  autoComplete="username"
-                  className="w-full h-11 px-3 border border-white/15 rounded-md bg-white/5 text-white text-sm placeholder-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
+            <div className="space-y-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase tracking-widest text-white/30">
+                  <span className="bg-[#16203A] px-4">Or continue with</span>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-white/70">Password</label>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="••••••••"
-                  required
-                  autoComplete="current-password"
-                  className="w-full h-11 px-3 border border-white/15 rounded-md bg-white/5 text-white text-sm placeholder-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
+
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                disabled={googleLoading}
+                width="100%"
+                text="continue_with"
+                theme="filled_blue"
+                size="large"
+                logo_alignment="left"
+                className={googleLoading ? 'opacity-70 pointer-events-none' : ''}
+              />
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase tracking-widest text-white/30">
+                  <span className="bg-[#16203A] px-4">Email & password</span>
+                </div>
               </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-11 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors disabled:opacity-70 flex items-center justify-center"
-              >
-                {loading ? 'Verifying…' : 'Continue'}
-              </button>
-            </form>
+
+              <form onSubmit={handleCredentials} className="space-y-5">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-white/70">Staff Email</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="admin@sikaride.com"
+                    required
+                    autoComplete="username"
+                    className="w-full h-11 px-3 border border-white/15 rounded-md bg-white/5 text-white text-sm placeholder-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-white/70">Password</label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="••••••••"
+                    required
+                    autoComplete="current-password"
+                    className="w-full h-11 px-3 border border-white/15 rounded-md bg-white/5 text-white text-sm placeholder-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || googleLoading}
+                  className="w-full h-11 bg-primary text-white font-bold rounded-md hover:bg-primarylight transition-colors disabled:opacity-70 flex items-center justify-center"
+                >
+                  {loading ? 'Verifying…' : 'Continue'}
+                </button>
+              </form>
+            </div>
           ) : (
             <form onSubmit={handleVerify} className="space-y-5">
               <div className="space-y-1.5">
