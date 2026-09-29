@@ -2,7 +2,7 @@ const prisma = require('../config/db');
 const { pushToUser } = require('../services/eventBus');
 const { pushToDevices } = require('../services/fcm');
 
-const NOTIFICATION_TYPES = ['NEW_MESSAGE', 'LISTING_SAVED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_REMOVED', 'LISTING_EXPIRED', 'LISTING_SOLD', 'PROFILE_PHOTO_APPROVED', 'PROFILE_PHOTO_REJECTED', 'SYSTEM', 'BROADCAST'];
+const NOTIFICATION_TYPES = ['NEW_MESSAGE', 'LISTING_SAVED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_REMOVED', 'LISTING_EXPIRED', 'LISTING_SOLD', 'PROFILE_PHOTO_APPROVED', 'PROFILE_PHOTO_REJECTED', 'SYSTEM', 'BROADCAST', 'ADMIN_PENDING_LISTING', 'ADMIN_PAYMENT_PENDING', 'ADMIN_PURCHASE_DISPUTE', 'ADMIN_PURCHASE_PAYOUT', 'ADMIN_AVATAR_PENDING', 'ADMIN_REPORT_NEW'];
 
 /**
  * Create a notification row, push it over the user's SSE stream, and — when
@@ -40,6 +40,52 @@ async function notifyAdmins({ type, title, body = null, data = null, senderId = 
     admins.map((admin) =>
       prisma.notification.create({
         data: { userId: admin.id, type, title, body, data, senderId, vehicleId },
+      })
+    )
+  );
+  created.forEach((n) => pushToUser(n.userId, 'notification:new', n));
+  return created;
+}
+
+/**
+ * Notify staff based on permission. Used for role-based alerting.
+ * permission: e.g. 'vehicles:moderate', 'payments:write', 'purchases:write', 'avatars:moderate', 'reports:write'
+ */
+async function notifyStaffByPermission({ permission, type, title, body = null, data = null, senderId = null, vehicleId = null, includeAdmins = true }) {
+  // Role permission matrix (mirrors authMiddleware.js)
+  const rolePermissions = {
+    ADMIN: ['*'],
+    MANAGER: ['vehicles:read', 'vehicles:write', 'vehicles:moderate', 'users:read', 'users:write', 'users:moderate', 'reports:read', 'reports:write', 'avatars:read', 'avatars:moderate', 'broadcast:write', 'stats:read'],
+    ACCOUNTANT: ['payments:read', 'payments:write', 'purchases:read', 'purchases:write', 'payouts:write', 'disputes:read', 'disputes:write', 'stats:read', 'stats:financial'],
+    STAFF: ['vehicles:read', 'users:read', 'reports:read', 'stats:read'],
+  };
+
+  const hasPermission = (role) => {
+    const perms = rolePermissions[role] || [];
+    return perms.includes('*') || perms.includes(permission);
+  };
+
+  const eligibleRoles = Object.keys(rolePermissions).filter(hasPermission);
+  
+  if (!includeAdmins) {
+    // Remove ADMIN if not wanted
+    const idx = eligibleRoles.indexOf('ADMIN');
+    if (idx > -1) eligibleRoles.splice(idx, 1);
+  }
+
+  if (eligibleRoles.length === 0) return [];
+
+  const staff = await prisma.user.findMany({
+    where: { role: { in: eligibleRoles }, isActive: true },
+    select: { id: true },
+  });
+
+  if (staff.length === 0) return [];
+
+  const created = await Promise.all(
+    staff.map((s) =>
+      prisma.notification.create({
+        data: { userId: s.id, type, title, body, data, senderId, vehicleId },
       })
     )
   );
@@ -131,8 +177,9 @@ const markAllRead = async (req, res) => {
 module.exports = {
   createNotification,
   notifyAdmins,
+  notifyStaffByPermission,
   getNotifications,
   markNotificationRead,
-  markAllRead,
+  markNotificationsRead,
   NOTIFICATION_TYPES,
 };

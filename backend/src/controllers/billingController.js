@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const prisma = require('../config/db');
 const { PLANS, FREE_TIER, MOMO, generateReference, PLATFORM_COMMISSION_BPS } = require('../config/plans');
 const { initializeTransaction, verifyTransaction } = require('../services/paystack');
-const { notifyAdmins } = require('./notificationController');
+const { notifyAdmins, notifyStaffByPermission } = require('./notificationController');
 
 // Free listing allowance for sellers without an active subscription
 const FREE_LISTING_LIMIT = FREE_TIER.listings;
@@ -168,14 +168,15 @@ const createPayment = async (req, res) => {
     });
 
     // Payment-submitted-for-review lands here (before Paystack callback
-    // settles it) — alert admins to verify (fire-and-forget).
-    notifyAdmins({
+    // settles it) — alert staff with payments:write permission (fire-and-forget).
+    notifyStaffByPermission({
+      permission: 'payments:write',
       type: 'ADMIN_PENDING_PAYMENT',
       title: 'Payment awaiting verification',
       body: `${plan.label} · ₵${(payment.amount / 100).toLocaleString()} · ref ${payment.reference}`,
       senderId: req.user.id,
       data: { path: '/admin?tab=payments', paymentId: payment.id },
-    }).catch((e) => console.error('Admin payment notify failed:', e.message));
+    }).catch((e) => console.error('Staff payment notify failed:', e.message));
 
     res.status(201).json({ payment });
   } catch (error) {

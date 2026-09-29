@@ -1,5 +1,5 @@
 const prisma = require('../config/db');
-const { notifyAdmins } = require('./notificationController');
+const { notifyAdmins, notifyStaffByPermission } = require('./notificationController');
 
 // @desc    Report a listing
 // @route   POST /api/reports
@@ -20,15 +20,16 @@ const createReport = async (req, res) => {
       }
     });
 
-    // Reports queue only moves when an admin reviews it — alert them now.
-    notifyAdmins({
+    // Reports queue only moves when a staff member reviews it — alert staff with reports:write permission now.
+    notifyStaffByPermission({
+      permission: 'reports:write',
       type: 'ADMIN_NEW_REPORT',
       title: 'New report filed',
       body: reason.trim().slice(0, 120),
       senderId: req.user.id,
       vehicleId: vehicleId ? parseInt(vehicleId) : null,
       data: { path: '/admin?tab=reports', reportId: report.id },
-    }).catch((e) => console.error('Admin report notify failed:', e.message));
+    }).catch((e) => console.error('Staff report notify failed:', e.message));
 
     res.status(201).json({ message: 'Report submitted successfully', report });
   } catch (error) {

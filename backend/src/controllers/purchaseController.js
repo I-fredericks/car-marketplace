@@ -1,7 +1,7 @@
 const prisma = require('../config/db');
 const { generateReference, PLATFORM_COMMISSION_BPS, commissionFor, PLATFORM_ACCOUNTS } = require('../config/plans');
 const { initializeTransaction, verifyTransaction } = require('../services/paystack');
-const { notifyAdmins } = require('./notificationController');
+const { notifyAdmins, notifyStaffByPermission } = require('./notificationController');
 const { sendMail, appUrl } = require('../services/mailer');
 
 // Purchase workflow (escrow over flat-fee rails):
@@ -155,13 +155,15 @@ async function onEscrowFunded(updated, { actorId } = {}) {
     });
   }
   if (buyerRow && vehicleRow) sendReceiptEmail(updated, vehicleRow, buyerRow);
-  notifyAdmins({
+  // Alert staff with purchases:read permission (fire-and-forget).
+  notifyStaffByPermission({
+    permission: 'purchases:read',
     type: 'ADMIN_PURCHASE_PAID',
     title: 'Money in escrow',
     body: `Purch ${updated.reference} ${GHS(updated.amount)} · vehicle #${updated.vehicleId}`,
     senderId: actorId || updated.buyerId,
     data: { path: '/admin?tab=purchases', purchaseId: updated.id },
-  }).catch((e) => console.error('Admin purchase-paid notify failed:', e.message));
+  }).catch((e) => console.error('Staff purchase-paid notify failed:', e.message));
 }
 
 /**
@@ -491,14 +493,15 @@ const claimPayment = async (req, res) => {
       },
     });
 
-    // Queue jump for admins: claimed orders sit at the top of the confirm list
-    notifyAdmins({
+    // Queue jump for staff: claimed orders sit at the top of the confirm list
+    notifyStaffByPermission({
+      permission: 'purchases:write',
       type: 'ADMIN_PURCHASE_CLAIMED',
       title: 'Buyer reports transfer sent',
       body: `Purch ${updated.reference} · ${GHS(updated.amount)} · ref ${updated.paymentRef}`,
       senderId: req.user.id,
       data: { path: '/admin?tab=purchases', purchaseId: updated.id },
-    }).catch((e) => console.error('Admin claim notify failed:', e.message));
+    }).catch((e) => console.error('Staff claim notify failed:', e.message));
 
     res.json({ purchase: updated });
   } catch (error) {
@@ -605,13 +608,15 @@ const openDispute = async (req, res) => {
       body: `Order ${updated.reference}: ${isBuyer ? 'the buyer' : 'the seller'} reported a problem. Funds stay frozen until SikaRide mediates.`,
       data: { path: `/purchases/${updated.id}`, purchaseId: updated.id },
     });
-    notifyAdmins({
+    // Alert staff with disputes:read permission
+    notifyStaffByPermission({
+      permission: 'disputes:read',
       type: 'ADMIN_PURCHASE_DISPUTE',
       title: 'Escrow dispute opened',
       body: `Purch ${updated.reference} · ${GHS(updated.amount)} frozen · opened by ${isBuyer ? 'buyer' : 'seller'}`,
       senderId: req.user.id,
       data: { path: '/admin?tab=purchases', purchaseId: updated.id },
-    }).catch((e) => console.error('Admin dispute notify failed:', e.message));
+    }).catch((e) => console.error('Staff dispute notify failed:', e.message));
 
     res.json({ status: 'success', purchase: updated });
   } catch (error) {

@@ -3,7 +3,7 @@ const { getActiveSubscription } = require('./billingController');
 const { getListingLimit, getPlanRank } = require('../config/plans');
 const cache = require('../services/cache');
 const audit = require('../services/audit');
-const { notifyAdmins } = require('./notificationController');
+const { notifyAdmins, notifyStaffByPermission } = require('./notificationController');
 
 // How long a free-plan listing stays public before it must be renewed by upgrading
 const FREE_LISTING_DAYS = 90;
@@ -198,15 +198,16 @@ const createVehicle = async (req, res) => {
       meta: { title: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim() },
     });
 
-    // Every new listing needs moderation — alert admins (fire-and-forget).
-    notifyAdmins({
+    // Every new listing needs moderation — alert staff with vehicles:moderate/read permission
+    notifyStaffByPermission({
+      permission: 'vehicles:moderate',
       type: 'ADMIN_PENDING_LISTING',
       title: 'New listing awaiting approval',
       body: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim(),
       vehicleId: vehicle.id,
       senderId: req.user.id,
       data: { path: '/admin?tab=pending', vehicleId: vehicle.id },
-    }).catch((e) => console.error('Admin listing notify failed:', e.message));
+    }).catch((e) => console.error('Staff listing notify failed:', e.message));
 
     res.status(201).json(vehicle);
   } catch (error) {
