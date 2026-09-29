@@ -695,6 +695,7 @@ const updateProfile = async (req, res) => {
 // @route   POST /api/auth/admin-login
 // @access  Public (rate-limited; admins only succeed here)
 const ADMIN_OTP_MINUTES = 10;
+const STAFF_ROLES = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'STAFF'];
 
 const adminLogin = async (req, res) => {
   try {
@@ -703,9 +704,9 @@ const adminLogin = async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email } });
     const isMatch = user ? await bcrypt.compare(password, user.password) : false;
 
-    // Uniform failure for wrong creds AND non-admin accounts — the staff
-    // portal must not reveal which emails exist or which are admins.
-    if (!user || !isMatch || user.role !== 'ADMIN' || !user.isActive || !user.emailVerified) {
+    // Uniform failure for wrong creds AND non-staff accounts — the staff
+    // portal must not reveal which emails exist or which are staff.
+    if (!user || !isMatch || !STAFF_ROLES.includes(user.role) || !user.isActive || !user.emailVerified) {
       return res.status(401).json({ message: 'Invalid staff credentials.' });
     }
 
@@ -762,7 +763,7 @@ const adminVerifyCode = async (req, res) => {
     const { email, code } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || user.role !== 'ADMIN' || !user.isActive) {
+    if (!user || !STAFF_ROLES.includes(user.role) || !user.isActive) {
       return res.status(401).json({ message: 'Invalid or expired security code.' });
     }
 

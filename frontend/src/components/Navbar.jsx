@@ -95,7 +95,7 @@ const Navbar = () => {
                     <div className="text-left leading-tight hidden lg:block">
                       <div className="text-[13px] font-semibold text-textprimary truncate max-w-[120px]">{user.name}</div>
                       <div className="text-[11px] text-textmuted">
-                        {user.role === 'ADMIN' ? 'Administrator' : billing ? `${billing.plan.label} plan` : 'Buyer'}
+                        {user.role === 'ADMIN' ? 'Administrator' : ['MANAGER', 'ACCOUNTANT', 'STAFF'].includes(user.role) ? user.role : billing ? `${billing.plan.label} plan` : 'Buyer'}
                       </div>
                     </div>
                     <ChevronDown size={15} className={`text-textmuted transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
@@ -119,9 +119,9 @@ const Navbar = () => {
                           <List size={16} className="text-textmuted" /> My Listings
                         </Link>
                       )}
-                      {user.role === 'ADMIN' && (
+                      {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'STAFF'].includes(user.role) && (
                         <Link to="/admin" role="menuitem" className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors">
-                          <LayoutDashboard size={16} /> Admin Panel
+                          <LayoutDashboard size={16} /> {user.role === 'ADMIN' ? 'Admin Panel' : 'Staff Dashboard'}
                         </Link>
                       )}
                       {user.sellerProfile?.verified && (
@@ -217,8 +217,10 @@ const Navbar = () => {
                  {(user.role === 'SELLER' || user.role === 'ADMIN') && (
                   <Link to="/seller/dashboard" className="block text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">My Listings</Link>
                 )}
-                {user.role === 'ADMIN' && (
-                  <Link to="/admin" className="block text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">Admin Panel</Link>
+                {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'STAFF'].includes(user.role) && (
+                  <Link to="/admin" className="block text-textsecondary p-2 -mx-2 rounded-md hover:bg-bg">
+                    {user.role === 'ADMIN' ? 'Admin Panel' : 'Staff Dashboard'}
+                  </Link>
                 )}
                 <button onClick={logout} className="w-full text-left text-err font-medium p-2 -mx-2 rounded-md hover:bg-err/10">
                   Logout

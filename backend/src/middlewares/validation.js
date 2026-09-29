@@ -164,7 +164,7 @@ const createStaffSchema = z.object({
   email: z.string().email('Invalid email address'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
   role: z.enum(['MANAGER', 'ACCOUNTANT', 'STAFF']),
-  password: passwordSchema.optional(),
+  password: z.preprocess((val) => (!val || val === '' ? undefined : val), passwordSchema.optional()),
 });
 
 const updateUserSchema = z.object({
