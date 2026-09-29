@@ -159,16 +159,40 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       if (tab === 'overview') {
-        const [{ data: statsData }, { data: auditsData }, { data: purchasesData }, { data: paymentsData }] = await Promise.all([
+        const canAudit = user?.role === 'ADMIN';
+        const canPurchases = VALID.has('purchases');
+        const canPayments = VALID.has('payments');
+
+        const [statsRes, auditsRes, purchasesRes, paymentsRes] = await Promise.allSettled([
           api.get('/admin/stats'),
-          api.get('/admin/audit-logs?limit=8'),
-          api.get('/admin/purchases'),
-          api.get('/admin/payments'),
+          canAudit ? api.get('/admin/audit-logs?limit=8') : Promise.resolve({ data: { logs: [] } }),
+          canPurchases ? api.get('/admin/purchases') : Promise.resolve({ data: [] }),
+          canPayments ? api.get('/admin/payments') : Promise.resolve({ data: [] }),
         ]);
-        setStats(statsData);
-        setActivity(auditsData.logs || []);
-        setPurchases(purchasesData);
-        setPayments(paymentsData);
+
+        if (statsRes.status === 'fulfilled') {
+          setStats(statsRes.value.data);
+        } else {
+          console.error('Stats fetch error:', statsRes.reason);
+        }
+
+        if (auditsRes.status === 'fulfilled') {
+          setActivity(auditsRes.value.data?.logs || []);
+        } else {
+          setActivity([]);
+        }
+
+        if (purchasesRes.status === 'fulfilled') {
+          setPurchases(purchasesRes.value.data || []);
+        } else {
+          setPurchases([]);
+        }
+
+        if (paymentsRes.status === 'fulfilled') {
+          setPayments(paymentsRes.value.data || []);
+        } else {
+          setPayments([]);
+        }
       } else if (tab === 'pending') {
         const { data } = await api.get('/admin/vehicles/pending');
         setPendingCars(data);
@@ -567,35 +591,44 @@ const AdminDashboard = () => {
   // ──────────────────────────────────────────────────────
 
   const renderOverview = () => {
+    const showFinancials = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+    const escrowAmount = (stats?.purchases?.escrowHeldPesewas ?? 0) / 100;
+    const formattedEscrow = `GH₵${escrowAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
     const kpis = stats ? [
-      { label: 'Total Users', value: stats.users.total, Icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
-      { label: 'Sellers', value: stats.users.sellers, Icon: ShieldCheck, color: 'text-success', bg: 'bg-success/10' },
-      { label: 'Buyers', value: stats.users.buyers, Icon: Car, color: 'text-accent', bg: 'bg-accent/10' },
-      { label: 'Live Listings', value: stats.listings.available, Icon: List, color: 'text-primary', bg: 'bg-primary/10' },
-      // Money flowing through the platform escrow right now
-      { label: 'Escrow held', value: `GH₵${((stats.purchases?.escrowHeldPesewas ?? 0) / 100).toLocaleString()}`, Icon: CreditCard, color: 'text-warn', bg: 'bg-warn/10' },
-      { label: 'Payouts pending', value: stats.purchases?.payoutsPending ?? 0, Icon: Package, color: 'text-err', bg: 'bg-err/10' },
+      { label: 'Total Users', value: stats.users?.total ?? 0, Icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
+      { label: 'Sellers', value: stats.users?.sellers ?? 0, Icon: ShieldCheck, color: 'text-success', bg: 'bg-success/10' },
+      { label: 'Buyers', value: stats.users?.buyers ?? 0, Icon: Car, color: 'text-accent', bg: 'bg-accent/10' },
+      { label: 'Live Listings', value: stats.listings?.available ?? 0, Icon: List, color: 'text-primary', bg: 'bg-primary/10' },
+      ...(showFinancials ? [
+        { label: 'Escrow held', value: formattedEscrow, Icon: CreditCard, color: 'text-warn', bg: 'bg-warn/10' },
+        { label: 'Payouts pending', value: stats.purchases?.payoutsPending ?? 0, Icon: Package, color: 'text-err', bg: 'bg-err/10' },
+      ] : [
+        { label: 'Pending Listings', value: stats.listings?.pending ?? 0, Icon: Car, color: 'text-warn', bg: 'bg-warn/10' },
+        { label: 'Reports Pending', value: stats.reports?.pending ?? 0, Icon: AlertTriangle, color: 'text-err', bg: 'bg-err/10' },
+      ]),
     ] : [];
 
     const statusSegments = stats ? [
-      { key: 'available', label: 'Live', value: stats.listings.available, color: 'bg-success' },
-      { key: 'pending', label: 'Pending', value: stats.listings.pending, color: 'bg-[#EAB308]' },
-      { key: 'reserved', label: 'Reserved', value: stats.listings.reserved || 0, color: 'bg-accent' },
-      { key: 'sold', label: 'Sold', value: stats.listings.sold, color: 'bg-primary' },
-      { key: 'rejected', label: 'Rejected', value: stats.listings.rejected, color: 'bg-err' },
-      { key: 'deactivated', label: 'Taken down', value: stats.listings.deactivated, color: 'bg-orange-500' },
-      { key: 'removed', label: 'Removed', value: stats.listings.removed, color: 'bg-textmuted' },
+      { key: 'available', label: 'Live', value: stats.listings?.available ?? 0, color: 'bg-success' },
+      { key: 'pending', label: 'Pending', value: stats.listings?.pending ?? 0, color: 'bg-[#EAB308]' },
+      { key: 'reserved', label: 'Reserved', value: stats.listings?.reserved ?? 0, color: 'bg-accent' },
+      { key: 'sold', label: 'Sold', value: stats.listings?.sold ?? 0, color: 'bg-primary' },
+      { key: 'rejected', label: 'Rejected', value: stats.listings?.rejected ?? 0, color: 'bg-err' },
+      { key: 'deactivated', label: 'Taken down', value: stats.listings?.deactivated ?? 0, color: 'bg-orange-500' },
+      { key: 'removed', label: 'Removed', value: stats.listings?.removed ?? 0, color: 'bg-textmuted' },
     ] : [];
     const statusTotal = statusSegments.reduce((sum, s) => sum + (s.value || 0), 0) || 1;
 
-    const quickActions = stats ? [
-      { label: 'Review pending listings', tab: 'pending', count: stats.listings.pending, accent: stats.listings.pending > 0 },
+    const allQuickActions = stats ? [
+      { label: 'Review pending listings', tab: 'pending', count: stats.listings?.pending, accent: (stats.listings?.pending ?? 0) > 0 },
       { label: 'Pending payments', tab: 'payments', count: payments.filter(p => p.status === 'PENDING').length, accent: payments.filter(p => p.status === 'PENDING').length > 0 },
       { label: 'Payouts to release', tab: 'purchases', count: purchases.filter(p => p.payoutStatus === 'PENDING').length, accent: purchases.filter(p => p.payoutStatus === 'PENDING').length > 0 },
       { label: 'Open reports', tab: 'reports', count: (stats.reports?.pending ?? reports.length), accent: (stats.reports?.pending ?? 0) > 0 },
-      { label: 'Manage users', tab: 'users', count: stats.users.total, accent: false },
+      { label: 'Manage users', tab: 'users', count: stats.users?.total, accent: false },
       { label: 'Audit log', tab: 'audit', count: null, accent: false },
     ] : [];
+    const quickActions = allQuickActions.filter(qa => VALID.has(qa.tab));
 
     return (
       <div className="space-y-8 animate-fade-in">
@@ -612,23 +645,55 @@ const AdminDashboard = () => {
           </button>
         </div>
 
-        {loading || !stats ? (
+        {loading ? (
           <div className="flex justify-center py-20 text-textmuted">
             <div className="animate-spin w-8 h-8 border-4 border-bordercol border-t-primary rounded-full"></div>
+          </div>
+        ) : !stats ? (
+          <div className="bg-surface border border-bordercol rounded-xl p-8 text-center max-w-md mx-auto my-12">
+            <p className="text-textsecondary text-sm mb-4">Could not load dashboard overview metrics.</p>
+            <button
+              onClick={fetchData}
+              className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-md hover:bg-primarylight transition-colors"
+            >
+              Retry
+            </button>
           </div>
         ) : (
           <div className="space-y-8">
             {/* KPI tiles */}
-            <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-              {kpis.map(({ label, value, Icon, color, bg }) => (
-                <div key={label} className="bg-surface border border-bordercol rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group">
-                  <div className={`w-10 h-10 ${bg} ${color} rounded-lg flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}>
-                    <Icon size={20} />
+            <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+              {kpis.map(({ label, value, Icon, color, bg }) => {
+                const strVal = String(value);
+                const textSize =
+                  strVal.length > 13
+                    ? 'text-base sm:text-lg xl:text-base 2xl:text-lg'
+                    : strVal.length > 8
+                    ? 'text-lg sm:text-xl xl:text-lg 2xl:text-xl'
+                    : 'text-2xl sm:text-3xl';
+
+                return (
+                  <div
+                    key={label}
+                    className="bg-surface border border-bordercol rounded-xl p-3.5 sm:p-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all group min-w-0 overflow-hidden flex flex-col justify-between"
+                  >
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 ${bg} ${color} rounded-lg flex items-center justify-center mb-2.5 sm:mb-3 group-hover:scale-105 transition-transform shrink-0`}>
+                      <Icon size={19} />
+                    </div>
+                    <div className="min-w-0 w-full overflow-hidden">
+                      <div
+                        className={`font-display font-bold text-textprimary tracking-tight truncate ${textSize}`}
+                        title={strVal}
+                      >
+                        {value}
+                      </div>
+                      <div className="text-[11px] sm:text-xs text-textsecondary font-medium mt-0.5 truncate" title={label}>
+                        {label}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-2xl sm:text-3xl font-display font-bold text-textprimary tracking-tight">{value}</div>
-                  <div className="text-xs sm:text-sm text-textsecondary font-medium mt-0.5">{label}</div>
-                </div>
-              ))}
+                );
+              })}
             </section>
 
             <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
@@ -655,25 +720,25 @@ const AdminDashboard = () => {
               <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
                 <h3 className="font-display font-semibold text-textprimary mb-4">Engagement</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4 min-w-0 overflow-hidden">
                     <Heart size={18} className="text-err mb-2" />
-                    <div className="text-xl font-display font-bold text-textprimary">{stats.favorites}</div>
-                    <div className="text-[11px] text-textmuted uppercase font-medium">Saved by buyers</div>
+                    <div className="text-xl font-display font-bold text-textprimary truncate">{stats.engagement?.favorites ?? stats.favorites ?? 0}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium truncate">Saved by buyers</div>
                   </div>
-                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4 min-w-0 overflow-hidden">
                     <MessageCircle size={18} className="text-primary mb-2" />
-                    <div className="text-xl font-display font-bold text-textprimary">{stats.messages}</div>
-                    <div className="text-[11px] text-textmuted uppercase font-medium">Messages</div>
+                    <div className="text-xl font-display font-bold text-textprimary truncate">{stats.engagement?.messages ?? stats.messages ?? 0}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium truncate">Messages</div>
                   </div>
-                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4 min-w-0 overflow-hidden">
                     <Star size={18} className="text-[#EAB308] mb-2" />
-                    <div className="text-xl font-display font-bold text-textprimary">{stats.listings.featured ?? 0}</div>
-                    <div className="text-[11px] text-textmuted uppercase font-medium">Featured</div>
+                    <div className="text-xl font-display font-bold text-textprimary truncate">{stats.listings?.featured ?? 0}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium truncate">Featured</div>
                   </div>
-                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4">
+                  <div className="rounded-lg bg-bg border border-bordercol/60 p-4 min-w-0 overflow-hidden">
                     <ShieldAlert size={18} className="text-err mb-2" />
-                    <div className="text-xl font-display font-bold text-textprimary">{stats.reports?.pending ?? 0}</div>
-                    <div className="text-[11px] text-textmuted uppercase font-medium">Reports pending</div>
+                    <div className="text-xl font-display font-bold text-textprimary truncate">{stats.reports?.pending ?? 0}</div>
+                    <div className="text-[11px] text-textmuted uppercase font-medium truncate">Reports pending</div>
                   </div>
                 </div>
               </section>
@@ -684,32 +749,38 @@ const AdminDashboard = () => {
                   Recent activity, so the two columns stay level */}
               <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
                 <h3 className="font-display font-semibold text-textprimary mb-4">Quick actions</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {quickActions.map(({ label, tab, count, accent }) => (
-                    <button
-                      key={tab + label}
-                      onClick={() => setTab(tab)}
-                      className="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border border-bordercol hover:border-primary/40 hover:bg-bg transition-colors text-left group"
-                    >
-                      <span className="text-sm font-medium text-textprimary leading-tight">{label}</span>
-                      <span className="flex items-center gap-2">
-                        {count != null && (
-                          <span className={`min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold ${accent ? 'bg-[#EAB308]/15 text-[#EAB308]' : 'bg-bg border border-bordercol text-textmuted'}`}>
-                            {count}
-                          </span>
-                        )}
-                        <ArrowRight size={14} className="text-textmuted group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {quickActions.length === 0 ? (
+                  <p className="text-sm text-textmuted py-6 text-center">No quick actions available.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {quickActions.map(({ label, tab, count, accent }) => (
+                      <button
+                        key={tab + label}
+                        onClick={() => setTab(tab)}
+                        className="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border border-bordercol hover:border-primary/40 hover:bg-bg transition-colors text-left group"
+                      >
+                        <span className="text-sm font-medium text-textprimary leading-tight">{label}</span>
+                        <span className="flex items-center gap-2">
+                          {count != null && (
+                            <span className={`min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full text-[11px] font-bold ${accent ? 'bg-[#EAB308]/15 text-[#EAB308]' : 'bg-bg border border-bordercol text-textmuted'}`}>
+                              {count}
+                            </span>
+                          )}
+                          <ArrowRight size={14} className="text-textmuted group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* Recent activity */}
               <section className="bg-surface border border-bordercol rounded-xl p-5 sm:p-6 shadow-sm">
                 <h3 className="font-display font-semibold text-textprimary mb-4">Recent activity</h3>
                 {activity.length === 0 ? (
-                  <p className="text-sm text-textmuted py-6 text-center">No activity yet.</p>
+                  <p className="text-sm text-textmuted py-6 text-center">
+                    {user?.role === 'ADMIN' ? 'No activity yet.' : 'Recent audit activity is visible to administrators only.'}
+                  </p>
                 ) : (
                   <div className="divide-y divide-bordercol/60 max-h-[300px] overflow-y-auto -mx-1">
                     {activity.map(log => (
@@ -729,9 +800,11 @@ const AdminDashboard = () => {
                     ))}
                   </div>
                 )}
-                <button onClick={() => setTab('audit')} className="mt-3 text-xs font-medium text-primary hover:text-primarylight transition-colors">
-                  View full audit log →
-                </button>
+                {user?.role === 'ADMIN' && (
+                  <button onClick={() => setTab('audit')} className="mt-3 text-xs font-medium text-primary hover:text-primarylight transition-colors">
+                    View full audit log →
+                  </button>
+                )}
               </section>
             </div>
           </div>
