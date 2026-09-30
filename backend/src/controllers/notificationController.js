@@ -180,6 +180,6 @@ module.exports = {
   notifyStaffByPermission,
   getNotifications,
   markNotificationRead,
-  markNotificationsRead,
+  markAllRead,
   NOTIFICATION_TYPES,
 };
